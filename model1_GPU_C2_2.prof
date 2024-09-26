@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/users/mt1370/dlrm/dlrm_s_caffe2.py", line 87, in <module>
+    from caffe2.proto import caffe2_pb2
+ModuleNotFoundError: No module named 'caffe2'

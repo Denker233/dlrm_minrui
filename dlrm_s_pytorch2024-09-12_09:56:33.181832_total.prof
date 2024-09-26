@@ -1,0 +1,105 @@
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+enumerate(DataLoader)#_SingleProcessDataLoaderIter._...        63.66%        6.617s        63.90%        6.642s      65.765ms           101  
+                                               aten::mm        10.18%        1.059s        10.19%        1.059s     962.613us          1100  
+                                              aten::add         9.27%     963.332ms         9.29%     965.690ms       1.073ms           900  
+                                            aten::addmm         4.61%     478.720ms         5.10%     529.943ms     883.238us           600  
+                                   aten::_embedding_bag         2.53%     263.402ms         2.77%     287.707ms     359.634us           800  
+                                     aten::index_select         1.52%     158.462ms         1.57%     163.156ms     203.945us           800  
+                                             aten::add_         1.18%     122.562ms        10.45%        1.086s     517.138us          2100  
+                                           DLRM forward         0.69%      71.611ms         9.73%        1.012s      10.115ms           100  
+                                          DLRM backward         0.64%      66.983ms        26.15%        2.718s      27.181ms           100  
+                                            aten::copy_         0.58%      59.965ms         0.58%      59.965ms      17.637us          3400  
+                                        aten::clamp_min         0.57%      59.750ms         0.57%      59.750ms     119.499us           500  
+                                Optimizer.step#SGD.step         0.41%      42.234ms        10.78%        1.120s      11.203ms           100  
+                               aten::threshold_backward         0.36%      37.931ms         0.36%      37.931ms      75.862us           500  
+                                              aten::bmm         0.34%      35.316ms         0.34%      35.439ms     118.130us           300  
+                                           aten::cumsum         0.19%      19.752ms         0.19%      19.995ms      24.993us           800  
+                                              aten::cat         0.19%      19.359ms         0.20%      20.370ms      67.900us           300  
+                                            aten::empty         0.15%      15.295ms         0.15%      15.295ms       1.378us         11101  
+                                           aten::select         0.14%      14.249ms         0.16%      16.827ms       3.506us          4800  
+                          aten::_embedding_bag_backward         0.13%      13.479ms         2.46%     256.009ms     320.011us           800  
+         aten::_sparse_coo_tensor_with_dims_and_tensors         0.13%      13.115ms         0.15%      15.958ms       9.974us          1600  
+                                              aten::sum         0.12%      12.868ms         0.14%      14.134ms      20.192us           700  
+                                            aten::zero_         0.12%      12.506ms         0.12%      12.506ms      11.369us          1100  
+                                            aten::slice         0.11%      11.134ms         0.13%      13.310ms       3.503us          3800  
+                                      DLRM loss compute         0.10%      10.406ms         0.19%      19.834ms     198.342us           100  
+                        torch::autograd::AccumulateGrad         0.10%      10.283ms         0.24%      24.890ms      12.445us          2000  
+                                                aten::t         0.10%       9.937ms         0.20%      20.398ms       7.034us          2900  
+                                        aten::transpose         0.10%       9.934ms         0.12%      12.855ms       3.895us          3300  
+                      Optimizer.zero_grad#SGD.zero_grad         0.09%       8.863ms         0.09%       8.863ms      88.626us           100  
+                                       aten::as_strided         0.08%       8.353ms         0.08%       8.353ms       0.653us         12800  
+    autograd::engine::evaluate_function: AddmmBackward0         0.08%       8.184ms        10.56%        1.098s       1.830ms           600  
+                                 aten::_index_put_impl_         0.07%       7.604ms         0.08%       8.115ms      81.153us           100  
+autograd::engine::evaluate_function: EmbeddingBagBac...         0.06%       6.590ms         2.58%     267.884ms     334.855us           800  
+                                         AddmmBackward0         0.06%       6.401ms        10.35%        1.076s       1.793ms           600  
+                                             aten::sub_         0.06%       5.957ms         0.06%       5.957ms       3.723us          1600  
+                                            aten::index         0.06%       5.872ms         0.06%       6.566ms      65.656us           100  
+                                             aten::view         0.06%       5.793ms         0.06%       5.793ms       1.998us          2900  
+                        aten::embedding_sparse_backward         0.05%       5.684ms         0.21%      21.768ms      27.210us           800  
+                                  EmbeddingBagBackward0         0.05%       5.285ms         2.51%     261.293ms     326.617us           800  
+autograd::engine::evaluate_function: torch::autograd...         0.05%       4.984ms         0.29%      29.874ms      14.937us          2000  
+                                       aten::empty_like         0.04%       3.796ms         0.06%       6.478ms       3.599us          1800  
+                                             aten::relu         0.04%       3.701ms         0.61%      63.450ms     126.901us           500  
+                                            aten::fill_         0.03%       3.513ms         0.03%       3.513ms       1.405us          2500  
+                                          aten::detach_         0.03%       3.474ms         0.05%       4.925ms       2.462us          2000  
+                   aten::_embedding_bag_sparse_backward         0.03%       3.408ms         1.81%     188.333ms     235.416us           800  
+                                         aten::_to_copy         0.03%       3.400ms         0.11%      11.747ms      39.155us           300  
+                                          aten::reshape         0.03%       3.325ms         0.06%       6.181ms       2.943us          2100  
+                                       aten::index_add_         0.03%       3.194ms         0.03%       3.194ms       3.993us           800  
+                                        aten::new_zeros         0.03%       3.150ms         0.18%      18.523ms      20.581us           900  
+                                    aten::empty_strided         0.03%       3.073ms         0.03%       3.073ms       2.561us          1200  
+                                           aten::narrow         0.03%       3.065ms         0.08%       8.728ms       7.273us          1200  
+                        aten::_sparse_coo_tensor_unsafe         0.03%       3.042ms         0.18%      19.000ms      11.875us          1600  
+                                           aten::linear         0.03%       3.010ms         5.20%     540.134ms     900.223us           600  
+                                              aten::sub         0.03%       2.953ms         0.03%       2.953ms       3.691us           800  
+                                         aten::mse_loss         0.02%       2.578ms         0.09%       9.182ms      91.820us           100  
+                                        aten::ones_like         0.02%       2.531ms         0.07%       7.699ms       8.555us           900  
+                                                 detach         0.02%       2.493ms         0.02%       2.493ms       1.781us          1400  
+                                               aten::to         0.02%       2.434ms         0.14%      14.180ms       2.894us          4900  
+     autograd::engine::evaluate_function: ReluBackward0         0.02%       2.189ms         0.41%      42.286ms      84.572us           500  
+                                          ReluBackward0         0.02%       2.166ms         0.39%      40.097ms      80.194us           500  
+                                    aten::embedding_bag         0.02%       2.096ms         2.79%     289.803ms     362.253us           800  
+                                           aten::detach         0.02%       2.057ms         0.04%       4.550ms       3.250us          1400  
+                                          aten::resize_         0.02%       2.049ms         0.02%       2.049ms       0.418us          4900  
+                                           CatBackward0         0.02%       2.044ms         0.09%       9.761ms      48.804us           200  
+      autograd::engine::evaluate_function: CatBackward0         0.02%       1.972ms         0.13%      13.996ms      69.981us           200  
+                                        aten::new_empty         0.02%       1.958ms         0.04%       4.050ms       4.500us           900  
+        autograd::engine::evaluate_function: TBackward0         0.02%       1.904ms         0.05%       5.630ms       9.383us           600  
+                                            aten::stack         0.02%       1.824ms         0.04%       3.902ms      39.021us           100  
+                                         aten::_indices         0.02%       1.761ms         0.02%       1.761ms       0.550us          3200  
+                                           aten::expand         0.02%       1.747ms         0.02%       2.152ms       3.586us           600  
+                                aten::mse_loss_backward         0.02%       1.706ms         0.03%       3.475ms      17.373us           200  
+                                             aten::div_         0.02%       1.643ms         0.03%       3.496ms      34.965us           100  
+                                          aten::_values         0.02%       1.583ms         0.02%       1.583ms       0.495us          3200  
+                                         IndexBackward0         0.01%       1.493ms         0.13%      13.051ms     130.510us           100  
+                                                detach_         0.01%       1.450ms         0.01%       1.450ms       0.725us          2000  
+                                       aten::resize_as_         0.01%       1.430ms         0.02%       1.607ms       2.009us           800  
+                                          aten::sigmoid         0.01%       1.310ms         0.01%       1.310ms      13.095us           100  
+                                             aten::mean         0.01%       1.222ms         0.06%       6.261ms      62.610us           100  
+                                   aten::slice_backward         0.01%       1.196ms         0.04%       4.049ms      40.489us           100  
+autograd::engine::evaluate_function: TransposeBackwa...         0.01%       1.139ms         0.09%       9.689ms      96.890us           100  
+                                             aten::ones         0.01%       1.098ms         0.02%       1.932ms      19.323us           100  
+                                           BmmBackward0         0.01%     948.977us         0.26%      26.875ms     268.751us           100  
+                                 aten::sigmoid_backward         0.01%     909.443us         0.01%     909.443us       9.094us           100  
+                                             TBackward0         0.01%     857.669us         0.04%       3.726ms       6.210us           600  
+                                       aten::lift_fresh         0.01%     855.549us         0.01%     855.549us       0.428us          2000  
+                                       MseLossBackward0         0.01%     855.360us         0.03%       3.609ms      36.093us           100  
+      autograd::engine::evaluate_function: BmmBackward0         0.01%     821.771us         0.27%      27.697ms     276.969us           100  
+                                     aten::resolve_conj         0.01%     679.210us         0.01%     679.210us       0.148us          4600  
+    autograd::engine::evaluate_function: IndexBackward0         0.01%     610.587us         0.13%      13.662ms     136.616us           100  
+                                       SigmoidBackward0         0.01%     583.849us         0.01%       1.493ms      14.933us           100  
+autograd::engine::evaluate_function: MseLossBackward...         0.01%     569.614us         0.04%       4.179ms      41.789us           100  
+                                       aten::zeros_like         0.01%     530.958us         0.01%       1.048ms      10.480us           100  
+                                         SliceBackward0         0.00%     508.330us         0.04%       4.557ms      45.572us           100  
+                                            aten::zeros         0.00%     476.283us         0.02%       1.778ms      17.776us           100  
+    autograd::engine::evaluate_function: SliceBackward0         0.00%     364.762us         0.05%       4.922ms      49.220us           100  
+     autograd::engine::evaluate_function: ViewBackward0         0.00%     277.196us         0.01%     958.292us       9.583us           100  
+                                          ViewBackward0         0.00%     262.252us         0.01%     681.096us       6.811us           100  
+autograd::engine::evaluate_function: SigmoidBackward...         0.00%     259.614us         0.02%       1.753ms      17.529us           100  
+                                             aten::_nnz         0.00%     219.663us         0.00%     219.663us       0.137us          1600  
+                                     TransposeBackward0         0.00%     195.365us         0.01%     667.518us       6.675us           100  
+                                       aten::sparse_dim         0.00%     183.202us         0.00%     183.202us       0.115us          1600  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 10.395s

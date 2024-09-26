@@ -1,0 +1,4 @@
+world size: 1, current rank: 0, local rank: 0
+Using CPU...
+time/loss/accuracy (if enabled):
+Finished training it 100/100 of epoch 0, 29.79 ms/it, loss 0.083039

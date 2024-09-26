@@ -1,0 +1,106 @@
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+enumerate(DataLoader)#_SingleProcessDataLoaderIter._...        89.90%      400.234s        90.39%      402.421s     267.390ms      400.456s        89.90%      402.430s     267.395ms          1505  
+                                          DLRM backward         3.56%       15.841s         4.37%       19.467s      12.978ms       15.814s         3.55%       19.538s      13.026ms          1500  
+                                        cudaEventRecord         1.89%        8.396s         1.91%        8.502s       2.776us       0.000us         0.00%        1.091s       0.356us       3063050  
+                                  cudaStreamSynchronize         0.47%        2.078s         0.47%        2.078s      86.573us       0.000us         0.00%       0.000us       0.000us         24000  
+                                           DLRM forward         0.27%        1.202s         1.67%        7.446s       4.964ms     630.836ms         0.14%        8.188s       5.459ms          1500  
+                                       cudaLaunchKernel         0.26%        1.161s         0.26%        1.161s       7.895us       0.000us         0.00%       0.000us       0.000us        147000  
+                                            aten::copy_         0.23%        1.014s         0.90%        4.022s      95.752us        2.605s         0.58%        2.605s      62.024us         42000  
+                                              aten::add         0.21%     929.244ms         0.53%        2.347s     173.888us     707.454ms         0.16%        2.910s     215.543us         13500  
+                                        cudaMemcpyAsync         0.21%     920.872ms         0.21%     920.872ms      36.113us       0.000us         0.00%       0.000us       0.000us         25500  
+         aten::_sparse_coo_tensor_with_dims_and_tensors         0.18%     814.216ms         0.36%        1.609s      67.047us     719.398ms         0.16%        1.232s      51.333us         24000  
+                                            aten::empty         0.17%     763.228ms         0.17%     763.899ms       5.144us     982.998ms         0.22%     982.998ms       6.619us        148505  
+                        torch::autograd::AccumulateGrad         0.16%     697.157ms         0.58%        2.574s      85.786us     839.362ms         0.19%        2.533s      84.439us         30000  
+                                        aten::transpose         0.11%     509.990ms         0.17%     761.518ms      15.384us     468.355ms         0.11%     684.800ms      13.834us         49500  
+                                Optimizer.step#SGD.step         0.11%     503.759ms         0.76%        3.364s       2.243ms     331.988ms         0.07%        3.477s       2.318ms          1500  
+                                         aten::_to_copy         0.09%     422.637ms         1.09%        4.844s     179.395us     506.438ms         0.11%        3.291s     121.905us         27000  
+                                   aten::_embedding_bag         0.09%     414.386ms         0.24%        1.049s      87.432us        1.972s         0.44%        2.180s     181.695us         12000  
+                                          aten::reshape         0.09%     398.618ms         0.13%     592.855ms      14.116us     291.289ms         0.07%     452.607ms      10.776us         42000  
+                                            aten::addmm         0.09%     386.003ms         0.13%     570.164ms      63.352us        1.911s         0.43%        1.929s     214.374us          9000  
+                                               aten::mm         0.08%     341.880ms         0.11%     510.847ms      30.960us        3.031s         0.68%        3.031s     183.705us         16500  
+                                         AddmmBackward0         0.08%     334.929ms         0.41%        1.818s     201.990us     268.229ms         0.06%        3.883s     431.478us          9000  
+    autograd::engine::evaluate_function: AddmmBackward0         0.07%     322.174ms         0.58%        2.592s     287.982us     208.049ms         0.05%        4.410s     489.995us          9000  
+                                                aten::t         0.07%     309.162ms         0.29%        1.273s      29.259us     437.079ms         0.10%        1.047s      24.065us         43500  
+                        aten::embedding_sparse_backward         0.07%     303.095ms         0.43%        1.915s     159.546us     235.748ms         0.05%     940.462ms      78.372us         12000  
+                                     aten::index_select         0.06%     287.455ms         0.14%     627.337ms      52.278us        1.669s         0.37%        1.900s     158.332us         12000  
+autograd::engine::evaluate_function: torch::autograd...         0.06%     273.307ms         0.69%        3.059s     101.950us     389.149ms         0.09%        2.922s      97.411us         30000  
+                                          aten::detach_         0.06%     257.854ms         0.08%     371.137ms      12.371us     331.869ms         0.07%     485.223ms      16.174us         30000  
+                                             aten::add_         0.06%     249.315ms         0.62%        2.744s      83.143us     341.928ms         0.08%        3.211s      97.304us         33000  
+                        aten::_sparse_coo_tensor_unsafe         0.05%     230.324ms         0.43%        1.918s      79.911us     235.427ms         0.05%        1.467s      61.143us         24000  
+                                    aten::empty_strided         0.05%     206.274ms         0.05%     206.656ms       7.251us     294.917ms         0.07%     294.917ms      10.348us         28500  
+autograd::engine::evaluate_function: EmbeddingBagBac...         0.04%     198.759ms         0.79%        3.513s     292.777us     241.664ms         0.05%        3.570s     297.533us         12000  
+                                               aten::to         0.04%     198.009ms         1.16%        5.172s      56.522us     532.163ms         0.12%        3.824s      41.788us         91500  
+                                            aten::slice         0.04%     197.668ms         0.07%     316.364ms      16.224us     246.647ms         0.06%     345.113ms      17.698us         19500  
+                                              aten::sum         0.04%     196.551ms         0.06%     282.323ms      31.369us     273.199ms         0.06%     273.199ms      30.355us          9000  
+                                           aten::detach         0.04%     190.518ms         0.07%     313.830ms      14.944us     196.723ms         0.04%     303.116ms      14.434us         21000  
+                   aten::_embedding_bag_sparse_backward         0.04%     182.519ms         0.64%        2.855s     237.918us     166.510ms         0.04%        3.007s     250.580us         12000  
+                                           aten::narrow         0.03%     155.461ms         0.11%     470.427ms      28.511us     183.545ms         0.04%     483.045ms      29.275us         16500  
+                                 aten::_index_put_impl_         0.03%     136.247ms         0.40%        1.783s       1.189ms     313.114ms         0.07%     994.497ms     662.998us          1500  
+                                      DLRM loss compute         0.03%     132.659ms         0.24%        1.082s     721.358us     115.310ms         0.03%     390.235ms     260.157us          1500  
+                                           aten::linear         0.03%     132.632ms         0.24%        1.071s     118.978us     125.794ms         0.03%        2.299s     255.477us          9000  
+                                  EmbeddingBagBackward0         0.03%     126.964ms         0.72%        3.226s     268.821us     172.048ms         0.04%        3.329s     277.394us         12000  
+                      Optimizer.zero_grad#SGD.zero_grad         0.03%     122.315ms         0.03%     122.315ms      81.544us     132.725ms         0.03%     132.725ms      88.483us          1500  
+                                           aten::select         0.03%     119.393ms         0.04%     192.817ms      16.068us      95.028ms         0.02%     134.903ms      11.242us         12000  
+                               aten::threshold_backward         0.03%     118.977ms         0.04%     179.277ms      23.904us     199.747ms         0.04%     199.747ms      26.633us          7500  
+                                          aten::squeeze         0.03%     113.240ms         0.04%     164.110ms      13.676us      86.437ms         0.02%     126.708ms      10.559us         12000  
+                                       aten::as_strided         0.03%     113.110ms         0.03%     113.110ms       1.160us     416.009ms         0.09%     416.009ms       4.267us         97500  
+                          aten::_embedding_bag_backward         0.03%     111.846ms         0.68%        3.031s     252.559us     149.725ms         0.03%        3.157s     263.057us         12000  
+                                       aten::index_add_         0.03%     111.318ms         0.04%     190.039ms      15.837us        1.563s         0.35%        1.563s     130.243us         12000  
+                                             aten::view         0.02%     110.713ms         0.02%     110.713ms       1.677us     266.824ms         0.06%     266.824ms       4.043us         66000  
+                                              aten::bmm         0.02%     109.576ms         0.03%     143.856ms      31.968us     357.559ms         0.08%     357.559ms      79.458us          4500  
+                                    aten::embedding_bag         0.02%     106.212ms         0.27%        1.201s     100.107us      87.852ms         0.02%        2.268s     189.016us         12000  
+     autograd::engine::evaluate_function: ReluBackward0         0.02%     105.180ms         0.10%     444.152ms      59.220us     106.651ms         0.02%     385.432ms      51.391us          7500  
+                                        aten::clamp_min         0.02%     100.673ms         0.04%     161.914ms      21.589us     125.025ms         0.03%     125.025ms      16.670us          7500  
+                                             aten::relu         0.02%      96.337ms         0.07%     300.814ms      40.109us      56.315ms         0.01%     181.340ms      24.179us          7500  
+                                              aten::cat         0.02%      94.262ms         0.03%     119.599ms      26.577us     102.534ms         0.02%     102.534ms      22.785us          4500  
+                                            aten::index         0.02%      87.760ms         0.13%     581.287ms     387.524us     124.819ms         0.03%     337.512ms     225.008us          1500  
+                                          aten::resize_         0.02%      83.148ms         0.02%      84.610ms       1.343us     329.186ms         0.07%     329.186ms       5.225us         63000  
+                                           CatBackward0         0.02%      82.977ms         0.15%     670.185ms     223.395us     118.103ms         0.03%     601.148ms     200.383us          3000  
+                                             TBackward0         0.02%      81.908ms         0.08%     366.690ms      40.743us      86.940ms         0.02%     305.703ms      33.967us          9000  
+        autograd::engine::evaluate_function: TBackward0         0.02%      79.958ms         0.12%     513.037ms      57.004us     101.334ms         0.02%     407.037ms      45.226us          9000  
+                                       aten::empty_like         0.02%      77.943ms         0.04%     167.945ms      22.393us     106.165ms         0.02%     202.150ms      26.953us          7500  
+                                          ReluBackward0         0.02%      75.893ms         0.07%     294.239ms      39.232us      79.034ms         0.02%     278.781ms      37.171us          7500  
+                                         aten::mse_loss         0.02%      70.085ms         0.04%     196.627ms     131.085us     106.012ms         0.02%     203.446ms     135.631us          1500  
+      autograd::engine::evaluate_function: CatBackward0         0.01%      58.863ms         0.18%     790.982ms     263.661us      59.358ms         0.01%     701.217ms     233.739us          3000  
+                                  cudaDeviceSynchronize         0.01%      56.886ms         0.01%      56.886ms      18.956us       0.000us         0.00%       0.000us       0.000us          3001  
+                                            aten::fill_         0.01%      53.393ms         0.02%     106.597ms      14.213us     131.393ms         0.03%     131.393ms      17.519us          7500  
+                                aten::mse_loss_backward         0.01%      50.177ms         0.06%     276.269ms      92.090us      91.209ms         0.02%     293.390ms      97.797us          3000  
+                                            aten::stack         0.01%      48.879ms         0.02%      90.699ms      60.466us      52.652ms         0.01%     101.756ms      67.837us          1500  
+                                           BmmBackward0         0.01%      48.648ms         0.05%     206.064ms     137.376us      40.600ms         0.01%     394.279ms     262.853us          1500  
+                                                 detach         0.01%      48.100ms         0.01%      48.100ms       2.290us     106.393ms         0.02%     106.393ms       5.066us         21000  
+                                        aten::remainder         0.01%      45.215ms         0.02%      69.957ms      11.660us      47.358ms         0.01%      64.658ms      10.776us          6000  
+                                            aten::zero_         0.01%      43.888ms         0.03%     138.931ms      30.874us      57.036ms         0.01%     133.123ms      29.583us          4500  
+                                           aten::arange         0.01%      42.608ms         0.03%     130.171ms      43.390us      67.153ms         0.02%     145.094ms      48.365us          3000  
+                                         aten::_indices         0.01%      38.421ms         0.01%      38.421ms       0.800us     248.573ms         0.06%     248.573ms       5.179us         48000  
+                                              aten::mul         0.01%      37.946ms         0.01%      57.238ms       9.540us      44.926ms         0.01%      60.612ms      10.102us          6000  
+                                             aten::mean         0.01%      37.018ms         0.01%      64.941ms      43.294us      65.173ms         0.01%      73.142ms      48.761us          1500  
+                                        cudaMemsetAsync         0.01%      36.680ms         0.01%      36.680ms       4.076us       0.000us         0.00%       0.000us       0.000us          9000  
+                                          aten::_values         0.01%      34.462ms         0.01%      34.462ms       0.718us     240.185ms         0.05%     240.185ms       5.004us         48000  
+autograd::engine::evaluate_function: MseLossBackward...         0.01%      32.664ms         0.07%     311.949ms     207.966us      43.938ms         0.01%     320.899ms     213.933us          1500  
+                                   aten::slice_backward         0.01%      30.748ms         0.04%     195.360ms     130.240us      44.501ms         0.01%     201.969ms     134.646us          1500  
+autograd::engine::evaluate_function: TransposeBackwa...         0.01%      30.468ms         0.03%     119.294ms      79.530us      15.283ms         0.00%      65.291ms      43.527us          1500  
+                                          aten::sigmoid         0.01%      29.819ms         0.01%      44.432ms      29.621us      15.954ms         0.00%      15.954ms      10.636us          1500  
+                                       aten::zeros_like         0.01%      29.154ms         0.03%     147.834ms      98.556us      37.972ms         0.01%     156.458ms     104.305us          1500  
+                                             aten::ones         0.01%      28.319ms         0.01%      51.894ms      34.596us      35.888ms         0.01%      58.440ms      38.960us          1500  
+                                             aten::div_         0.01%      27.390ms         0.02%      80.454ms      26.818us      59.093ms         0.01%      95.926ms      31.975us          3000  
+                                         IndexBackward0         0.01%      26.579ms         0.44%        1.939s       1.293ms      15.787ms         0.00%        1.061s     707.240us          1500  
+      autograd::engine::evaluate_function: BmmBackward0         0.01%      26.133ms         0.05%     241.610ms     161.073us      16.927ms         0.00%     411.206ms     274.137us          1500  
+                                            aten::zeros         0.01%      24.269ms         0.02%      88.972ms      59.315us      30.230ms         0.01%      95.892ms      63.928us          1500  
+                                 aten::sigmoid_backward         0.01%      23.663ms         0.01%      38.939ms      25.959us      48.565ms         0.01%      48.565ms      32.377us          1500  
+                                        aten::ones_like         0.01%      23.147ms         0.02%     105.856ms      70.571us      31.564ms         0.01%     114.381ms      76.254us          1500  
+    autograd::engine::evaluate_function: IndexBackward0         0.01%      23.130ms         0.44%        1.972s       1.314ms       9.753ms         0.00%        1.071s     713.742us          1500  
+          cudaOccupancyMaxActiveBlocksPerMultiprocessor         0.01%      23.040ms         0.01%      23.040ms       2.191us       0.000us         0.00%       0.000us       0.000us         10517  
+                                            aten::clone         0.01%      22.339ms         0.02%      91.447ms      60.965us      30.034ms         0.01%      98.409ms      65.606us          1500  
+                                                detach_         0.01%      22.311ms         0.01%      22.311ms       0.744us     153.354ms         0.03%     153.354ms       5.112us         30000  
+autograd::engine::evaluate_function: SigmoidBackward...         0.00%      22.248ms         0.02%      99.891ms      66.594us      32.038ms         0.01%     108.262ms      72.175us          1500  
+                                        aten::new_zeros         0.00%      21.891ms         0.03%     111.616ms      74.411us      15.653ms         0.00%      50.576ms      33.717us          1500  
+                                       MseLossBackward0         0.00%      21.040ms         0.06%     268.521ms     179.014us      29.294ms         0.01%     276.961ms     184.641us          1500  
+                                       SigmoidBackward0         0.00%      20.196ms         0.02%      67.849ms      45.233us      27.659ms         0.01%      76.224ms      50.816us          1500  
+                                           aten::expand         0.00%      20.026ms         0.01%      26.071ms      17.380us      13.611ms         0.00%      18.136ms      12.091us          1500  
+    autograd::engine::evaluate_function: SliceBackward0         0.00%      18.407ms         0.06%     246.022ms     164.014us      22.167ms         0.00%     240.007ms     160.005us          1500  
+                                         SliceBackward0         0.00%      15.063ms         0.05%     217.036ms     144.691us      15.871ms         0.00%     217.840ms     145.227us          1500  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 445.207s
+Self CUDA time total: 445.432s
