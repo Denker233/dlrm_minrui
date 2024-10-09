@@ -61,12 +61,12 @@ import datetime
 import json
 import sys
 import time
-
+from fractions import Fraction
 # onnx
 # The onnx import causes deprecation warnings every time workers
 # are spawned during testing. So, we filter out those warnings.
 import warnings
-
+import re
 # data generation
 import dlrm_data_pytorch as dp
 
@@ -118,6 +118,72 @@ with warnings.catch_warnings():
 # from torch.nn.parameter import Parameter
 
 exc = getattr(builtins, "IOError", "FileNotFoundError")
+
+def extract_cpu_percentage(profile_data, function_name):
+    # Use re.findall to capture all matches of percentage values for the function
+    pattern = re.compile(rf"{re.escape(function_name)}.*?([\d.]+)%.*?([\d.]+)%")
+    matches = pattern.findall(profile_data)
+
+    
+    # Return the second match if it exists, otherwise return 0.0
+    if matches:
+        # matches will be a list of tuples, extract the first tuple
+        first_percentage, second_percentage = matches[0]
+        return float(second_percentage)
+    else:
+        print(f"No percentages found for {function_name}")
+        return None, None
+def calculate_ratios(*percentages):
+    # Find the smallest percentage as the base for normalization
+    min_percentage = min(percentages)
+    
+    # Normalize the percentages by dividing each by the smallest percentage
+    normalized_ratios = [Fraction(p / min_percentage).limit_denominator() for p in percentages]
+    
+    # Convert normalized ratios to a human-readable format (like 1:2:3:5)
+    ratio_str = ":".join(str(r) for r in normalized_ratios)
+    
+    return ratio_str
+
+def calculate_embeding_percentage(profile_data):
+    embedding_bag_cpu = extract_cpu_percentage(profile_data, "aten::embedding_bag")
+    embedding_bag_backward_cpu = extract_cpu_percentage(profile_data, "autograd::engine::evaluate_function: EmbeddingBagBac...")
+    dlrm_forward_cpu = extract_cpu_percentage(profile_data, "DLRM forward")
+    dlrm_backward_cpu = extract_cpu_percentage(profile_data, "DLRM backward")
+    numerator = embedding_bag_cpu + embedding_bag_backward_cpu
+    denominator = dlrm_forward_cpu + dlrm_backward_cpu
+
+    addmm_cpu = extract_cpu_percentage(profile_data, "aten::addmm")
+    bmm_cpu = extract_cpu_percentage(profile_data, "aten::bmm")
+    relu_cpu = extract_cpu_percentage(profile_data, "aten::relu")
+    bmm_backward_cpu = extract_cpu_percentage(profile_data, "autograd::engine::evaluate_function: BmmBackward0")
+    addmm_backward_cpu = extract_cpu_percentage(profile_data, "autograd::engine::evaluate_function: AddmmBackward0")
+    relu_cpu_backward = extract_cpu_percentage(profile_data, "autograd::engine::evaluate_function: ReluBackward0")
+
+    if denominator > 0:
+        ratio = numerator / denominator
+    else:
+        ratio = 0.0
+    embedding_bag_outof_forward = embedding_bag_cpu/dlrm_forward_cpu
+    embedding_back_outof_backward = embedding_bag_backward_cpu/dlrm_backward_cpu
+    ratios = calculate_ratios(addmm_cpu, bmm_cpu, relu_cpu,embedding_bag_cpu, bmm_backward_cpu, addmm_backward_cpu,relu_cpu_backward,embedding_bag_backward_cpu)
+
+# Print the result
+    print(f"Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:embedding_bag_cpu:bmm_backward_cpu:addmm_backward_cpu:relu_cpu_backward:embedding_bag_backward_cpu): {ratios}")
+    print(f"Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): {100*ratio:.2f}%")
+    print(f"Embedding bag CPU out of DLRM forward CPU: {100*embedding_bag_outof_forward:.2f}%")
+    print(f"Embedding backward CPU out of DLRM backward CPU: {100*embedding_back_outof_backward:.2f}%")
+    print(f"embedding_bag_cpu: {embedding_bag_cpu:.2f}%")
+    print(f"embedding_bag_backward_cpu: {embedding_bag_backward_cpu:.2f}%")
+
+    print(f"addmm_cpu: {addmm_cpu:.2f}%")
+    print(f"bmm_cpu: {bmm_cpu:.2f}%")
+    print(f"relu_cpu: {relu_cpu:.2f}%")
+    print(f"bmm_backward_cpu: {bmm_backward_cpu:.2f}%")
+    print(f"addmm_backward_cpu: {addmm_backward_cpu:.2f}%")
+    print(f"relu_cpu_backward: {relu_cpu_backward:.2f}%")
+    print(f"dlrm_forward_cpu: {dlrm_forward_cpu:.2f}%")
+    print(f"dlrm_backward_cpu: {dlrm_backward_cpu:.2f}%")
 
 
 def time_wrap(use_gpu):
@@ -1634,6 +1700,8 @@ def run():
                 start_time = time_wrap(use_gpu)
                 total_dlrm = 0
                 total_dlrm_back = 0
+                total_dlrm_backpass = 0
+
                 for j, inputBatch in enumerate(train_ld):
                     if j == 0 and args.save_onnx:
                         X_onnx, lS_o_onnx, lS_i_onnx, _, _, _ = unpack_batch(inputBatch)
@@ -1712,7 +1780,10 @@ def run():
                         ) or not args.mlperf_logging:
                             optimizer.zero_grad()
                         # backward pass
+                        dlrm_backpass_1 = time_wrap(use_gpu)
                         E.backward()
+                        dlrm_backpass_2 = time_wrap(use_gpu)
+                        total_dlrm_backpass += (dlrm_backpass_2 - dlrm_backpass_1)
 
                         # optimizer
                         if (
@@ -1766,6 +1837,7 @@ def run():
                             wall_time = " ({})".format(time.strftime("%H:%M"))
                         time_dlrm = total_dlrm* 1000/total_iter
                         time_dlrm_back_iteration = total_dlrm_back *1000 /total_iter
+                        time_dlrm_backpass_iteration = total_dlrm_backpass *1000 /total_iter
                         time_diff_look_up = (dlrm.time_look_up - last_time_look_up) *1000 /total_iter
                         time_diff_mlp = (dlrm.time_mlp - last_time_mlp) * 1000 / total_iter
                         time_diff_interact = (dlrm.time_interact - last_time_interact) * 1000 / total_iter
@@ -1778,13 +1850,14 @@ def run():
                             flush=True,
                         )
                         print(f"Embedding lookup time: {time_diff_look_up:.2f} ms, MLP time: {time_diff_mlp:.2f} ms, interaction time: {time_diff_interact:.2f} ms \n"
-                        f"Running dlrm: {time_dlrm:.2f} ms, running backpropagation after dlrm: {time_dlrm_back_iteration:.2f} ms")
+                        f"Running dlrm: {time_dlrm:.2f} ms, backpropagation after dlrm: {time_dlrm_back_iteration:.2f} ms, backpass: {time_dlrm_backpass_iteration:.2f} ms")
 
                         last_time_look_up = dlrm.time_look_up
                         last_time_mlp = dlrm.time_mlp
                         last_time_interact = dlrm.time_interact
                         total_dlrm = 0
                         total_dlrm_back=0
+                        total_dlrm_backpass=0
 
                         log_iter = nbatches * k + j + 1
                         writer.add_scalar("Train/Loss", train_loss, log_iter)
@@ -1923,7 +1996,9 @@ def run():
                 )
             )
         with open("dlrm_s_pytorch" + time_stamp + "_total.prof", "w") as prof_f:
-            prof_f.write(prof.key_averages().table(sort_by="self_cpu_time_total"))
+            profile_data = prof.key_averages().table(sort_by="self_cpu_time_total")
+            prof_f.write(profile_data)
+            calculate_embeding_percentage(profile_data)
         prof.export_chrome_trace("dlrm_s_pytorch" + time_stamp + ".json")
         # print(prof.key_averages().table(sort_by="cpu_time_total"))
 

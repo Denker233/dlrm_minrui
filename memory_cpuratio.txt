@@ -1,0 +1,306 @@
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:bmm_backward_cpu:addmm_backward_cpu): 106/3:7/3:16/3:1:190/3
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 14.46%
+Embedding bag CPU out of DLRM forward CPU: 25.51%
+Embedding backward CPU out of DLRM backward CPU: 11.32%
+embedding_bag_cpu: 0.50%
+embedding_bag_backward_cpu: 0.78%
+dlrm_forward_cpu: 1.96%
+dlrm_backward_cpu: 6.89%
+addmm_cpu: 1.06%
+bmm_cpu: 0.07%
+relu_cpu: 0.16%
+bmm_backward_cpu: 0.03%
+addmm_backward_cpu: 1.90%
+The MLP time is 23.178542375564575
+The embedding lookup time is 9.986387729644775
+The interaction time is 4.56705117225647
+The total time is 2152.2148616313934
+
+numactl python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=1000000-1000000-1000000-1000000-1000000-1000000-1000000-1000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling > op1.log
+
+
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:bmm_backward_cpu:addmm_backward_cpu): 98/3:2:5:1:179/3
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 19.64%
+Embedding bag CPU out of DLRM forward CPU: 45.60%
+Embedding backward CPU out of DLRM backward CPU: 10.47%
+embedding_bag_cpu: 1.14%
+embedding_bag_backward_cpu: 0.74%
+dlrm_forward_cpu: 2.50%
+dlrm_backward_cpu: 7.07%
+addmm_cpu: 0.98%
+bmm_cpu: 0.06%
+relu_cpu: 0.15%
+bmm_backward_cpu: 0.03%
+addmm_backward_cpu: 1.79%
+The MLP time is 22.382463455200195
+The embedding lookup time is 22.630943536758423
+The interaction time is 4.456125497817993
+The total time is 2231.2665281295776
+
+numactl python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=10000000-10000000-10000000-10000000-10000000-10000000-10000000-10000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling > op2.log
+
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:bmm_backward_cpu:addmm_backward_cpu): 97/3:2:5:1:179/3
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 23.13%
+Embedding bag CPU out of DLRM forward CPU: 53.63%
+Embedding backward CPU out of DLRM backward CPU: 10.78%
+embedding_bag_cpu: 1.55%
+embedding_bag_backward_cpu: 0.77%
+addmm_cpu: 0.97%
+bmm_cpu: 0.06%
+relu_cpu: 0.15%
+bmm_backward_cpu: 0.03%
+addmm_backward_cpu: 1.79%
+dlrm_forward_cpu: 2.89%
+dlrm_backward_cpu: 7.14%
+The MLP time is 21.843920469284058
+The embedding lookup time is 30.04549288749695
+The interaction time is 4.414769649505615
+The total time is 2213.788698911667
+
+numactl python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=20000000-20000000-20000000-20000000-10000000-10000000-10000000-10000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling > op3.log
+
+
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:bmm_backward_cpu:addmm_backward_cpu): 33:2:5:1:185/3
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 23.92%
+Embedding bag CPU out of DLRM forward CPU: 56.45%
+Embedding backward CPU out of DLRM backward CPU: 10.20%
+embedding_bag_cpu: 1.75%
+embedding_bag_backward_cpu: 0.75%
+dlrm_forward_cpu: 3.10%
+dlrm_backward_cpu: 7.35%
+addmm_cpu: 0.99%
+bmm_cpu: 0.06%
+relu_cpu: 0.15%
+bmm_backward_cpu: 0.03%
+addmm_backward_cpu: 1.85%
+The MLP time is 21.926997423171997
+The embedding lookup time is 33.35060429573059
+The interaction time is 4.27219820022583
+The total time is 2191.7695376873016
+
+numactl python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=20000000-20000000-20000000-20000000-20000000-20000000-20000000-20000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling > op4.log
+
+can you draw a picture showing x be the embedding table size and y be the Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:bmm_backward_cpu:addmm_backward_cpu): 33:2:5:1:185/3
+
+
+can you draw a picture showing x be the embedding table size and y be the Ratios of CPU percentages
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:embedding_bag_cpu:bmm_backward_cpu:addmm_backward_cpu:relu_cpu_backward:embedding_bag_backward_cpu: 183/13:17/13:35/13:113/13:1:361/13:33/13:11
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 13.88%
+Embedding bag CPU out of DLRM forward CPU: 30.87%
+Embedding backward CPU out of DLRM backward CPU: 9.67%
+embedding_bag_cpu: 1.13%
+embedding_bag_backward_cpu: 1.43%
+addmm_cpu: 1.83%
+bmm_cpu: 0.17%
+relu_cpu: 0.35%
+bmm_backward_cpu: 0.13%
+addmm_backward_cpu: 3.61%
+relu_cpu_backward: 0.33%
+dlrm_forward_cpu: 3.66%
+dlrm_backward_cpu: 14.79%
+The MLP time is 14.882481098175049
+The embedding lookup time is 7.81948184967041
+The interaction time is 3.0120491981506348
+The total time is 795.068853855133
+numactl python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=1000000-1000000-1000000-1000000-1000000-1000000-1000000-1000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling > op5.log
+
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:embedding_bag_cpu:bmm_backward_cpu:addmm_backward_cpu:relu_cpu_backward:embedding_bag_backward_cpu: 61/4:5/4:35/12:209/12:1:29:31/12:139/12
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 17.96%
+Embedding bag CPU out of DLRM forward CPU: 45.53%
+Embedding backward CPU out of DLRM backward CPU: 9.40%
+embedding_bag_cpu: 2.09%
+embedding_bag_backward_cpu: 1.39%
+addmm_cpu: 1.83%
+bmm_cpu: 0.15%
+relu_cpu: 0.35%
+bmm_backward_cpu: 0.12%
+addmm_backward_cpu: 3.48%
+relu_cpu_backward: 0.31%
+dlrm_forward_cpu: 4.59%
+dlrm_backward_cpu: 14.79%
+The MLP time is 15.162713050842285
+The embedding lookup time is 14.498897314071655
+The interaction time is 2.513188362121582
+The total time is 805.9191110134125
+
+numactl python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=10000000-10000000-10000000-10000000-10000000-10000000-10000000-10000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling > op6.log
+
+
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:embedding_bag_cpu:bmm_backward_cpu:addmm_backward_cpu:relu_cpu_backward:embedding_bag_backward_cpu: 181/12:5/4:17/6:125/6:1:343/12:5/2:34/3
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 19.63%
+Embedding bag CPU out of DLRM forward CPU: 50.20%
+Embedding backward CPU out of DLRM backward CPU: 9.26%
+embedding_bag_cpu: 2.50%
+embedding_bag_backward_cpu: 1.36%
+addmm_cpu: 1.81%
+bmm_cpu: 0.15%
+relu_cpu: 0.34%
+bmm_backward_cpu: 0.12%
+addmm_backward_cpu: 3.43%
+relu_cpu_backward: 0.30%
+dlrm_forward_cpu: 4.98%
+dlrm_backward_cpu: 14.68%
+The MLP time is 14.935335397720337
+The embedding lookup time is 17.25566077232361
+The interaction time is 2.4935882091522217
+The total time is 812.0854122638702
+numactl python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=20000000-20000000-20000000-20000000-10000000-10000000-10000000-10000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling > op7.log
+
+
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:embedding_bag_cpu:bmm_backward_cpu:addmm_backward_cpu:relu_cpu_backward:embedding_bag_backward_cpu: 185/13:16/13:36/13:285/13:1:348/13:32/13:144/13
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 21.17%
+Embedding bag CPU out of DLRM forward CPU: 52.78%
+Embedding backward CPU out of DLRM backward CPU: 9.69%
+embedding_bag_cpu: 2.85%
+embedding_bag_backward_cpu: 1.44%
+addmm_cpu: 1.85%
+bmm_cpu: 0.16%
+relu_cpu: 0.36%
+bmm_backward_cpu: 0.13%
+addmm_backward_cpu: 3.48%
+relu_cpu_backward: 0.32%
+dlrm_forward_cpu: 5.40%
+dlrm_backward_cpu: 14.86%
+The MLP time is 15.37733793258667
+The embedding lookup time is 19.62259006500244
+The interaction time is 2.5904438495635986
+The total time is 815.6825017929077
+numactl python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=20000000-20000000-20000000-20000000-20000000-20000000-20000000-20000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling > op8.log
+
+up are all d7525
+
+------------------------------------------------------------------------------------------------------------------
+can you draw a picture showing x be the embedding table size and y be the Ratios of CPU percentages 
+for every table size can you make all the percentage into 100% and each account some of it ?
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:embedding_bag_cpu:bmm_backward_cpu:addmm_backward_cpu:relu_cpu_backward:embedding_bag_backward_cpu: 109/3:7/3:17/3:17:1:194/3:10/3:26
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 14.48%
+Embedding bag CPU out of DLRM forward CPU: 25.63%
+Embedding backward CPU out of DLRM backward CPU: 11.27%
+embedding_bag_cpu: 0.51%
+embedding_bag_backward_cpu: 0.78%
+addmm_cpu: 1.09%
+bmm_cpu: 0.07%
+relu_cpu: 0.17%
+bmm_backward_cpu: 0.03%
+addmm_backward_cpu: 1.94%
+relu_cpu_backward: 0.10%
+dlrm_forward_cpu: 1.99%
+dlrm_backward_cpu: 6.92%
+The MLP time is 23.528652667999268
+The embedding lookup time is 9.984191179275513
+The interaction time is 4.586384296417236
+The total time is 2133.402902841568
+numactl python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=1000000-1000000-1000000-1000000-1000000-1000000-1000000-1000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling > op5.log
+
+
+
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:embedding_bag_cpu:bmm_backward_cpu:addmm_backward_cpu:relu_cpu_backward:embedding_bag_backward_cpu: 101/3:2:5:112/3:1:62:10/3:76/3
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 18.73%
+Embedding bag CPU out of DLRM forward CPU: 44.80%
+Embedding backward CPU out of DLRM backward CPU: 10.08%
+embedding_bag_cpu: 1.12%
+embedding_bag_backward_cpu: 0.76%
+addmm_cpu: 1.01%
+bmm_cpu: 0.06%
+relu_cpu: 0.15%
+bmm_backward_cpu: 0.03%
+addmm_backward_cpu: 1.86%
+relu_cpu_backward: 0.10%
+dlrm_forward_cpu: 2.50%
+dlrm_backward_cpu: 7.54%
+The MLP time is 22.17518162727356
+The embedding lookup time is 21.4526150226593
+The interaction time is 4.3736419677734375
+The total time is 2170.1833403110504
+numactl python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=10000000-10000000-10000000-10000000-10000000-10000000-10000000-10000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling > op6.log
+
+
+
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:embedding_bag_cpu:bmm_backward_cpu:addmm_backward_cpu:relu_cpu_backward:embedding_bag_backward_cpu: 95/3:2:5:131/3:1:176/3:3:25
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 21.39%
+Embedding bag CPU out of DLRM forward CPU: 50.00%
+Embedding backward CPU out of DLRM backward CPU: 10.70%
+embedding_bag_cpu: 1.31%
+embedding_bag_backward_cpu: 0.75%
+addmm_cpu: 0.95%
+bmm_cpu: 0.06%
+relu_cpu: 0.15%
+bmm_backward_cpu: 0.03%
+addmm_backward_cpu: 1.76%
+relu_cpu_backward: 0.09%
+dlrm_forward_cpu: 2.62%
+dlrm_backward_cpu: 7.01%
+The MLP time is 21.89682149887085
+The embedding lookup time is 26.15372633934021
+The interaction time is 4.454256296157837
+The total time is 2254.863123655319
+numactl python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=20000000-20000000-20000000-20000000-10000000-10000000-10000000-10000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling > op7.log
+
+
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:embedding_bag_cpu:bmm_backward_cpu:addmm_backward_cpu:relu_cpu_backward:embedding_bag_backward_cpu: 100/3:2:5:57:1:61:10/3:77/3
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 23.96%
+Embedding bag CPU out of DLRM forward CPU: 55.52%
+Embedding backward CPU out of DLRM backward CPU: 10.59%
+embedding_bag_cpu: 1.71%
+embedding_bag_backward_cpu: 0.77%
+addmm_cpu: 1.00%
+bmm_cpu: 0.06%
+relu_cpu: 0.15%
+bmm_backward_cpu: 0.03%
+addmm_backward_cpu: 1.83%
+relu_cpu_backward: 0.10%
+dlrm_forward_cpu: 3.08%
+dlrm_backward_cpu: 7.27%
+The MLP time is 22.249258041381836
+The embedding lookup time is 32.683165550231934
+The interaction time is 4.342439651489258
+The total time is 2185.152643918991
+numactl python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=20000000-20000000-20000000-20000000-20000000-20000000-20000000-20000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling > op8.log

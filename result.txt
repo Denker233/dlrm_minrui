@@ -1,0 +1,138 @@
+
+Linfeng's machine:
+numactl --physcpubind=10  python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=50000000-50000000-50000000-50000000-10000000-10000000-10000000-10000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling
+numactl --physcpubind=10  python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=5000000-2000000-2000000-2000000-2000000-2000000-2000000-2000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling
+
+
+Overall embedding ratio(embedding_bag+embedding_bag_backward)/(DLRM forward+DLRM backward): 0.46
+Embedding bag CPU out of DLRM forward CPU: 0.77
+Embedding bag backward CPU out of DLRM backward CPU: 0.12
+
+Overall embedding ratio(embedding_bag+embedding_bag_backward)/(DLRM forward+DLRM backward): 0.336
+Embedding bag CPU out of DLRM forward CPU: 0.634
+Embedding bag backward CPU out of DLRM backward CPU: 0.114
+
+d7525 RAM: 128 GB 3200 MT/s
+Disk: 2 480 GB 6G SATA SSD, 1 1.6 TB PCIe4 x4 NVMe SSD
+:
+
+numactl --physcpubind=10  python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=1000000-1000000-1000000-1000000-1000000-1000000-1000000-1000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling
+1.91 GB of memory used
+consistently
+Overall embedding ratio(embedding_bag+embedding_bag_backward)/(DLRM forward+DLRM backward): 12%
+Embedding bag CPU out of DLRM forward CPU: 18%
+Embedding bag backward CPU out of DLRM backward CPU: 9%
+
+numactl --physcpubind=10  python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=1000000-1000000-1000000-1000000-1000000-1000000-1000000-1000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling
+1.91 GB of memory used
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 13.99%
+Embedding bag CPU out of DLRM forward CPU: 30.59%
+Embedding backward CPU out of DLRM backward CPU: 9.80%
+
+numactl --physcpubind=10  python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=10000000-10000000-10000000-10000000-10000000-10000000-10000000-10000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling
+
+19.072 GB of memory used
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 25.85%
+Embedding bag CPU out of DLRM forward CPU: 53.54%
+Embedding backward CPU out of DLRM backward CPU: 8.47%
+
+numactl --physcpubind=10  python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=20000000-20000000-20000000-20000000-10000000-10000000-10000000-10000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling
+28.61 GB
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 31.63%
+Embedding bag CPU out of DLRM forward CPU: 62.02%
+Embedding backward CPU out of DLRM backward CPU: 8.64%
+
+numactl --physcpubind=10  python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=20000000-20000000-20000000-20000000-20000000-20000000-20000000-20000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling
+
+38.15 GB
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 36.13%
+Embedding bag CPU out of DLRM forward CPU: 67.60%
+Embedding backward CPU out of DLRM backward CPU: 8.53%
+
+numactl --physcpubind=10  python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=50000000-20000000-20000000-20000000-20000000-20000000-20000000-20000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling
+45.30 GB
+
+c240g5 RAM: 2666 MT/s
+Disk: 	One 1 TB 7200 RPM 6G SAS HDs,  One Intel DC S3500 480 GB 6G SATA SSD
+:
+numactl --physcpubind=10  python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=1000000-1000000-1000000-1000000-1000000-1000000-1000000-1000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling
+1.91 GB
+consistently
+Overall embedding ratio(embedding_bag+embedding_bag_backward)/(DLRM forward+DLRM backward): 15%
+Embedding bag CPU out of DLRM forward CPU: 27%
+Embedding bag backward CPU out of DLRM backward CPU: 9%
+
+
+
+
+
+numactl --physcpubind=10  python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=10000000-10000000-10000000-10000000-10000000-10000000-10000000-10000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling
+19.072 GB
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 46%
+Embedding bag CPU out of DLRM forward CPU: 75%
+Embedding backward CPU out of DLRM backward CPU: 8.6%
+
+
+numactl --physcpubind=10  python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=20000000-20000000-20000000-20000000-20000000-20000000-20000000-20000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling 
+38.15 GB
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 54.20%
+Embedding bag CPU out of DLRM forward CPU: 80.86%
+Embedding backward CPU out of DLRM backward CPU: 9.08%
+
+
+numactl --physcpubind=10  python3 dlrm_s_pytorch.py \
+                          --arch-embedding-size=50000000-50000000-50000000-50000000-10000000-10000000-10000000-10000000 \
+                          --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+                          --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+                          --print-freq=200 --print-time --enable-profiling
+
+consistently
+57.216 GB of memory used
+Overall embedding ratio(embedding_bag+embedding_bag_backward)/(DLRM forward+DLRM backward): 53%
+Embedding bag CPU out of DLRM forward CPU: 80%
+Embedding bag backward CPU out of DLRM backward CPU: 9.6%
+Self CPU time total: 4282.120s
