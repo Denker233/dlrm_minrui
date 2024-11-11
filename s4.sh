@@ -1,53 +1,338 @@
-#!/bin/bash
-# Define the extra option passed to the script, if any
-if [[ $# == 1 ]]; then
-    dlrm_extra_option=$1
-else
-    dlrm_extra_option=""
-fi
-# GPU configuration
-gpu=1
-ngpus="1"  # Adjust this value if you want to run on multiple GPUs, e.g., "1 2 4 8"
-# Model parameters specific to your command
-mb_size=2
-data_size=6
-numa_cmd=""  # Empty since not using specific CPU binding for GPUs
-dlrm_pt_bin="python dlrm_s_pytorch.py"
-# GPU Benchmarking
-if [ $gpu = 1 ]; then
-  echo "--------------------------------------------"
-  echo "GPU Benchmarking - running on $ngpus GPUs"
-  echo "--------------------------------------------"
-  for _ng in $ngpus
-  do
-    # strong scaling, keeping batch size fixed
-    _mb_size=$((mb_size*1))
-    _gpus=$(seq -s, 0 $((_ng-1)))
-    cuda_arg="CUDA_VISIBLE_DEVICES=$_gpus"
-    echo "-------------------"
-    echo "Using GPUS: "$_gpus
-    echo "-------------------"
-    # Running the PyTorch model on GPU
-    outf="model_GPU_PT_$_ng.log"
-    outp="dlrm_s_pytorch.prof"
-    echo "-------------------------------"
-    echo "Running PT (log file: $outf)"
-    echo "-------------------------------"
-    # Command to run your specific setup on GPU
-    cmd="$cuda_arg $dlrm_pt_bin --mini-batch-size=$_mb_size --data-size=$data_size --use-gpu $dlrm_extra_option > $outf"
-    echo $cmd
-    eval $cmd
-    # Extract minimum iteration time from the log
-    min=$(grep "iteration" $outf | awk 'BEGIN{best=999999} {if (best > $7) best=$7} END{print best}')
-    echo "Min time per iteration = $min"
-    # Move profiling file(s)
-    mv $outp ${outf//".log"/".prof"}
-    mv ${outp//".prof"/".json"} ${outf//".log"/".json"}
-  done
-fi
+bash /users/mt1370/expr/throttle/run_freq.sh 2.4 2.4 10
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=1000000-1000000-1000000-1000000-1000000-1000000-1000000-1000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 1.91 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=1000000-1000000-1000000-1000000-1000000-1000000-1000000-1000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 1.91 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=10000000-10000000-10000000-10000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 19.072 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=10000000-10000000-10000000-10000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 19.072 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 28.61 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 28.61 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-20000000-20000000-20000000-20000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 38.15 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-20000000-20000000-20000000-20000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 38.15 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+#########################################################################################
+bash /users/mt1370/expr/throttle/run_freq.sh 2.4 2.4 7
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=1000000-1000000-1000000-1000000-1000000-1000000-1000000-1000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 1.91 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=1000000-1000000-1000000-1000000-1000000-1000000-1000000-1000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 1.91 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=10000000-10000000-10000000-10000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 19.072 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=10000000-10000000-10000000-10000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 19.072 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 28.61 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 28.61 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-20000000-20000000-20000000-20000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 38.15 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-20000000-20000000-20000000-20000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 38.15 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+#########################################################################################
+bash /users/mt1370/expr/throttle/run_freq.sh 2.4 2.4 5
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=1000000-1000000-1000000-1000000-1000000-1000000-1000000-1000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 1.91 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=1000000-1000000-1000000-1000000-1000000-1000000-1000000-1000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 1.91 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=10000000-10000000-10000000-10000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 19.072 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=10000000-10000000-10000000-10000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 19.072 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 28.61 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 28.61 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-20000000-20000000-20000000-20000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 38.15 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-20000000-20000000-20000000-20000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 38.15 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+
+#########################################################################################
+bash /users/mt1370/expr/throttle/run_freq.sh 2.4 2.4 3
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=1000000-1000000-1000000-1000000-1000000-1000000-1000000-1000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 1.91 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=1000000-1000000-1000000-1000000-1000000-1000000-1000000-1000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 1.91 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=10000000-10000000-10000000-10000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 19.072 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=10000000-10000000-10000000-10000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 19.072 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 28.61 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 28.61 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-20000000-20000000-20000000-20000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 38.15 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-20000000-20000000-20000000-20000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 38.15 GB of memory used (NUMA 1)" >> combined_output_numa1.log
 
 
 
+#########################################################################################
+bash /users/mt1370/expr/throttle/run_freq.sh 2.4 2.4 1
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=1000000-1000000-1000000-1000000-1000000-1000000-1000000-1000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 1.91 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=1000000-1000000-1000000-1000000-1000000-1000000-1000000-1000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 1.91 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=10000000-10000000-10000000-10000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 19.072 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=10000000-10000000-10000000-10000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 19.072 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 28.61 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-10000000-10000000-10000000-10000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 28.61 GB of memory used (NUMA 1)" >> combined_output_numa1.log
+
+# Run on NUMA 0
+numactl --physcpubind=0 --membind=0 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-20000000-20000000-20000000-20000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa0.log 2>&1
+echo "# Embedding table size 38.15 GB of memory used (NUMA 0)" >> combined_output_numa0.log
+
+# Run on NUMA 1
+numactl --physcpubind=1 --membind=1 python3 dlrm_s_pytorch.py \
+    --arch-embedding-size=20000000-20000000-20000000-20000000-20000000-20000000-20000000-20000000 \
+    --arch-sparse-feature-size=64 --arch-mlp-bot="512-512-64" --arch-mlp-top="1024-1024-1024-1" \
+    --data-generation=random --mini-batch-size=2048 --num-batches=1000 --num-indices-per-lookup=100 \
+    --print-freq=200 --print-time --enable-profiling >> combined_output_numa1.log 2>&1
+echo "# Embedding table size 38.15 GB of memory used (NUMA 1)" >> combined_output_numa1.log
 
 
 

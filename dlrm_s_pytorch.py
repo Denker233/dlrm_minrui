@@ -54,6 +54,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import argparse
+import sys
 
 # miscellaneous
 import builtins
@@ -2102,6 +2103,7 @@ def run():
     print(f"The embedding lookup time is {dlrm.time_look_up}")
     print(f"The interaction time is {dlrm.time_interact}")
     print(f"The total time is {total_time_end-start_time}")
+    print("Command used to run the program: " + " ".join(sys.argv))
 
 
 
