@@ -1,3 +1,54 @@
+### Instructions for Running DLRM with Memory Throttling
+
+
+1. **Prepare and Clean the Dataset**
+    ```
+    cd input/
+    wget https://go.criteo.net/criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz
+    ```
+   - Untar and decompress the dataset file `criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz`:
+     ```
+     tar -xzvf criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz
+     ```
+   - Rename `train.txt` and `test.txt` to `train_original.txt` and `test_original.txt`:
+     ```
+     mv train.txt train_original.txt
+     mv test.txt test_original.txt
+     ```
+   - Remove all preprocessed files from the `input` directory to clean up previous runs:
+     ```
+     rm -rf kaggleAdDisplayChallenge_processed.npz train_day_* train_fea_*
+     ```
+
+2. **Split Dataset**
+   - To split the `train.txt` and `test.txt` files:
+     - Use the **original dataset**:
+       ```
+       python3 train_split.py 1
+       ```
+     - Use **1/10 of the dataset**:
+       ```
+       python3 train_split.py 10
+       ```
+
+3. **(Optional) Check File Sizes**
+   - To verify the file size manually, use the following command:
+     ```
+     du --apparent-size --block-size=1 filename | awk '{printf "%.2fG\t%s\n", $1/1073741824, $2}'
+     ```
+
+4. **Run the Script**
+   - Run the script with full memory or bind it to **NUMA 1**:
+     - Uncomment the line in `kaggle_throttle.sh` that enables NUMA binding.
+     - Execute the script:
+       ```
+       cd ..
+       ./kaggle_throttle.sh
+       ```
+
+
+
+
 Deep Learning Recommendation Model for Personalization and Recommendation Systems:
 =================================================================================
 *Copyright (c) Facebook, Inc. and its affiliates.*

@@ -1,0 +1,199 @@
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=./input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+time/loss/accuracy (if enabled):
+Finished training it 3070/3070 of epoch 0, 23.73 ms/it, loss 0.496861
+ERROR:2024-11-15 18:38:14 2829024:2829024 DeviceProperties.cpp:46] gpuGetDeviceCount failed with code 35
+/users/mt1370/expr/dlrm_minrui/dlrm_data_pytorch.py:328: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor. (Triggered internally at ../torch/csrc/utils/tensor_new.cpp:278.)
+  X_int = torch.log(torch.tensor(transposed_data[0], dtype=torch.float) + 1)
+Embedding lookup time: 4.68 ms, MLP time: 1.96 ms, interaction time: 1.82 ms 
+Running dlrm: 7.79 ms, backpropagation after dlrm: 15.54 ms, backpass: 13.44 ms
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:embedding_bag_cpu:bmm_backward_cpu:addmm_backward_cpu:relu_cpu_backward:embedding_bag_backward_cpu): 257/34:3/2:62/17:817/34:1:1311/34:42/17:1113/34
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 31.55%
+Embedding bag CPU out of DLRM forward CPU: 40.07%
+Embedding backward CPU out of DLRM backward CPU: 27.29%
+embedding_bag_cpu: 8.17%
+embedding_bag_backward_cpu: 11.13%
+addmm_cpu: 2.57%
+bmm_cpu: 0.51%
+relu_cpu: 1.24%
+bmm_backward_cpu: 0.34%
+addmm_backward_cpu: 13.11%
+relu_cpu_backward: 0.84%
+dlrm_forward_cpu: 20.39%
+dlrm_backward_cpu: 40.78%
+The MLP time is 6.016693830490112
+The embedding lookup time is 14.358239889144897
+The interaction time is 5.575127840042114
+The total time is 1574.7267265319824
+Command used to run the program: dlrm_s_pytorch.py --arch-sparse-feature-size=16 --arch-mlp-bot=13-512-256-64-16 --arch-mlp-top=512-256-1 --data-generation=dataset --data-set=kaggle --raw-data-file=./input/train.txt --processed-data-file=./input/kaggleAdDisplayChallenge_processed.npz --loss-function=bce --round-targets=True --learning-rate=0.1 --mini-batch-size=128 --print-freq=8192 --print-time --test-mini-batch-size=16384 --test-num-workers=16 --enable-profiling
+done
+# Run DLRM (NUMA 1) 8GB bandwidth
+run pytorch ...
+world size: 1, current rank: 0, local rank: 0
+Using CPU...
+Reading pre-processed data=./input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=./input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+time/loss/accuracy (if enabled):
+Finished training it 3070/3070 of epoch 0, 23.74 ms/it, loss 0.496861
+ERROR:2024-11-15 19:06:38 2899914:2899914 DeviceProperties.cpp:46] gpuGetDeviceCount failed with code 35
+/users/mt1370/expr/dlrm_minrui/dlrm_data_pytorch.py:328: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor. (Triggered internally at ../torch/csrc/utils/tensor_new.cpp:278.)
+  X_int = torch.log(torch.tensor(transposed_data[0], dtype=torch.float) + 1)
+Embedding lookup time: 4.71 ms, MLP time: 1.94 ms, interaction time: 1.83 ms 
+Running dlrm: 7.81 ms, backpropagation after dlrm: 15.53 ms, backpass: 13.36 ms
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:embedding_bag_cpu:bmm_backward_cpu:addmm_backward_cpu:relu_cpu_backward:embedding_bag_backward_cpu): 256/35:52/35:124/35:118/5:1:187/5:12/5:1103/35
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 31.35%
+Embedding bag CPU out of DLRM forward CPU: 40.21%
+Embedding backward CPU out of DLRM backward CPU: 26.91%
+embedding_bag_cpu: 8.26%
+embedding_bag_backward_cpu: 11.03%
+addmm_cpu: 2.56%
+bmm_cpu: 0.52%
+relu_cpu: 1.24%
+bmm_backward_cpu: 0.35%
+addmm_backward_cpu: 13.09%
+relu_cpu_backward: 0.84%
+dlrm_forward_cpu: 20.54%
+dlrm_backward_cpu: 40.99%
+The MLP time is 5.9600489139556885
+The embedding lookup time is 14.461061716079712
+The interaction time is 5.60479998588562
+The total time is 1487.6226160526276
+Command used to run the program: dlrm_s_pytorch.py --arch-sparse-feature-size=16 --arch-mlp-bot=13-512-256-64-16 --arch-mlp-top=512-256-1 --data-generation=dataset --data-set=kaggle --raw-data-file=./input/train.txt --processed-data-file=./input/kaggleAdDisplayChallenge_processed.npz --loss-function=bce --round-targets=True --learning-rate=0.1 --mini-batch-size=128 --print-freq=8192 --print-time --test-mini-batch-size=16384 --test-num-workers=16 --enable-profiling
+done
+# Run DLRM (NUMA 1) 5GB bandwidth
+run pytorch ...
+world size: 1, current rank: 0, local rank: 0
+Using CPU...
+Reading pre-processed data=./input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=./input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+time/loss/accuracy (if enabled):
+Finished training it 3070/3070 of epoch 0, 24.03 ms/it, loss 0.496861
+ERROR:2024-11-15 19:37:04 2961730:2961730 DeviceProperties.cpp:46] gpuGetDeviceCount failed with code 35
+/users/mt1370/expr/dlrm_minrui/dlrm_data_pytorch.py:328: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor. (Triggered internally at ../torch/csrc/utils/tensor_new.cpp:278.)
+  X_int = torch.log(torch.tensor(transposed_data[0], dtype=torch.float) + 1)
+Embedding lookup time: 4.79 ms, MLP time: 1.94 ms, interaction time: 1.85 ms 
+Running dlrm: 7.91 ms, backpropagation after dlrm: 15.71 ms, backpass: 13.59 ms
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:embedding_bag_cpu:bmm_backward_cpu:addmm_backward_cpu:relu_cpu_backward:embedding_bag_backward_cpu): 85/12:3/2:41/12:839/36:1:147/4:7/3:187/6
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 31.65%
+Embedding bag CPU out of DLRM forward CPU: 40.53%
+Embedding backward CPU out of DLRM backward CPU: 27.20%
+embedding_bag_cpu: 8.39%
+embedding_bag_backward_cpu: 11.22%
+addmm_cpu: 2.55%
+bmm_cpu: 0.54%
+relu_cpu: 1.23%
+bmm_backward_cpu: 0.36%
+addmm_backward_cpu: 13.23%
+relu_cpu_backward: 0.84%
+dlrm_forward_cpu: 20.70%
+dlrm_backward_cpu: 41.25%
+The MLP time is 5.968827486038208
+The embedding lookup time is 14.692522287368774
+The interaction time is 5.678492784500122
+The total time is 1607.4909982681274
+Command used to run the program: dlrm_s_pytorch.py --arch-sparse-feature-size=16 --arch-mlp-bot=13-512-256-64-16 --arch-mlp-top=512-256-1 --data-generation=dataset --data-set=kaggle --raw-data-file=./input/train.txt --processed-data-file=./input/kaggleAdDisplayChallenge_processed.npz --loss-function=bce --round-targets=True --learning-rate=0.1 --mini-batch-size=128 --print-freq=8192 --print-time --test-mini-batch-size=16384 --test-num-workers=16 --enable-profiling
+done
+# Run DLRM (NUMA 1) 3GB bandwidth
+run pytorch ...
+world size: 1, current rank: 0, local rank: 0
+Using CPU...
+Reading pre-processed data=./input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=./input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+time/loss/accuracy (if enabled):
+Finished training it 3070/3070 of epoch 0, 23.93 ms/it, loss 0.496861
+ERROR:2024-11-15 20:06:55 3024361:3024361 DeviceProperties.cpp:46] gpuGetDeviceCount failed with code 35
+/users/mt1370/expr/dlrm_minrui/dlrm_data_pytorch.py:328: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor. (Triggered internally at ../torch/csrc/utils/tensor_new.cpp:278.)
+  X_int = torch.log(torch.tensor(transposed_data[0], dtype=torch.float) + 1)
+Embedding lookup time: 4.72 ms, MLP time: 2.04 ms, interaction time: 1.82 ms 
+Running dlrm: 7.91 ms, backpropagation after dlrm: 15.62 ms, backpass: 13.49 ms
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:embedding_bag_cpu:bmm_backward_cpu:addmm_backward_cpu:relu_cpu_backward:embedding_bag_backward_cpu): 280/43:61/43:126/43:832/43:1:1343/43:2:1113/43
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 31.29%
+Embedding bag CPU out of DLRM forward CPU: 39.87%
+Embedding backward CPU out of DLRM backward CPU: 26.95%
+embedding_bag_cpu: 8.32%
+embedding_bag_backward_cpu: 11.13%
+addmm_cpu: 2.80%
+bmm_cpu: 0.61%
+relu_cpu: 1.26%
+bmm_backward_cpu: 0.43%
+addmm_backward_cpu: 13.43%
+relu_cpu_backward: 0.86%
+dlrm_forward_cpu: 20.87%
+dlrm_backward_cpu: 41.30%
+The MLP time is 6.2666285037994385
+The embedding lookup time is 14.477783918380737
+The interaction time is 5.594217538833618
+The total time is 1551.6011815071106
+Command used to run the program: dlrm_s_pytorch.py --arch-sparse-feature-size=16 --arch-mlp-bot=13-512-256-64-16 --arch-mlp-top=512-256-1 --data-generation=dataset --data-set=kaggle --raw-data-file=./input/train.txt --processed-data-file=./input/kaggleAdDisplayChallenge_processed.npz --loss-function=bce --round-targets=True --learning-rate=0.1 --mini-batch-size=128 --print-freq=8192 --print-time --test-mini-batch-size=16384 --test-num-workers=16 --enable-profiling
+done
+run pytorch ...
+world size: 1, current rank: 0, local rank: 0
+Using CPU...
+Reading pre-processed data=./input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=./input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+time/loss/accuracy (if enabled):
+Finished training it 3070/3070 of epoch 0, 28.79 ms/it, loss 0.496861
+ERROR:2024-11-15 20:41:13 3087144:3087144 DeviceProperties.cpp:46] gpuGetDeviceCount failed with code 35
+/users/mt1370/expr/dlrm_minrui/dlrm_data_pytorch.py:328: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor. (Triggered internally at ../torch/csrc/utils/tensor_new.cpp:278.)
+  X_int = torch.log(torch.tensor(transposed_data[0], dtype=torch.float) + 1)
+Embedding lookup time: 5.55 ms, MLP time: 2.47 ms, interaction time: 2.09 ms 
+Running dlrm: 9.32 ms, backpropagation after dlrm: 19.04 ms, backpass: 16.25 ms
+Ratios of CPU percentages (addmm_cpu:bmm_cpu:relu_cpu:embedding_bag_cpu:bmm_backward_cpu:addmm_backward_cpu:relu_cpu_backward:embedding_bag_backward_cpu): 319/64:41/32:59/32:867/64:1:1507/64:53/32:539/32
+Overall embedding ratio (embedding_bag + embedding_bag_backward) / (DLRM forward + DLRM backward): 29.89%
+Embedding bag CPU out of DLRM forward CPU: 40.63%
+Embedding backward CPU out of DLRM backward CPU: 24.65%
+embedding_bag_cpu: 8.67%
+embedding_bag_backward_cpu: 10.78%
+addmm_cpu: 3.19%
+bmm_cpu: 0.82%
+relu_cpu: 1.18%
+bmm_backward_cpu: 0.64%
+addmm_backward_cpu: 15.07%
+relu_cpu_backward: 1.06%
+dlrm_forward_cpu: 21.34%
+dlrm_backward_cpu: 43.73%
+The MLP time is 7.585714340209961
+The embedding lookup time is 17.03029155731201
+The interaction time is 6.410276412963867
+The total time is 1730.9782629013062
+Command used to run the program: dlrm_s_pytorch.py --arch-sparse-feature-size=16 --arch-mlp-bot=13-512-256-64-16 --arch-mlp-top=512-256-1 --data-generation=dataset --data-set=kaggle --raw-data-file=./input/train.txt --processed-data-file=./input/kaggleAdDisplayChallenge_processed.npz --loss-function=bce --round-targets=True --learning-rate=0.1 --mini-batch-size=128 --print-freq=8192 --print-time --test-mini-batch-size=16384 --test-num-workers=16 --enable-profiling
+done
