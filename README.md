@@ -1,9 +1,19 @@
 ### Instructions for Running DLRM with Memory Throttling
 
+0. **Set Up the Memory Throttling Module and Necessary Packages**
+   - Clone the repository outside dlrm_minrui and follow the instructions provided:
+     ```
+     git clone https://github.com/RutgersCSSystems/Near-memory.git
+     ```
+   - Outside dlrm_minrui, run the script to install packages:
+     ```
+     ./set_env.sh
+     ```
 
 1. **Prepare and Clean the Dataset**
     ```
-    cd input/
+    source dlrm_env/bin/activate
+    cd dlrm_minrui/input/
     wget https://go.criteo.net/criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz
     ```
    - Untar and decompress the dataset file `criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz`:
