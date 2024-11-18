@@ -7,6 +7,8 @@
      ```
    - Outside dlrm_minrui, run the script to install packages:
      ```
+     mv ./set_env.sh ../
+     cd ../
      ./set_env.sh
      ```
 
