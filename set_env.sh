@@ -5,7 +5,7 @@ mkdir -p dlrm_env
 sudo apt update
 sudo apt install -y python3.9-venv
 
-python3 -m venv dlrm_env
+python3.9 -m venv dlrm_env
 
 source dlrm_env/bin/activate
 
