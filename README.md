@@ -1,4 +1,5 @@
 ### Instructions for Running DLRM with Memory Throttling
+**Note**: The code must run on a **c220g2** server with **Ubuntu 20.04**.
 
 0. **Set Up the Memory Throttling Module and Necessary Packages**
    - Clone the repository outside dlrm_minrui and follow the instructions provided:
