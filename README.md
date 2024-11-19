@@ -8,10 +8,10 @@
      sudo mount /dev/sdc expr
      git clone https://github.com/RutgersCSSystems/Near-memory.git -b throttle throttle
      ```
-   - Outside dlrm_minrui, run the script to install packages:
+   - Run the scripts to install packages:
      ```
      git clone https://github.com/Denker233/dlrm_minru
-     chmod +x set_env.sh install_req.sh
+     chmod +x set_env.sh install_req.sh kaggle_throttle.sh
      ./set_env.sh
      source dlrm_env/bin/activate
      export TMPDIR=$PWD/dlrm_env
