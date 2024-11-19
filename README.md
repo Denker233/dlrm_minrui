@@ -4,7 +4,9 @@
 0. **Set Up the Memory Throttling Module and Necessary Packages**
    - Clone the repository outside dlrm_minrui and follow the instructions provided:
      ```
-     git clone https://github.com/RutgersCSSystems/Near-memory.git
+     mkdir expr
+     sudo mount /dev/sdc expr
+     git clone https://github.com/RutgersCSSystems/Near-memory.git -b throttle throttle
      ```
    - Outside dlrm_minrui, run the script to install packages:
      ```
