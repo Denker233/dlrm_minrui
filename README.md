@@ -10,8 +10,8 @@
      ```
    - Outside dlrm_minrui, run the script to install packages:
      ```
-     mv ./set_env.sh ../
-     cd ../
+     git clone https://github.com/Denker233/dlrm_minru
+     chmod +x set_env.sh
      ./set_env.sh
      ```
 
