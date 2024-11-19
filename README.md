@@ -11,8 +11,11 @@
    - Outside dlrm_minrui, run the script to install packages:
      ```
      git clone https://github.com/Denker233/dlrm_minru
-     chmod +x set_env.sh
+     chmod +x set_env.sh install_req.sh
      ./set_env.sh
+     source dlrm_env/bin/activate
+     export TMPDIR=$PWD/dlrm_env
+     
      ```
 
 1. **Prepare and Clean the Dataset**
