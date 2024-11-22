@@ -15,7 +15,7 @@
      ./set_env.sh
      source dlrm_env/bin/activate
      export TMPDIR=$PWD/dlrm_env
-     
+     ./install_req.sh
      ```
 
 1. **Prepare and Clean the Dataset**
