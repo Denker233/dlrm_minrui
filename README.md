@@ -27,9 +27,9 @@
    - Download, Untar the dataset file and Rename files:
      ```
      wget https://go.criteo.net/criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz \
-    && tar -xzvf criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz \
-    && mv train.txt train_original.txt \
-    && mv test.txt test_original.txt
+       && tar -xzvf criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz \
+       && mv train.txt train_original.txt \
+       && mv test.txt test_original.txt
      ```
    - Remove all preprocessed files from the `input` directory to clean up previous runs:
      ```
