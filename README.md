@@ -5,6 +5,7 @@
    - Clone the repository outside dlrm_minrui and follow the instructions provided:
      ```
      mkdir expr
+     sudo mkfs.ext4 /dev/sdc
      sudo mount /dev/sdc expr
      git clone https://github.com/RutgersCSSystems/Near-memory.git -b throttle throttle
      ```
