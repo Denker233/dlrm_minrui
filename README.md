@@ -10,7 +10,8 @@
      ```
    - Run the scripts to install packages:
      ```
-     git clone https://github.com/Denker233/dlrm_minru
+     git clone https://github.com/Denker233/dlrm_minrui
+     cd dlrm_minru
      chmod +x set_env.sh install_req.sh kaggle_throttle.sh
      ./set_env.sh
      source dlrm_env/bin/activate
@@ -22,16 +23,13 @@
     ```
     source dlrm_env/bin/activate
     cd dlrm_minrui/input/
-    wget https://go.criteo.net/criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz
     ```
-   - Untar and decompress the dataset file `criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz`:
+   - Download, Untar the dataset file and Rename files:
      ```
-     tar -xzvf criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz
-     ```
-   - Rename `train.txt` and `test.txt` to `train_original.txt` and `test_original.txt`:
-     ```
-     mv train.txt train_original.txt
-     mv test.txt test_original.txt
+     wget https://go.criteo.net/criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz \
+    && tar -xzvf criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz \
+    && mv train.txt train_original.txt \
+    && mv test.txt test_original.txt
      ```
    - Remove all preprocessed files from the `input` directory to clean up previous runs:
      ```
