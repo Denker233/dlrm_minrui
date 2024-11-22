@@ -54,7 +54,8 @@
 3. **(Optional) Check File Sizes**
    - To verify the file size manually, use the following command:
      ```
-     du --apparent-size --block-size=1 filename | awk '{printf "%.2fG\t%s\n", $1/1073741824, $2}'
+     du --apparent-size --block-size=1 train.txt | awk '{printf "%.2fG\t%s\n", $1/1073741824, $2}'
+     du --apparent-size --block-size=1 test.txt | awk '{printf "%.2fG\t%s\n", $1/1073741824, $2}'
      ```
 
 4. **Run the Script**
