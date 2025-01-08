@@ -19,7 +19,7 @@
      ```
      cd expr
      git clone https://github.com/Denker233/dlrm_minrui
-     cd dlrm_minru
+     cd dlrm_minrui
      chmod +x set_env.sh install_req.sh kaggle_throttle.sh
      ./set_env.sh
      source dlrm_env/bin/activate
