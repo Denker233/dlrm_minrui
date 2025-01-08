@@ -7,10 +7,12 @@
      mkdir expr
      sudo mkfs.ext4 /dev/sdc
      sudo mount /dev/sdc expr
+     sudo chmod 777 expr
      git clone https://github.com/RutgersCSSystems/Near-memory.git -b throttle throttle
      ```
    - Run the scripts to install packages:
      ```
+     cd expr
      git clone https://github.com/Denker233/dlrm_minrui
      cd dlrm_minru
      chmod +x set_env.sh install_req.sh kaggle_throttle.sh
