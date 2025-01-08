@@ -26,6 +26,8 @@
      export TMPDIR=$PWD/dlrm_env
      ./install_req.sh
      ```
+   - Test run:
+     python dlrm_s_pytorch.py --mini-batch-size=2 --data-size=6 --debug-mode
 
 1. **Prepare and Clean the Dataset**
     ```
