@@ -6,5 +6,5 @@ torch
 torchviz
 scikit-learn
 tqdm
-torchrec-nightly
+# torchrec-nightly
 torchx-nightly
