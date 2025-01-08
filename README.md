@@ -9,6 +9,11 @@
      sudo mount /dev/sdc expr
      sudo chmod 777 expr
      git clone https://github.com/RutgersCSSystems/Near-memory.git -b throttle throttle
+     cd throttle
+     source scripts/setvars.sh
+     ./scripts/set_appbench.sh
+     sudo chmod +x set_freq.sh 
+     sudo chmod +x run_freq.sh
      ```
    - Run the scripts to install packages:
      ```
