@@ -2100,7 +2100,7 @@ def run():
         onnx.checker.check_model(dlrm_pytorch_onnx)
     total_time_end = time_wrap(use_gpu)
     print(f"The MLP time is {dlrm.time_mlp}")
-    print(f"The embedding lookup time is {dlrm.time_look_up}")
+    print(f"The embedding time is {dlrm.time_look_up}")
     print(f"The interaction time is {dlrm.time_interact}")
     print(f"The total time is {total_time_end-start_time}")
     print("Command used to run the program: " + " ".join(sys.argv))
