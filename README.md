@@ -14,8 +14,8 @@ May need to use **int64** in **data_utils.py**
      cd throttle
      source scripts/setvars.sh
      ./scripts/set_appbench.sh
-     sudo chmod +x set_freq.sh 
-     sudo chmod +x run_freq.sh
+     sudo chmod +x ./scripts/set_freq.sh 
+     sudo chmod +x ./scripts/run_freq.sh
      ```
    - Run the scripts to install packages:
      ```
