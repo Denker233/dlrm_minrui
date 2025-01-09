@@ -71,7 +71,7 @@ May need to use **int64** in **data_utils.py**
 
 4. **Run the Script**
    - Run the script with full memory or bind it to **NUMA 1**:
-     - Uncomment the line in `kaggle_throttle.sh` that enables NUMA binding.
+     - Could add --enable-profiling to see how each operator behaves
      - Execute the script:
        ```
        cd ..
