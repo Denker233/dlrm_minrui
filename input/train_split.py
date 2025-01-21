@@ -1,8 +1,10 @@
-
 import os
+import argparse
 
 def get_file_size_in_gb(file_path):
-    
+    """
+    Get the file size in GB.
+    """
     if os.path.exists(file_path):
         size_in_bytes = os.path.getsize(file_path)
         return size_in_bytes / (1024 ** 3)  # Convert bytes to GB
@@ -30,20 +32,32 @@ def split_file(input_filename, output_filename, split_factor):
             else:
                 break
 
+def main():
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description="Split files based on a split factor.")
+    parser.add_argument(
+        "split_factor",
+        type=int,
+        help="The denominator for splitting the file (e.g., 7 for 1/7th of the file)."
+    )
+    args = parser.parse_args()
 
-# Specify the split factor and file names
-try:
-    split_factor = int(input("Enter the split factor (e.g., 7 for 1/7th): "))
+    split_factor = args.split_factor
+
     if split_factor <= 0:
         raise ValueError("Split factor must be greater than 0.")
-except ValueError as e:
-    print(f"Invalid input: {e}")
-split_file('train_original.txt', 'train.txt', split_factor)
-split_file('test_original.txt', 'test.txt', split_factor)
 
-for file in ['train.txt', 'test.txt']:
-    size_in_gb = get_file_size_in_gb(file)
-    if size_in_gb is not None:
-        print(f"File: {file}, Size: {size_in_gb:.2f} GB")
-    else:
-        print(f"File: {file} does not exist.")
+    # Split the train and test files
+    split_file('./input/train_original.txt', './input/train.txt', split_factor)
+    split_file('./input/test_original.txt', './input/test.txt', split_factor)
+
+    # Display the sizes of the output files
+    for file in ['./input/train.txt', './input/test.txt']:
+        size_in_gb = get_file_size_in_gb(file)
+        if size_in_gb is not None:
+            print(f"File: {file}, Size: {size_in_gb:.2f} GB")
+        else:
+            print(f"File: {file} does not exist.")
+
+if __name__ == "__main__":
+    main()
