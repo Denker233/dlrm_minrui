@@ -53,13 +53,13 @@ May need to use **int64** in **data_utils.py**
    - To split the `train.txt` and `test.txt` files:
      - Use the **original dataset**:
        ```
-       python3 train_split.py
-       1
+       python3 train_split.py 1
+       
        ```
      - Use **1/10 of the dataset**:
        ```
-       python3 train_split.py
-       10
+       python3 train_split.py 10
+       
        ```
 
 3. **(Optional) Check File Sizes**
