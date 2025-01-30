@@ -1003,7 +1003,7 @@ def getCriteoAdData(
                     if (line[j] == "") or (line[j] == "\n"):
                         line[j] = "0"
                 # sub-sample data by dropping zero targets, if needed
-                target = np.int32(line[0])
+                target = np.int64(line[0])
                 if (
                     target == 0
                     and (rand_u if sub_sample_rate == 0.0 else rand_u[k])
@@ -1012,15 +1012,15 @@ def getCriteoAdData(
                     continue
 
                 y[i] = target
-                X_int[i] = np.array(line[1:14], dtype=np.int32)
+                X_int[i] = np.array(line[1:14], dtype=np.int64)
                 if max_ind_range > 0:
                     X_cat[i] = np.array(
                         list(map(lambda x: int(x, 16) % max_ind_range, line[14:])),
-                        dtype=np.int32,
+                        dtype=np.int64,
                     )
                 else:
                     X_cat[i] = np.array(
-                        list(map(lambda x: int(x, 16), line[14:])), dtype=np.int32
+                        list(map(lambda x: int(x, 16), line[14:])), dtype=np.int64
                     )
 
                 # count uniques
@@ -1151,7 +1151,7 @@ def getCriteoAdData(
     print("Divided into days/splits:\n", total_per_file)
 
     # dictionary files
-    counts = np.zeros(26, dtype=np.int32)
+    counts = np.zeros(26, dtype=np.int64)
     if recreate_flag:
         # create dictionaries
         for j in range(26):
@@ -1160,7 +1160,7 @@ def getCriteoAdData(
             dict_file_j = d_path + d_file + "_fea_dict_{0}.npz".format(j)
             if not path.exists(dict_file_j):
                 np.savez_compressed(
-                    dict_file_j, unique=np.array(list(convertDicts[j]), dtype=np.int32)
+                    dict_file_j, unique=np.array(list(convertDicts[j]), dtype=np.int64)
                 )
             counts[j] = len(convertDicts[j])
         # store (uniques and) counts
