@@ -117,7 +117,7 @@ with warnings.catch_warnings():
         import onnx
     except ImportError as error:
         print("Unable to import onnx. ", error)
-
+# itt = ipex._C.itt  # Import ITT API
 # from torchviz import make_dot
 # import torch.nn.functional as Functional
 # from torch.nn.parameter import Parameter
@@ -466,6 +466,8 @@ class DLRM_Net(nn.Module):
             self.mem_interact =0
             self.mem_look_up =0
             self.mem_mlp=0
+            self.times_apply_emb = 0
+            self.times_sequential_forward =0
             self.ndevices = ndevices
             self.output_d = 0
             self.parallel_model_batch_size = -1
@@ -620,6 +622,7 @@ class DLRM_Net(nn.Module):
         elapsed_time = end_time - start_time
         self.time_look_up += elapsed_time
         self.mem_look_up += peak -before
+        self.times_apply_emb +=1
         # print(f"Time taken to look up emb: {elapsed_time:.6f} seconds")
         return ly
 
@@ -822,6 +825,7 @@ class DLRM_Net(nn.Module):
         # start_time = time.time()
         # process sparse features(using embeddings), resulting in a list of row vectors
         ly = self.apply_emb(lS_o, lS_i, self.emb_l, self.v_W_l)
+        self.times_sequential_forward +=1
         # end_time = time.time()
         # elapsed_time = end_time - start_time
         # self.time_look_up += elapsed_time
@@ -1808,9 +1812,15 @@ def run():
     writer = SummaryWriter(tb_file)
 
     ext_dist.barrier()
+    # itt.resume()
     with torch.autograd.profiler.emit_itt(
-        args.enable_profiling
+        True
     ) as prof:
+        torch.set_num_threads(20)
+        torch.set_num_interop_threads(40)
+        print("PyTorch Threads:", torch.get_num_threads())  # Should print 40 
+        print("PyTorch inter Threads:", torch.get_num_interop_threads())
+        # torch.profiler.itt.range_push('training')
         if not args.inference_only:
             k = 0
             total_time_begin = 0
@@ -2132,6 +2142,8 @@ def run():
                 device,
                 use_gpu,
             )
+        # torch.profiler.itt.range_pop()
+    # itt.pause()
 
     # profiling
     if args.enable_profiling:
@@ -2254,6 +2266,10 @@ def run():
     print(f"The MLP memory is {dlrm.mem_mlp}")
     print(f"The embedding lookup memory is {dlrm.mem_look_up}")
     print(f"The interaction memory is {dlrm.mem_interact}")
+    # Inside your training loop (e.g., after forward pass)
+    print(f"Times Apply Embedding: {dlrm.times_apply_emb}")
+    print(f"Times Sequential Forward: {dlrm.times_sequential_forward}")
+
 
 
     print("Command used to run the program: " + " ".join(sys.argv))
