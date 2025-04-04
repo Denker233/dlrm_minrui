@@ -6,10 +6,8 @@ May need to use **int64** in **data_utils.py**
 0. **Set Up the Memory Throttling Module and Necessary Packages**
    - Clone the repository outside dlrm_minrui and follow the instructions provided:
      ```
-     mkdir expr
-     sudo mkfs.ext4 /dev/sdc
-     sudo mount /dev/sdc expr
-     sudo chmod 777 expr
+     mkdir expr && sudo mkfs.ext4 /dev/sdc && sudo mount /dev/sdc expr && sudo chmod 777 expr
+
      git clone https://github.com/RutgersCSSystems/Near-memory.git -b throttle throttle
      cd throttle
      source scripts/setvars.sh
