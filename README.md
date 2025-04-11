@@ -1,5 +1,5 @@
 ### Instructions for Running DLRM with Memory Throttling
-**Note**: The code must run on a **c220g2** server with **Ubuntu 20.04**.
+**Note**: The code must run on a **c220g2** server with **Ubuntu 20.04** or c220g5 with **Ubuntu 22.04**.
 
 May need to use **int64** in **data_utils.py**
 
@@ -12,8 +12,6 @@ May need to use **int64** in **data_utils.py**
      cd throttle
      source scripts/setvars.sh
      ./scripts/set_appbench.sh
-     sudo chmod +x ./scripts/set_freq.sh 
-     sudo chmod +x ./scripts/run_freq.sh
      ```
    - Run the scripts to install packages:
      ```
@@ -51,11 +49,11 @@ May need to use **int64** in **data_utils.py**
    - To split the `train.txt` and `test.txt` files:
      - Use the **original dataset**:
        ```
-       python3 train_split.py 1
+       python3 input/train_split.py 1
        ```
      - Use **1/10 of the dataset**:
        ```
-       python3 train_split.py 10
+       python3 input/train_split.py 10
        ```
 
 3. **(Optional) Check File Sizes**
