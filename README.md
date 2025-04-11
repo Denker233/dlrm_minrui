@@ -77,7 +77,7 @@ The default threading strategy(Batch Threading) in PyTorch can perform poorly in
      ```
 
 2. **Split Dataset**
-   - To split the `train.txt` and `test.txt` files under dlrm_minrui:
+   - To split the `train.txt` and `test.txt` files under **dlrm_minrui**:
      - Use the **original dataset**:
        ```
        cd ..
