@@ -22,7 +22,7 @@ The default threading strategy(Batch Threading) in PyTorch can perform poorly in
 
 #### Embedding Table Parallelism
 
-- **How it works**: For each batch, all the embedding tables are **processed in parallel**.
+- **How it works**: For each batch, all the embedding tables are **processed in parallel on a dedicated core**.
 - **Benefit**: Better **cache utilization** and **fewer cache misses**.
 - Ideal for workloads that require low-latency access to sparse embeddings.
 
