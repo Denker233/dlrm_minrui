@@ -1,4 +1,4 @@
-### Instructions for Running DLRM with Memory Throttling and embedding table parallelism
+### Instructions for Running DLRM with Memory Throttling and Embedding Table Parallelism
 **Note**: The code must run on a **c220g2** server with **Ubuntu 20.04** or **c220g5** with **Ubuntu 22.04**.
 
 May need to use **int64** in **data_utils.py**
