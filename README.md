@@ -97,7 +97,7 @@ The default threading strategy(Batch Threading) in PyTorch can perform poorly in
      ```
 
 4.1 **Run the Script to throttle the memoyr**
-   Replace `/users/yourusername/...` with the correct path to your local setup inside the kaggle_throttle.sh.
+   - Replace `/users/yourusername/...` with the correct path to your local setup inside the kaggle_throttle.sh.
    - Run the script with full memory or bind it to **NUMA 1**:
      - Could add --enable-profiling to see how each operator behaves
      - Execute the script:
