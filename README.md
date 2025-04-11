@@ -3,15 +3,25 @@
 
 May need to use **int64** in **data_utils.py**
 
-0. **Set Up the Memory Throttling Module and Necessary Packages**
+
+
+0. **Set Up Environment and Install Necessary Packages**
    - Clone the repository outside dlrm_minrui and follow the instructions provided:
+   - For c220g2:
      ```
      mkdir expr && sudo mkfs.ext4 /dev/sdc && sudo mount /dev/sdc expr && sudo chmod 777 expr
-
+     ```
+   - For c220g5:
+     ```
+     mkdir expr && sudo mkfs.ext4 /dev/sdb && sudo mount /dev/sdb expr && sudo chmod 777 expr
+     ```
+     
+     ```
      git clone https://github.com/RutgersCSSystems/Near-memory.git -b throttle throttle
      cd throttle
      source scripts/setvars.sh
      ./scripts/set_appbench.sh
+     cp scripts/gen_config.sh $QUARTZ
      ```
    - Run the scripts to install packages:
      ```
