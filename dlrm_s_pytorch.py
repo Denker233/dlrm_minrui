@@ -52,12 +52,10 @@
 # Recommendation Systems", CoRR, arXiv:1906.00091, 2019
 
 from __future__ import absolute_import, division, print_function, unicode_literals
-import torch.jit
+
 import argparse
 import sys
-import resource
-from concurrent.futures import ThreadPoolExecutor
-import os
+
 # miscellaneous
 import builtins
 import datetime
@@ -121,7 +119,6 @@ with warnings.catch_warnings():
 # from torch.nn.parameter import Parameter
 
 exc = getattr(builtins, "IOError", "FileNotFoundError")
-
 
 def extract_cpu_percentage(profile_data, function_name):
     # Use re.findall to capture all matches of percentage values for the function
@@ -384,7 +381,6 @@ class DLRM_Net(nn.Module):
         md_threshold=200,
         weighted_pooling=None,
         loss_function="bce",
-        thread_count = None
         
     ):
         super(DLRM_Net, self).__init__()
@@ -410,7 +406,6 @@ class DLRM_Net(nn.Module):
             self.sync_dense_params = sync_dense_params
             self.loss_threshold = loss_threshold
             self.loss_function = loss_function
-            self.thread_count =thread_count
             if weighted_pooling is not None and weighted_pooling != "fixed":
                 self.weighted_pooling = "learned"
             else:
@@ -482,62 +477,6 @@ class DLRM_Net(nn.Module):
         return layers(x)
 
     def apply_emb(self, lS_o, lS_i, emb_l, v_W_l):
-        start_time = time.time()
-        num_threads = torch.get_num_threads()
-        print(f"PyTorch intra-op threads (torch.get_num_threads()): inside apply_emb {torch.get_num_threads()}")
-        print(f"OMP_NUM_THREADS (thread_count): {self.thread_count}")
-        torch.set_num_threads(1)
-        def emb_lookup(k, sparse_index_group_batch, sparse_offset_group_batch):
-            # Pin this thread to core `k % os.cpu_count()` to avoid overflow
-            try:
-                os.sched_setaffinity(0, {k % self.thread_count})
-            except AttributeError:
-                pass  # For non-Linux systems
-
-            if v_W_l[k] is not None:
-                per_sample_weights = v_W_l[k].gather(0, sparse_index_group_batch)
-            else:
-                per_sample_weights = None
-
-            if self.quantize_emb:
-                if self.quantize_bits == 4:
-                    return ops.quantized.embedding_bag_4bit_rowwise_offsets(
-                        self.emb_l_q[k],
-                        sparse_index_group_batch,
-                        sparse_offset_group_batch,
-                        per_sample_weights=per_sample_weights,
-                    )
-                elif self.quantize_bits == 8:
-                    return ops.quantized.embedding_bag_byte_rowwise_offsets(
-                        self.emb_l_q[k],
-                        sparse_index_group_batch,
-                        sparse_offset_group_batch,
-                        per_sample_weights=per_sample_weights,
-                    )
-            else:
-                E = emb_l[k]
-                return E(
-                    sparse_index_group_batch,
-                    sparse_offset_group_batch,
-                    per_sample_weights=per_sample_weights,
-                )
-
-        ly = []
-        with ThreadPoolExecutor(max_workers=len(lS_i)) as executor:
-            futures = []
-            for k, sparse_index_group_batch in enumerate(lS_i):
-                sparse_offset_group_batch = lS_o[k]
-                futures.append(executor.submit(emb_lookup, k, sparse_index_group_batch, sparse_offset_group_batch))
-
-            for f in futures:
-                ly.append(f.result())
-
-        end_time = time.time()
-        self.time_look_up += end_time - start_time
-        torch.set_num_threads(num_threads)
-        return ly
-
-    # def apply_emb(self, lS_o, lS_i, emb_l, v_W_l):
         # WARNING: notice that we are processing the batch at once. We implicitly
         # assume that the data is laid out such that:
         # 1. each embedding is indexed with a group of sparse indices,
@@ -546,64 +485,63 @@ class DLRM_Net(nn.Module):
         # 3. for a list of embedding tables there is a list of batched lookups
 
         #start timer for embeding look ups
-        # start_time = time.time()
+        start_time = time.time()
 
-        # ly = []
-        # for k, sparse_index_group_batch in enumerate(lS_i):
-        #     sparse_offset_group_batch = lS_o[k]
+        ly = []
+        for k, sparse_index_group_batch in enumerate(lS_i):
+            sparse_offset_group_batch = lS_o[k]
 
-        #     # embedding lookup
-        #     # We are using EmbeddingBag, which implicitly uses sum operator.
-        #     # The embeddings are represented as tall matrices, with sum
-        #     # happening vertically across 0 axis, resulting in a row vector
-        #     # E = emb_l[k]
+            # embedding lookup
+            # We are using EmbeddingBag, which implicitly uses sum operator.
+            # The embeddings are represented as tall matrices, with sum
+            # happening vertically across 0 axis, resulting in a row vector
+            # E = emb_l[k]
 
-        #     if v_W_l[k] is not None:
-        #         per_sample_weights = v_W_l[k].gather(0, sparse_index_group_batch)
-        #     else:
-        #         per_sample_weights = None
+            if v_W_l[k] is not None:
+                per_sample_weights = v_W_l[k].gather(0, sparse_index_group_batch)
+            else:
+                per_sample_weights = None
 
-        #     if self.quantize_emb:
-        #         s1 = self.emb_l_q[k].element_size() * self.emb_l_q[k].nelement()
-        #         s2 = self.emb_l_q[k].element_size() * self.emb_l_q[k].nelement()
-        #         print("quantized emb sizes:", s1, s2)
+            if self.quantize_emb:
+                s1 = self.emb_l_q[k].element_size() * self.emb_l_q[k].nelement()
+                s2 = self.emb_l_q[k].element_size() * self.emb_l_q[k].nelement()
+                print("quantized emb sizes:", s1, s2)
 
-        #         if self.quantize_bits == 4:
-        #             QV = ops.quantized.embedding_bag_4bit_rowwise_offsets(
-        #                 self.emb_l_q[k],
-        #                 sparse_index_group_batch,
-        #                 sparse_offset_group_batch,
-        #                 per_sample_weights=per_sample_weights,
-        #             )
-        #         elif self.quantize_bits == 8:
-        #             QV = ops.quantized.embedding_bag_byte_rowwise_offsets(
-        #                 self.emb_l_q[k],
-        #                 sparse_index_group_batch,
-        #                 sparse_offset_group_batch,
-        #                 per_sample_weights=per_sample_weights,
-        #             )
+                if self.quantize_bits == 4:
+                    QV = ops.quantized.embedding_bag_4bit_rowwise_offsets(
+                        self.emb_l_q[k],
+                        sparse_index_group_batch,
+                        sparse_offset_group_batch,
+                        per_sample_weights=per_sample_weights,
+                    )
+                elif self.quantize_bits == 8:
+                    QV = ops.quantized.embedding_bag_byte_rowwise_offsets(
+                        self.emb_l_q[k],
+                        sparse_index_group_batch,
+                        sparse_offset_group_batch,
+                        per_sample_weights=per_sample_weights,
+                    )
 
-        #         ly.append(QV)
-        #     else:
-        #         E = emb_l[k]
-        #         V = E(
-        #             sparse_index_group_batch,
-        #             sparse_offset_group_batch,
-        #             per_sample_weights=per_sample_weights,
-        #         )
+                ly.append(QV)
+            else:
+                E = emb_l[k]
+                V = E(
+                    sparse_index_group_batch,
+                    sparse_offset_group_batch,
+                    per_sample_weights=per_sample_weights,
+                )
 
-        #         ly.append(V)
+                ly.append(V)
 
-        # # print(ly)
-        # # Stop the timer
-        # end_time = time.time()
+        # print(ly)
+        # Stop the timer
+        end_time = time.time()
 
-        # # Calculate and print the elapsed time
-        # elapsed_time = end_time - start_time
-        # self.time_look_up += elapsed_time
-        # # print(f"Time taken to look up emb: {elapsed_time:.6f} seconds")
-        # return ly
-    
+        # Calculate and print the elapsed time
+        elapsed_time = end_time - start_time
+        self.time_look_up += elapsed_time
+        # print(f"Time taken to look up emb: {elapsed_time:.6f} seconds")
+        return ly
 
     #  using quantizing functions from caffe2/aten/src/ATen/native/quantized/cpu
     def quantize_embedding(self, bits):
@@ -1114,7 +1052,6 @@ def inference(
 
 
 def run():
-    
     ### parse arguments ###
     parser = argparse.ArgumentParser(
         description="Train Deep Learning Recommendation Model (DLRM)"
@@ -1502,7 +1439,6 @@ def run():
     global last_time_interact
     global dlrm
 
-
     last_time_look_up = 0
     last_time_mlp = 0
     last_time_interact = 0
@@ -1526,7 +1462,6 @@ def run():
         md_threshold=args.md_threshold,
         weighted_pooling=args.weighted_pooling,
         loss_function=args.loss_function,
-        thread_count = args.thread_count
     )
 
     # test prints
@@ -1740,6 +1675,7 @@ def run():
     ) as prof:
         if args.thread_count:
             torch.set_num_threads(args.thread_count)
+
         print("PyTorch Intra-op threads:", torch.get_num_threads())
         if not args.inference_only:
             k = 0
