@@ -1,8 +1,30 @@
 ### Instructions for Running DLRM with Memory Throttling and Embedding Table Parallelism
 **Note**: The code must run on a **c220g2** server with **Ubuntu 20.04** or **c220g5** with **Ubuntu 22.04**.
 
-May need to use **int64** in **data_utils.py**
+#### Preprocessing 
 
+- You may need to modify `data_utils.py` to use `int64` for proper data handling.
+
+---
+
+#### Threading Strategy Overview
+
+The default threading strategy(Batch Threading) in PyTorch can perform poorly in terms of scalability on high-core-count CPUs.
+
+- On a **40-core CPU**, the best performance is typically observed with **15 to 30 threads**.
+- Using significantly fewer or more threads may **decrease performance**.
+
+#### Batch Threading (BT)
+
+- **How it works**: For each batch, embedding tables are **processed sequentially**.
+- **Memory layout**: Embedding tables are **replicated across cache levels**.
+- **Limitation**: Can result in **poor cache reuse** and **higher latency** as batch size grows.
+
+#### Embedding Table Parallelism
+
+- **How it works**: For each batch, all the embedding tables are **processed in parallel**.
+- **Benefit**: Better **cache utilization** and **fewer cache misses**.
+- Ideal for workloads that require low-latency access to sparse embeddings.
 
 
 0. **Set Up Environment and Install Necessary Packages**
