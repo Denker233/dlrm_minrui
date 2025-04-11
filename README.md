@@ -103,7 +103,7 @@ The default threading strategy(Batch Threading) in PyTorch can perform poorly in
        ```
        ./kaggle_throttle.sh
        ```
-5.1  **Run the Script to see the performance of embedding table  parallelism and batch parallelism**:
+4.2  **Run the Script to see the performance of embedding table  parallelism and batch parallelism**:
  ```
 ./parallel.sh
  ```
