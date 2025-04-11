@@ -39,7 +39,7 @@
 # # Run on NUMA 1
 # echo "# Run DLRM (NUMA 1) 1GB bandwidth" >> combined_output_numa0.log
 # ./bench/dlrm_s_criteo_kaggle.sh >> combined_output_numa1.log 2>&1
-frequencies=( 2.0 1.6 1.4 1 0.6 0.2)  # Frequencies in GHz
+frequencies=( 3.0 2.6 2.2 2.0 1.8 1.6 1.4 1.2)  # Frequencies in GHz
 
 for freq in "${frequencies[@]}"; do
     # Apply CPU frequency to NUMA node 1 (CPUs 10-19, 30-39)
