@@ -1,4 +1,4 @@
-### Instructions for Running DLRM with Memory Throttling
+### Instructions for Running DLRM with Memory Throttling and embedding table parallelism
 **Note**: The code must run on a **c220g2** server with **Ubuntu 20.04** or c220g5 with **Ubuntu 22.04**.
 
 May need to use **int64** in **data_utils.py**
@@ -16,6 +16,7 @@ May need to use **int64** in **data_utils.py**
      mkdir expr && sudo mkfs.ext4 /dev/sdb && sudo mount /dev/sdb expr && sudo chmod 777 expr
      ```
      
+     - Install the throttling module:
      ```
      git clone https://github.com/RutgersCSSystems/Near-memory.git -b throttle throttle
      cd throttle
@@ -56,13 +57,15 @@ May need to use **int64** in **data_utils.py**
      ```
 
 2. **Split Dataset**
-   - To split the `train.txt` and `test.txt` files:
+   - To split the `train.txt` and `test.txt` files under dlrm_minrui:
      - Use the **original dataset**:
        ```
+       cd ..
        python3 input/train_split.py 1
        ```
      - Use **1/10 of the dataset**:
        ```
+       cd ..
        python3 input/train_split.py 10
        ```
 
@@ -73,14 +76,17 @@ May need to use **int64** in **data_utils.py**
      du --apparent-size --block-size=1 test.txt | awk '{printf "%.2fG\t%s\n", $1/1073741824, $2}'
      ```
 
-4. **Run the Script**
+4.1 **Run the Script to throttle the memoyr**
    - Run the script with full memory or bind it to **NUMA 1**:
      - Could add --enable-profiling to see how each operator behaves
      - Execute the script:
        ```
-       cd ..
        ./kaggle_throttle.sh
        ```
+5.1  **Run the Script to see the performance of embedding table  parallelism and batch parallelism**:
+ ```
+./parallel.sh
+ ```
 
 
 
