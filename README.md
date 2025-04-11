@@ -5,8 +5,6 @@
 
 - You may need to modify `data_utils.py` to use `int64` for proper data handling.
 
----
-
 #### Threading Strategy Overview
 
 The default threading strategy(Batch Threading) in PyTorch can perform poorly in terms of scalability on high-core-count CPUs.
