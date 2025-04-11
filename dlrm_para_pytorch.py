@@ -122,6 +122,7 @@ with warnings.catch_warnings():
 
 exc = getattr(builtins, "IOError", "FileNotFoundError")
 
+
 def extract_cpu_percentage(profile_data, function_name):
     # Use re.findall to capture all matches of percentage values for the function
     pattern = re.compile(rf"{re.escape(function_name)}.*?([\d.]+)%.*?([\d.]+)%")
@@ -383,6 +384,7 @@ class DLRM_Net(nn.Module):
         md_threshold=200,
         weighted_pooling=None,
         loss_function="bce",
+        thread_count = None
         
     ):
         super(DLRM_Net, self).__init__()
@@ -408,6 +410,7 @@ class DLRM_Net(nn.Module):
             self.sync_dense_params = sync_dense_params
             self.loss_threshold = loss_threshold
             self.loss_function = loss_function
+            self.thread_count =thread_count
             if weighted_pooling is not None and weighted_pooling != "fixed":
                 self.weighted_pooling = "learned"
             else:
@@ -481,11 +484,13 @@ class DLRM_Net(nn.Module):
     def apply_emb(self, lS_o, lS_i, emb_l, v_W_l):
         start_time = time.time()
         num_threads = torch.get_num_threads()
+        print(f"PyTorch intra-op threads (torch.get_num_threads()): inside apply_emb {torch.get_num_threads()}")
+        print(f"OMP_NUM_THREADS (thread_count): {self.thread_count}")
         torch.set_num_threads(1)
         def emb_lookup(k, sparse_index_group_batch, sparse_offset_group_batch):
             # Pin this thread to core `k % os.cpu_count()` to avoid overflow
             try:
-                os.sched_setaffinity(0, {k % os.cpu_count()})
+                os.sched_setaffinity(0, {k % self.thread_count})
             except AttributeError:
                 pass  # For non-Linux systems
 
@@ -1109,8 +1114,7 @@ def inference(
 
 
 def run():
-    GB = 64
-    resource.setrlimit(resource.RLIMIT_AS, (GB * 1024**3, GB * 1024**3))
+    
     ### parse arguments ###
     parser = argparse.ArgumentParser(
         description="Train Deep Learning Recommendation Model (DLRM)"
@@ -1498,6 +1502,7 @@ def run():
     global last_time_interact
     global dlrm
 
+
     last_time_look_up = 0
     last_time_mlp = 0
     last_time_interact = 0
@@ -1521,6 +1526,7 @@ def run():
         md_threshold=args.md_threshold,
         weighted_pooling=args.weighted_pooling,
         loss_function=args.loss_function,
+        thread_count = args.thread_count
     )
 
     # test prints
