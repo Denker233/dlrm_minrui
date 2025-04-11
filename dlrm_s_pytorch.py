@@ -1057,6 +1057,7 @@ def run():
         description="Train Deep Learning Recommendation Model (DLRM)"
     )
     # model related parameters
+    parser.add_argument('--thread-count', type=int, default=None, help='Number of threads to use for intra-op')
     parser.add_argument("--arch-sparse-feature-size", type=int, default=2)
     parser.add_argument(
         "--arch-embedding-size", type=dash_separated_ints, default="4-3-2"
@@ -1672,6 +1673,10 @@ def run():
     with torch.autograd.profiler.profile(
         args.enable_profiling, use_cuda=use_gpu, record_shapes=True
     ) as prof:
+        if args.thread_count:
+            torch.set_num_threads(args.thread_count)
+
+        print("PyTorch Intra-op threads:", torch.get_num_threads())
         if not args.inference_only:
             k = 0
             total_time_begin = 0
