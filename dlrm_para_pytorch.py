@@ -484,8 +484,8 @@ class DLRM_Net(nn.Module):
     def apply_emb(self, lS_o, lS_i, emb_l, v_W_l):
         start_time = time.time()
         num_threads = torch.get_num_threads()
-        print(f"PyTorch intra-op threads (torch.get_num_threads()): inside apply_emb {torch.get_num_threads()}")
-        print(f"OMP_NUM_THREADS (thread_count): {self.thread_count}")
+        # print(f"PyTorch intra-op threads (torch.get_num_threads()): inside apply_emb {torch.get_num_threads()}")
+        # print(f"OMP_NUM_THREADS (thread_count): {self.thread_count}")
         torch.set_num_threads(1)
         def emb_lookup(k, sparse_index_group_batch, sparse_offset_group_batch):
             # Pin this thread to core `k % os.cpu_count()` to avoid overflow
