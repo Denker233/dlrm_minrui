@@ -381,7 +381,7 @@ class DLRM_Net(nn.Module):
         md_threshold=200,
         weighted_pooling=None,
         loss_function="bce",
-        
+        thread_count = None,
     ):
         super(DLRM_Net, self).__init__()
 
@@ -406,6 +406,7 @@ class DLRM_Net(nn.Module):
             self.sync_dense_params = sync_dense_params
             self.loss_threshold = loss_threshold
             self.loss_function = loss_function
+            self.thread_count = thread_count
             if weighted_pooling is not None and weighted_pooling != "fixed":
                 self.weighted_pooling = "learned"
             else:
@@ -1462,6 +1463,7 @@ def run():
         md_threshold=args.md_threshold,
         weighted_pooling=args.weighted_pooling,
         loss_function=args.loss_function,
+        thread_count = args.thread_count,
     )
 
     # test prints
