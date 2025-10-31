@@ -39,7 +39,18 @@ The default threading strategy(Batch Threading) in PyTorch can perform poorly in
      ```
      mkdir expr && sudo mkfs.ext4 /dev/nvme2n1 && sudo mount /dev/nvme2n1 expr && sudo chmod 777 expr
      ```
-     
+  
+   -Install MLC:
+   From Local:
+      ```
+      MLC_TGZ=~/Downloads/mlc_v3.12.tgz
+      scp -p "$MLC_TGZ" mt1370@sm110p-10s10616.wisc.cloudlab.us:~/
+      ```
+   For the remote:
+   ```
+   ./install_mlc
+   ```
+   
      - Install the throttling module:
      ```
      git clone https://github.com/RutgersCSSystems/Near-memory.git -b throttle throttle
@@ -63,7 +74,7 @@ The default threading strategy(Batch Threading) in PyTorch can perform poorly in
       ```
      python dlrm_s_pytorch.py --mini-batch-size=2 --data-size=6 --debug-mode
       ```
-1. **Prepare and Clean the Dataset**
+2. **Prepare and Clean the Dataset**
     ```
     source dlrm_env/bin/activate
     cd dlrm_minrui/input/
@@ -80,7 +91,7 @@ The default threading strategy(Batch Threading) in PyTorch can perform poorly in
      rm -rf kaggleAdDisplayChallenge_processed.npz train_day_* train_fea_*
      ```
 
-2. **Split Dataset**
+3. **Split Dataset**
    - To split the `train.txt` and `test.txt` files under **dlrm_minrui**:
      - Use the **original dataset**:
        ```
@@ -93,7 +104,7 @@ The default threading strategy(Batch Threading) in PyTorch can perform poorly in
        python3 input/train_split.py 10
        ```
 
-3. **(Optional) Check File Sizes**
+4. **(Optional) Check File Sizes**
    - To verify the file size manually, use the following command:
      ```
      du --apparent-size --block-size=1 train.txt | awk '{printf "%.2fG\t%s\n", $1/1073741824, $2}'
