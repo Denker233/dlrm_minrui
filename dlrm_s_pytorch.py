@@ -1677,7 +1677,7 @@ def run():
     ) as prof:
         if args.thread_count:
             torch.set_num_threads(args.thread_count)
-
+        start_time = time_wrap(use_gpu)
         print("PyTorch Intra-op threads:", torch.get_num_threads())
         if not args.inference_only:
             k = 0
@@ -1705,7 +1705,7 @@ def run():
                     previous_iteration_time = None
 
                 #where timer started   
-                start_time = time_wrap(use_gpu)
+                
                 total_dlrm = 0
                 total_dlrm_back = 0
                 total_dlrm_backpass = 0
