@@ -40,16 +40,7 @@ The default threading strategy(Batch Threading) in PyTorch can perform poorly in
      mkdir expr && sudo mkfs.ext4 /dev/nvme2n1 && sudo mount /dev/nvme2n1 expr && sudo chmod 777 expr
      ```
   
-   -Install MLC:
-   From Local:
-      ```
-      MLC_TGZ=~/Downloads/mlc_v3.12.tgz
-      scp -p "$MLC_TGZ" mt1370@sm110p-10s10616.wisc.cloudlab.us:~/
-      ```
-   For the remote:
-   ```
-   ./install_mlc
-   ```
+
    
      - Install the throttling module:
      ```
@@ -64,12 +55,23 @@ The default threading strategy(Batch Threading) in PyTorch can perform poorly in
      cd expr
      git clone https://github.com/Denker233/dlrm_minrui
      cd dlrm_minrui
-     chmod +x set_env.sh install_req.sh kaggle_throttle.sh
+     chmod +x *.sh
      ./set_env.sh
      source dlrm_env/bin/activate
      export TMPDIR=$PWD/dlrm_env
      ./install_req.sh
      ```
+ -Install MLC:
+   From Local:
+      ```
+      MLC_TGZ=~/Downloads/mlc_v3.12.tgz
+      scp -p "$MLC_TGZ" mt1370@sm110p-10s10616.wisc.cloudlab.us:~/
+      ```
+   For the remote:
+   ```
+   ./install_mlc
+   ```
+
    - Test run:
       ```
      python dlrm_s_pytorch.py --mini-batch-size=2 --data-size=6 --debug-mode
