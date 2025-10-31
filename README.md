@@ -35,6 +35,10 @@ The default threading strategy(Batch Threading) in PyTorch can perform poorly in
      ```
      mkdir expr && sudo mkfs.ext4 /dev/sdb && sudo mount /dev/sdb expr && sudo chmod 777 expr
      ```
+   - For sm110p:
+     ```
+     mkdir expr && sudo mkfs.ext4 /dev/nvme2n1 && sudo mount /dev/nvme2n1 expr && sudo chmod 777 expr
+     ```
      
      - Install the throttling module:
      ```
