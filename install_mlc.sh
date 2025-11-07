@@ -2,8 +2,10 @@
 if command -v apt-get >/dev/null 2>&1; then
   sudo apt-get update -y
   sudo apt-get install -y numactl numactl-dev build-essential
+  sudo apt install numactl
 elif command -v yum >/dev/null 2>&1; then
   sudo yum install -y numactl numactl-devel gcc make
+  sudo apt install numactl
 fi
 
 # --- allow PMU/MSR access ---
