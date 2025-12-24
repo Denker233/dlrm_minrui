@@ -1,28 +1,5 @@
-### Instructions for Running DLRM with Memory Throttling and Embedding Table Parallelism
-**Note**: The code must run on **c220g2** with **Ubuntu 20.04**, **c220g5** with **Ubuntu 22.04**, or **sm110p**. For memory bandwidth monitoring (MBM functionality), use **sm110p** or other machines with Intel MBM support.
 
-#### Preprocessing 
 
-- You may need to modify `data_utils.py` to use `int64` for proper data handling.
-
-#### Threading Strategy Overview
-
-The default threading strategy(Batch Threading) in PyTorch can perform poorly in terms of scalability on high-core-count CPUs.
-
-- On a **40-core CPU**, the best performance is typically observed with **15 to 30 threads**.
-- Using significantly fewer or more threads may **decrease performance**.
-
-#### Batch Threading (BT)
-
-- **How it works**: For each batch, embedding tables are **processed sequentially**.
-- **Memory layout**: Embedding tables are **replicated across cache levels**.
-- **Limitation**: Can result in **poor cache reuse** and **higher latency** as batch size grows.
-
-#### Embedding Table Parallelism
-
-- **How it works**: For each batch, all the embedding tables are **processed in parallel on a dedicated core**.
-- **Benefit**: Better **cache utilization** and **fewer cache misses**.
-- Ideal for workloads that require low-latency access to sparse embeddings.
 
 
 0. **Set Up Environment and Install Necessary Packages**\
@@ -116,10 +93,6 @@ The default threading strategy(Batch Threading) in PyTorch can perform poorly in
      du --apparent-size --block-size=1 test.txt | awk '{printf "%.2fG\t%s\n", $1/1073741824, $2}'
 ```
 
-5.  **Run the Script to see the performance of embedding table parallelism and batch parallelism**:
-```
-./parallel.sh
-```
 
 6. **Run DLRM with Embedding Table Merging and Splitting**
    
@@ -268,6 +241,7 @@ chmod +x compare.sh
 ./compare.sh
 ```
 
+---
 
 ## File Structure
 ```
