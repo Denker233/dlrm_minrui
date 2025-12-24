@@ -166,7 +166,7 @@ The default threading strategy(Batch Threading) in PyTorch can perform poorly in
    ./multi_split_merge.sh
 ```
 
-7.## Hot/Cold Runtime Remapping
+## 7. Hot/Cold Runtime Remapping
 
 Split tables based on access patterns - frequently accessed embeddings (hot) vs. rarely accessed (cold).
 
@@ -178,6 +178,7 @@ python dlrm_hot.py \
     --save-access-profile=./profiles/kaggle_profile_P80_FULL.pkl \
     --hotcold-percentile=80 \
     --hotcold-emb-threshold=1000000 \
+    --data-generation=dataset \
     --data-set=kaggle \
     --raw-data-file=./input/train.txt \
     --processed-data-file=./input/kaggleAdDisplayChallenge_processed.npz \
@@ -208,6 +209,7 @@ python dlrm_hot.py \
     --load-access-profile=./profiles/kaggle_profile_P80_FULL.pkl \
     --hotcold-percentile=80 \
     --hotcold-emb-threshold=1000000 \
+    --data-generation=dataset \
     --data-set=kaggle \
     --raw-data-file=./input/train.txt \
     --processed-data-file=./input/kaggleAdDisplayChallenge_processed.npz \
