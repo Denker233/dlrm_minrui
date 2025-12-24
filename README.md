@@ -1,145 +1,160 @@
+## 0. Set Up Environment and Install Necessary Packages
 
+**Note**: **For memory bandwidth monitoring for merging and splitting tables, use sm110p or other machines with Intel MBM support.**
 
+- Clone the repository outside dlrm_minrui and follow the instructions provided:
+- For c220g2:
+```bash
+mkdir expr && sudo mkfs.ext4 /dev/sdc && sudo mount /dev/sdc expr && sudo chmod 777 expr
+```
 
+- For c220g5:
+```bash
+mkdir expr && sudo mkfs.ext4 /dev/sdb && sudo mount /dev/sdb expr && sudo chmod 777 expr
+```
 
-0. **Set Up Environment and Install Necessary Packages**\
-   \
-   **Note**: **For memory bandwidth monitoring for merging and splitting tables, use sm110p or other machines with Intel MBM support.**
-   - Clone the repository outside dlrm_minrui and follow the instructions provided:
-   - For c220g2:
+- For sm110p:
+```bash
+mkdir expr && sudo mkfs.ext4 /dev/nvme2n1 && sudo mount /dev/nvme2n1 expr && sudo chmod 777 expr
 ```
-     mkdir expr && sudo mkfs.ext4 /dev/sdc && sudo mount /dev/sdc expr && sudo chmod 777 expr
+
+- **(Optional)** Install the throttling module (required for memory throttling experiments, optional for embedding table merging/splitting):
+```bash
+git clone https://github.com/RutgersCSSystems/Near-memory.git -b throttle throttle
+cd throttle
+source scripts/setvars.sh
+./scripts/set_appbench.sh
+cp scripts/gen_config.sh $QUARTZ
 ```
-   - For c220g5:
+
+- Run the scripts to install packages:
+```bash
+cd expr
+git clone https://github.com/Denker233/dlrm_minrui
+cd dlrm_minrui
+chmod +x *.sh
+./set_env.sh
+source dlrm_env/bin/activate
+export TMPDIR=$PWD/dlrm_env
+./install_req.sh
 ```
-     mkdir expr && sudo mkfs.ext4 /dev/sdb && sudo mount /dev/sdb expr && sudo chmod 777 expr
-```
-   - For sm110p:
-```
-     mkdir expr && sudo mkfs.ext4 /dev/nvme2n1 && sudo mount /dev/nvme2n1 expr && sudo chmod 777 expr
+
+- **Install MLC and intel-cmt-cat**:
+  
+  From Local (download MLC first):
+```bash
+MLC_TGZ=~/Downloads/mlc_v3.12.tgz
+scp -p "$MLC_TGZ" mt1370@sm110p-10s10616.wisc.cloudlab.us:~/
 ```
   
-   - **(Optional)** Install the throttling module (required for memory throttling experiments, optional for embedding table merging/splitting):
-```
-     git clone https://github.com/RutgersCSSystems/Near-memory.git -b throttle throttle
-     cd throttle
-     source scripts/setvars.sh
-     ./scripts/set_appbench.sh
-     cp scripts/gen_config.sh $QUARTZ
-```
-   - Run the scripts to install packages:
-```
-     cd expr
-     git clone https://github.com/Denker233/dlrm_minrui
-     cd dlrm_minrui
-     chmod +x *.sh
-     ./set_env.sh
-     source dlrm_env/bin/activate
-     export TMPDIR=$PWD/dlrm_env
-     ./install_req.sh
-```
-   - **Install MLC and intel-cmt-cat**:
-     
-     From Local (download MLC first):
-```
-     MLC_TGZ=~/Downloads/mlc_v3.12.tgz
-     scp -p "$MLC_TGZ" mt1370@sm110p-10s10616.wisc.cloudlab.us:~/
-```
-     
-     On the remote machine:
-```
-     ./install_mlc_cmt_cat
-```
-
-   - Test run:
-```
-     python dlrm_s_pytorch.py --mini-batch-size=2 --data-size=6 --debug-mode
-```
-
-2. **Prepare and Clean the Dataset**
-```
-    source dlrm_env/bin/activate
-    cd dlrm_minrui/input/
-```
-   - Download, Untar the dataset file and Rename files:
-```
-     wget https://go.criteo.net/criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz \
-       && tar -xzvf criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz \
-       && mv train.txt train_original.txt \
-       && mv test.txt test_original.txt
-```
-   - Remove all preprocessed files from the `input` directory to clean up previous runs:
-```
-     rm -rf kaggleAdDisplayChallenge_processed.npz train_day_* train_fea_*
-```
-
-3. **Split Dataset**
-   - To split the `train.txt` and `test.txt` files under **dlrm_minrui**:
-     - Use the **original dataset**:
-```
-       cd ..
-       python3 input/train_split.py 1
-```
-     - Use **1/10 of the dataset**:
-```
-       cd ..
-       python3 input/train_split.py 10
-```
-
-4. **(Optional) Check File Sizes**
-   - To verify the file size manually, use the following command:
-```
-     du --apparent-size --block-size=1 train.txt | awk '{printf "%.2fG\t%s\n", $1/1073741824, $2}'
-     du --apparent-size --block-size=1 test.txt | awk '{printf "%.2fG\t%s\n", $1/1073741824, $2}'
-```
-
-
-6. **Run DLRM with Embedding Table Merging and Splitting**
-   
-   Example command for testing merge and split strategies:
+  On the remote machine:
 ```bash
-   numactl --physcpubind=0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38 --membind=0 \
-   python3 dlrm_split_merge_pytorch.py \
-     --arch-sparse-feature-size=64 \
-     --arch-mlp-bot=13-512-256-64-64 \
-     --arch-mlp-top=512-256-1 \
-     --data-generation=dataset \
-     --data-set=kaggle \
-     --raw-data-file=./input/train.txt \
-     --processed-data-file=./input/kaggleAdDisplayChallenge_processed.npz \
-     --dataset-multiprocessing \
-     --loss-function=bce \
-     --round-targets=True \
-     --mini-batch-size=16380 \
-     --print-freq=8192 \
-     --print-time \
-     --test-mini-batch-size=16380 \
-     --test-num-workers=16 \
-     --num-indices-per-lookup=64 \
-     --merge-emb-threshold=1000 \
-     --split-emb-threshold=500000 \
-     --num-splits=4 \
-     --min-split-rows=100000 \
-     --max-split-rows=5000000 \
-     --min-table-size=50 \
-     --inference-only \
-     --nepochs=0
+./install_mlc_cmt_cat
 ```
-   
-   Key parameters for merge/split:
-   - `--merge-emb-threshold`: Merge tables with size below this threshold (0 = no merging)
-   - `--split-emb-threshold`: Split tables with size above this threshold (0 = no splitting)
-   - `--num-splits`: Number of splits for large tables (e.g., 2, 4, 6)
-   - `--min-table-size`: Minimum table size to consider for merging
-   - `--min-split-rows=100000`: Only split tables ≥ 100K rows
-   - `--max-split-rows=5000000`: Only split tables ≤ 5M rows
 
-6.1 **Run the automated multi-configuration test script**:
+- Test run:
 ```bash
-   ./multi_split_merge.sh
+python dlrm_s_pytorch.py --mini-batch-size=2 --data-size=6 --debug-mode
 ```
 
-## 7. Hot/Cold Runtime Remapping
+---
+
+## 1. Prepare and Clean the Dataset
+```bash
+source dlrm_env/bin/activate
+cd dlrm_minrui/input/
+```
+
+- Download, Untar the dataset file and Rename files:
+```bash
+wget https://go.criteo.net/criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz \
+  && tar -xzvf criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz \
+  && mv train.txt train_original.txt \
+  && mv test.txt test_original.txt
+```
+
+- Remove all preprocessed files from the `input` directory to clean up previous runs:
+```bash
+rm -rf kaggleAdDisplayChallenge_processed.npz train_day_* train_fea_*
+```
+
+---
+
+## 2. Split Dataset
+
+- To split the `train.txt` and `test.txt` files under **dlrm_minrui**:
+  - Use the **original dataset**:
+```bash
+cd ..
+python3 input/train_split.py 1
+```
+  
+  - Use **1/10 of the dataset**:
+```bash
+cd ..
+python3 input/train_split.py 10
+```
+
+---
+
+## 3. (Optional) Check File Sizes
+
+- To verify the file size manually, use the following command:
+```bash
+du --apparent-size --block-size=1 train.txt | awk '{printf "%.2fG\t%s\n", $1/1073741824, $2}'
+du --apparent-size --block-size=1 test.txt | awk '{printf "%.2fG\t%s\n", $1/1073741824, $2}'
+```
+
+---
+
+## 4. Run DLRM with Embedding Table Merging and Splitting
+
+Example command for testing merge and split strategies:
+```bash
+numactl --physcpubind=0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38 --membind=0 \
+python3 dlrm_split_merge_pytorch.py \
+  --arch-sparse-feature-size=64 \
+  --arch-mlp-bot=13-512-256-64-64 \
+  --arch-mlp-top=512-256-1 \
+  --data-generation=dataset \
+  --data-set=kaggle \
+  --raw-data-file=./input/train.txt \
+  --processed-data-file=./input/kaggleAdDisplayChallenge_processed.npz \
+  --dataset-multiprocessing \
+  --loss-function=bce \
+  --round-targets=True \
+  --mini-batch-size=16380 \
+  --print-freq=8192 \
+  --print-time \
+  --test-mini-batch-size=16380 \
+  --test-num-workers=16 \
+  --num-indices-per-lookup=64 \
+  --merge-emb-threshold=1000 \
+  --split-emb-threshold=500000 \
+  --num-splits=4 \
+  --min-split-rows=100000 \
+  --max-split-rows=5000000 \
+  --min-table-size=50 \
+  --inference-only \
+  --nepochs=0
+```
+
+Key parameters for merge/split:
+- `--merge-emb-threshold`: Merge tables with size below this threshold (0 = no merging)
+- `--split-emb-threshold`: Split tables with size above this threshold (0 = no splitting)
+- `--num-splits`: Number of splits for large tables (e.g., 2, 4, 6)
+- `--min-table-size`: Minimum table size to consider for merging
+- `--min-split-rows=100000`: Only split tables ≥ 100K rows
+- `--max-split-rows=5000000`: Only split tables ≤ 5M rows
+
+### 4.1 Run the automated multi-configuration test script
+```bash
+./multi_split_merge.sh
+```
+
+---
+
+## 5. Hot/Cold Runtime Remapping
 
 Split tables based on access patterns - frequently accessed embeddings (hot) vs. rarely accessed (cold).
 
@@ -199,9 +214,16 @@ python dlrm_hot.py \
     --inference-only \
     --nepochs=0
 ```
-## Hot/Cold Preprocessing
+
+---
+
+## 6. Hot/Cold Preprocessing
 
 Eliminate runtime remapping overhead by preprocessing data once.
+
+### Step 1: Profile (same as Section 5, Step 1)
+
+See Section 5, Step 1 above.
 
 ### Step 2: Preprocess data (one-time cost)
 ```bash
@@ -219,6 +241,7 @@ python preprocess_hotcold_identical.py \
     --output-dir=./preprocessed_B8192 \
     --batch-size=8192
 ```
+
 ### Step 3: Run inference with preprocessed data
 ```bash
 python dlrm_hot.py \
@@ -234,9 +257,14 @@ python dlrm_hot.py \
     --print-time \
     --inference-only \
     --nepochs=0
+```
+
+---
+
+## 7. Comparison Script
 
 Run comprehensive comparison of all approaches:
-```
+```bash
 chmod +x compare.sh
 ./compare.sh
 ```
