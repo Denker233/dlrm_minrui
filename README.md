@@ -146,6 +146,8 @@ The default threading strategy(Batch Threading) in PyTorch can perform poorly in
      --merge-emb-threshold=1000 \
      --split-emb-threshold=500000 \
      --num-splits=4 \
+     --min-split-rows=100000 \
+     --max-split-rows=5000000 \
      --min-table-size=50 \
      --inference-only \
      --nepochs=0
@@ -156,8 +158,138 @@ The default threading strategy(Batch Threading) in PyTorch can perform poorly in
    - `--split-emb-threshold`: Split tables with size above this threshold (0 = no splitting)
    - `--num-splits`: Number of splits for large tables (e.g., 2, 4, 6)
    - `--min-table-size`: Minimum table size to consider for merging
+   - `--min-split-rows=100000`: Only split tables ≥ 100K rows
+   - `--max-split-rows=5000000`: Only split tables ≤ 5M rows
 
-5.1 **Run the automated multi-configuration test script**:
+6.1 **Run the automated multi-configuration test script**:
 ```bash
    ./multi_split_merge.sh
+```
+
+7.## Hot/Cold Runtime Remapping
+
+Split tables based on access patterns - frequently accessed embeddings (hot) vs. rarely accessed (cold).
+
+### Step 1: Profile access patterns
+```bash
+python dlrm_hot.py \
+    --profile-embedding-access \
+    --profile-batches=-1 \
+    --save-access-profile=./profiles/kaggle_profile_P80_FULL.pkl \
+    --hotcold-percentile=80 \
+    --hotcold-emb-threshold=1000000 \
+    --data-set=kaggle \
+    --raw-data-file=./input/train.txt \
+    --processed-data-file=./input/kaggleAdDisplayChallenge_processed.npz \
+    --loss-function=bce \
+    --round-targets=True \
+    --mini-batch-size=16384 \
+    --arch-sparse-feature-size=64 \
+    --arch-mlp-bot=13-512-256-64 \
+    --arch-mlp-top=512-256-1 \
+    --num-batches=2519 \
+    --inference-only \
+    --nepochs=0
+```
+
+**Key parameters:**
+- `--profile-embedding-access`: Enable profiling mode
+- `--profile-batches=-1`: Profile full training set 
+- `--save-access-profile`: Output file for profile data
+- `--hotcold-percentile=80`: Hot embeddings cover 80% of accesses
+- `--hotcold-emb-threshold=1000000`: Only split tables ≥ 1M rows
+
+**Output files:**
+- `./profiles/kaggle_profile_P80_FULL.pkl` - Raw access counts
+- `./profiles/kaggle_profile_P80_FULL_analyzed.pkl` - Analyzed hot/cold mappings
+
+### Step 2: Run inference with runtime remapping
+```bash
+python dlrm_hot.py \
+    --load-access-profile=./profiles/kaggle_profile_P80_FULL.pkl \
+    --hotcold-percentile=80 \
+    --hotcold-emb-threshold=1000000 \
+    --data-set=kaggle \
+    --raw-data-file=./input/train.txt \
+    --processed-data-file=./input/kaggleAdDisplayChallenge_processed.npz \
+    --loss-function=bce \
+    --round-targets=True \
+    --mini-batch-size=16384 \
+    --arch-sparse-feature-size=64 \
+    --arch-mlp-bot=13-512-256-64 \
+    --arch-mlp-top=512-256-1 \
+    --print-freq=100 \
+    --print-time \
+    --test-mini-batch-size=16384 \
+    --test-num-workers=8 \
+    --inference-only \
+    --nepochs=0
+```
+## Hot/Cold Preprocessing
+
+Eliminate runtime remapping overhead by preprocessing data once.
+
+### Step 2: Preprocess data (one-time cost)
+```bash
+# For batch size 16384
+python preprocess_hotcold_identical.py \
+    --processed-data-file=./input/kaggleAdDisplayChallenge_processed.npz \
+    --profile-file=./profiles/kaggle_profile_P80_FULL.pkl \
+    --output-dir=./preprocessed_B16384 \
+    --batch-size=16384
+
+# For batch size 8192
+python preprocess_hotcold_identical.py \
+    --processed-data-file=./input/kaggleAdDisplayChallenge_processed.npz \
+    --profile-file=./profiles/kaggle_profile_P80_FULL.pkl \
+    --output-dir=./preprocessed_B8192 \
+    --batch-size=8192
+```
+### Step 3: Run inference with preprocessed data
+```bash
+python dlrm_hot.py \
+    --use-hotcold-preprocessed \
+    --hotcold-preprocessed-dir=./preprocessed_B16384 \
+    --mini-batch-size=16384 \
+    --arch-sparse-feature-size=64 \
+    --arch-mlp-bot=13-512-256-64 \
+    --arch-mlp-top=512-256-1 \
+    --loss-function=bce \
+    --round-targets=True \
+    --print-freq=100 \
+    --print-time \
+    --inference-only \
+    --nepochs=0
+
+Run comprehensive comparison of all approaches:
+```
+chmod +x compare.sh
+./compare.sh
+```
+
+
+## File Structure
+```
+dlrm_minrui/
+├── dlrm_hot.py                      # Main DLRM implementation
+├── preprocess_hotcold_identical.py  # Preprocessing script
+├── compare_full.sh                  # Comparison benchmark
+├── input/
+│   ├── train.txt                    # Raw Criteo data
+│   └── kaggleAdDisplayChallenge_processed.npz
+├── profiles/
+│   ├── kaggle_profile_P80_FULL.pkl           # Raw profile
+│   └── kaggle_profile_P80_FULL_analyzed.pkl  # Analyzed profile
+├── preprocessed_B16384/             # Preprocessed batch 16384
+│   ├── train/
+│   │   ├── batch_000000.pt
+│   │   └── ...
+│   ├── test/
+│   └── metadata.pkl
+└── comparison_results/              # Benchmark results
+    ├── B16384_T80/
+    │   ├── baseline.summary.txt
+    │   ├── preprocessed.summary.txt
+    │   └── runtime.summary.txt
+    └── comparison_summary.txt
 ```
