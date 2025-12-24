@@ -187,7 +187,6 @@ python dlrm_hot.py \
     --arch-sparse-feature-size=64 \
     --arch-mlp-bot=13-512-256-64 \
     --arch-mlp-top=512-256-1 \
-    --num-batches=2519 \
     --inference-only \
     --nepochs=0
 ```
