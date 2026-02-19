@@ -326,7 +326,7 @@ def collate_wrapper_criteo_offset(list_of_tuples):
     # where each tuple is (X_int, X_cat, y)
     transposed_data = list(zip(*list_of_tuples))
     X_int = torch.log(torch.tensor(transposed_data[0], dtype=torch.float) + 1)
-    X_cat = torch.tensor(transposed_data[1], dtype=torch.long)
+    X_cat = torch.tensor(np.array(transposed_data[1], dtype=np.int64), dtype=torch.long)
     T = torch.tensor(transposed_data[2], dtype=torch.float32).view(-1, 1)
 
     batchSize = X_cat.shape[0]

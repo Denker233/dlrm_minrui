@@ -106,7 +106,362 @@ from tricks.md_embedding_bag import md_solver, PrEmbeddingBag
 
 # quotient-remainder trick
 from tricks.qr_embedding_bag import QREmbeddingBag
+# ============================================================================
+# QSV Compression for Embeddings
+# Add this at the very end of dlrm_s_pytorch.py
+# ============================================================================
 
+import subprocess
+import tempfile
+import os
+
+# Quantization functions
+def quantize_asymmetric(weights, bits=8):
+    """Asymmetric quantization (PyTorch standard)"""
+    w_min, w_max = weights.min(), weights.max()
+    scale = (w_max - w_min) / (2**bits - 1)
+    zero_point = -(w_min / scale).round()
+    quantized = ((weights / scale).round() + zero_point).clamp(0, 255)
+    quantized = quantized.to(torch.uint8)
+    metadata = {'scale': float(scale), 'zero_point': float(zero_point)}
+    return quantized, metadata
+
+def dequantize_asymmetric(quantized, metadata):
+    """Dequantize from asymmetric"""
+    weights = (quantized.float() - metadata['zero_point']) * metadata['scale']
+    return weights
+
+def quantize_per_row(weights, bits=8):
+    """Per-row quantization (best for embeddings)"""
+    num_rows = weights.shape[0]
+    quantized = torch.zeros_like(weights, dtype=torch.uint8)
+    scales = []
+    zero_points = []
+    
+    for i in range(num_rows):
+        row = weights[i]
+        r_min, r_max = row.min(), row.max()
+        scale = (r_max - r_min) / (2**bits - 1) if r_max > r_min else 1.0
+        zero_point = -(r_min / scale).round() if scale > 0 else 0
+        quantized[i] = ((row / scale).round() + zero_point).clamp(0, 255).to(torch.uint8)
+        scales.append(float(scale))
+        zero_points.append(float(zero_point))
+    
+    metadata = {'scales': scales, 'zero_points': zero_points}
+    return quantized, metadata
+
+def dequantize_per_row(quantized, metadata):
+    """Dequantize from per-row"""
+    num_rows = quantized.shape[0]
+    weights = torch.zeros_like(quantized, dtype=torch.float32)
+    
+    for i in range(num_rows):
+        scale = metadata['scales'][i]
+        zero_point = metadata['zero_points'][i]
+        weights[i] = (quantized[i].float() - zero_point) * scale
+    
+    return weights
+
+
+
+def tile_embeddings(data, emb_dim, num_emb, tile_size=4):
+    """
+    Arrange embeddings as tiles in a 2D grid.
+    Each embedding becomes a tile_size×tile_size block.
+    """
+    import numpy as np
+    
+    # Reshape embeddings to tile_size×tile_size
+    # Pad embedding dimension to tile_size² if needed
+    tiles_per_emb = (emb_dim + tile_size**2 - 1) // tile_size**2
+    padded_emb_dim = tiles_per_emb * tile_size**2
+    
+    # Pad data if needed
+    if emb_dim < padded_emb_dim:
+        data_2d = data.reshape(num_emb, emb_dim)
+        padded_data = np.zeros((num_emb, padded_emb_dim), dtype=data.dtype)
+        padded_data[:, :emb_dim] = data_2d
+        data_2d = padded_data
+    else:
+        data_2d = data.reshape(num_emb, emb_dim)
+    
+    # Reshape each embedding into tile(s)
+    tiles = data_2d.reshape(num_emb, tiles_per_emb, tile_size, tile_size)
+    
+    # Arrange tiles in a grid
+    grid_size = int(np.ceil(np.sqrt(num_emb * tiles_per_emb)))
+    total_tiles = grid_size * grid_size
+    
+    # Pad to fill grid
+    if num_emb * tiles_per_emb < total_tiles:
+        padding = np.zeros((total_tiles - num_emb * tiles_per_emb, tile_size, tile_size), dtype=data.dtype)
+        all_tiles = np.concatenate([tiles.reshape(-1, tile_size, tile_size), padding], axis=0)
+    else:
+        all_tiles = tiles.reshape(-1, tile_size, tile_size)
+    
+    # Arrange in grid
+    tiles_grid = all_tiles.reshape(grid_size, grid_size, tile_size, tile_size)
+    
+    # Merge tiles into final image
+    rows = []
+    for i in range(grid_size):
+        row_tiles = [tiles_grid[i, j] for j in range(grid_size)]
+        row = np.concatenate(row_tiles, axis=1)
+        rows.append(row)
+    image = np.concatenate(rows, axis=0)
+    
+    return image, grid_size, tiles_per_emb
+
+def untile_embeddings(image, emb_dim, num_emb, grid_size, tiles_per_emb, tile_size=4):
+    """
+    Extract embeddings from tiled image.
+    """
+    import numpy as np
+    
+    # Split image back into tiles
+    tiles_grid = image.reshape(grid_size, tile_size, grid_size, tile_size)
+    tiles_grid = tiles_grid.transpose(0, 2, 1, 3)  # [grid_size, grid_size, tile_size, tile_size]
+    
+    # Flatten to list of tiles
+    all_tiles = tiles_grid.reshape(-1, tile_size, tile_size)
+    
+    # Take only the tiles we need
+    needed_tiles = num_emb * tiles_per_emb
+    tiles = all_tiles[:needed_tiles]
+    
+    # Reshape back to embeddings
+    embeddings = tiles.reshape(num_emb, tiles_per_emb * tile_size * tile_size)
+    
+    # Remove padding from embedding dimension
+    embeddings = embeddings[:, :emb_dim]
+    
+    return embeddings.reshape(-1)
+
+class QSVEmbeddingCompressor:
+    """Compress embedding tables using Intel QSV hardware acceleration"""
+    
+    def __init__(self, codec='hevc_qsv', quality=23, quantization='asymmetric', bits=8):
+        self.codec = codec
+        self.quality = quality
+        self.quantization = quantization
+        self.bits = bits
+        
+        # Map quantization methods
+        self.quantizers = {
+            'asymmetric': (quantize_asymmetric, dequantize_asymmetric),
+            'per_row': (quantize_per_row, dequantize_per_row)
+        }
+        
+        # Check ffmpeg availability
+        try:
+            result = subprocess.run(['ffmpeg', '-version'], 
+                                  capture_output=True, 
+                                  text=True, 
+                                  check=True,
+                                  timeout=5)
+        except Exception as e:
+            raise RuntimeError(f"ffmpeg not found. Install with: sudo apt install ffmpeg")
+    
+    def _encode_qsv(self, input_file, output_file, width, height):
+        """Encode using QSV with tiling for large tables"""
+        import numpy as np
+        
+        # Video codecs have dimension limits
+        MAX_DIM = 16384
+        MIN_WIDTH = 64
+        MIN_HEIGHT = 64
+        TILE_SIZE = 4  # Each embedding → 4×4 tile
+        original_width, original_height = width, height
+        
+        # For large tables, use tiling to preserve structure
+        TILING_THRESHOLD = 50000  # Use tiling for tables with >50K embeddings
+        
+        if original_height > TILING_THRESHOLD:
+            # Read data and tile it
+            data = np.fromfile(input_file, dtype=np.uint8)
+            image, grid_size, tiles_per_emb = tile_embeddings(
+                data, original_width, original_height, TILE_SIZE
+            )
+            
+            # Write tiled image
+            image.tofile(input_file)
+            width, height = image.shape[1], image.shape[0]
+            
+            # Store tiling info for decompression
+            self._tiling_metadata = {
+                'tiled': True,
+                'grid_size': grid_size,
+                'tiles_per_emb': tiles_per_emb,
+                'tile_size': TILE_SIZE
+            }
+            
+            print(f"      Tiled into {grid_size}×{grid_size} grid of {TILE_SIZE}×{TILE_SIZE} tiles → {width}×{height}")
+        else:
+            self._tiling_metadata = {'tiled': False}
+        
+        if height > MAX_DIM or width < MIN_WIDTH or height < MIN_HEIGHT:
+            # Reshape to fit within limits
+            total_pixels = width * height
+            
+            # For very small tables, ensure we meet minimum dimensions
+            min_required_pixels = MIN_WIDTH * MIN_HEIGHT
+            
+            if total_pixels < min_required_pixels:
+                # Table is too small - pad to minimum size
+                width = MIN_WIDTH
+                height = MIN_HEIGHT
+            elif height > MAX_DIM:
+                # Table is too tall
+                width = (total_pixels + MAX_DIM - 1) // MAX_DIM
+                height = MAX_DIM
+                if width < MIN_WIDTH:
+                    width = MIN_WIDTH
+                    height = (total_pixels + width - 1) // width
+            elif width < MIN_WIDTH:
+                # Table is too narrow
+                width = MIN_WIDTH
+                height = (total_pixels + width - 1) // width
+                if height < MIN_HEIGHT:
+                    height = MIN_HEIGHT
+            elif height < MIN_HEIGHT:
+                # Table is too short
+                height = MIN_HEIGHT
+                width = (total_pixels + height - 1) // height
+                if width < MIN_WIDTH:
+                    width = MIN_WIDTH
+                    height = (total_pixels + width - 1) // width
+                    if height < MIN_HEIGHT:
+                        # Still too small, use minimums
+                        width = MIN_WIDTH
+                        height = MIN_HEIGHT
+            
+            # Pad the data if needed
+            padded_pixels = width * height
+            if padded_pixels > total_pixels:
+                data = np.fromfile(input_file, dtype=np.uint8)
+                padded_data = np.zeros(padded_pixels, dtype=np.uint8)
+                padded_data[:len(data)] = data
+                padded_data.tofile(input_file)
+            
+            print(f"      Reshaped from {original_width}x{original_height} to {width}x{height}")
+        
+        cmd = [
+            'ffmpeg', '-y',
+            '-f', 'rawvideo',
+            '-pix_fmt', 'gray',
+            '-s', f'{width}x{height}',
+            '-r', '1',
+            '-i', input_file,
+            '-c:v', self.codec,
+            '-crf', str(self.quality),
+            '-preset', 'ultrafast',
+            '-x265-params', 'log-level=error:allow-non-conformance=1',
+            '-frames:v', '1',
+            output_file
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            raise RuntimeError(f"QSV encoding failed: {result.stderr}")
+    
+    def _decode_qsv(self, input_file, output_file, expected_size=None):
+        """Decode using QSV"""
+        cmd = [
+            'ffmpeg', '-y',
+            '-hwaccel', 'qsv',
+            '-c:v', {'hevc_qsv': 'hevc', 'h264_qsv': 'h264', 'libx265': 'hevc', 'libx264': 'h264'}.get(self.codec, 'hevc'),
+            '-i', input_file,
+            '-pix_fmt', 'gray',
+            '-f', 'rawvideo',
+            output_file
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            raise RuntimeError(f"QSV decoding failed: {result.stderr}")
+    
+    def compress_table(self, weights):
+        """Compress an embedding table"""
+        num_emb, emb_dim = weights.shape
+        
+        # Step 1: Quantize
+        quantize_fn = self.quantizers[self.quantization][0]
+        pixels_uint8, quant_metadata = quantize_fn(weights, bits=self.bits)
+        
+        # Step 2: Encode with QSV
+        with tempfile.TemporaryDirectory() as tmpdir:
+            raw_file = os.path.join(tmpdir, 'pixels.raw')
+            video_file = os.path.join(tmpdir, 'compressed.mp4')
+            
+            # Write raw
+            pixels_uint8.numpy().tofile(raw_file)
+            
+            # Encode
+            self._encode_qsv(raw_file, video_file, emb_dim, num_emb)
+            
+            # Read compressed
+            with open(video_file, 'rb') as f:
+                compressed_data = f.read()
+        
+        # Metadata
+        metadata = {
+            'shape': (num_emb, emb_dim),
+            'quantization': self.quantization,
+            'quant_params': quant_metadata,
+            'bits': self.bits,
+            'codec': self.codec,
+            'quality': self.quality,
+            'tiling': getattr(self, '_tiling_metadata', {'tiled': False})
+        }
+        
+        return compressed_data, metadata
+    
+    def decompress_table(self, compressed_data, metadata):
+        """Decompress an embedding table"""
+        import numpy as np
+        
+        num_emb, emb_dim = metadata['shape']
+        
+        # Decode from QSV
+        with tempfile.TemporaryDirectory() as tmpdir:
+            video_file = os.path.join(tmpdir, 'compressed.mp4')
+            raw_file = os.path.join(tmpdir, 'decoded.raw')
+            
+            # Write compressed
+            with open(video_file, 'wb') as f:
+                f.write(compressed_data)
+            
+            # Decode
+            expected_size = num_emb * emb_dim
+            self._decode_qsv(video_file, raw_file, expected_size)
+            
+            # Read raw
+            pixels_uint8 = np.fromfile(raw_file, dtype=np.uint8)
+            
+            # Handle tiling if used
+            if metadata.get('tiling', {}).get('tiled', False):
+                tiling = metadata['tiling']
+                # Read tiled image dimensions from decoded data
+                grid_size = tiling['grid_size']
+                tile_size = tiling['tile_size']
+                image_size = grid_size * tile_size
+                
+                # Untile
+                pixels_uint8 = untile_embeddings(
+                    pixels_uint8[:image_size*image_size].reshape(image_size, image_size),
+                    emb_dim, num_emb,
+                    grid_size, tiling['tiles_per_emb'], tile_size
+                )
+            else:
+                pixels_uint8 = pixels_uint8[:expected_size]
+            
+            pixels_uint8 = torch.from_numpy(pixels_uint8).reshape(num_emb, emb_dim)
+        
+        # Dequantize
+        dequantize_fn = self.quantizers[metadata['quantization']][1]
+        weights = dequantize_fn(pixels_uint8, metadata['quant_params'])
+        
+        return weights
 with warnings.catch_warnings():
     warnings.filterwarnings("ignore", category=DeprecationWarning)
     try:
@@ -1022,6 +1377,7 @@ def inference(
         is_best = validation_results["roc_auc"] > best_auc_test
         if is_best:
             best_auc_test = validation_results["roc_auc"]
+            best_acc_test = validation_results["accuracy"]  
             model_metrics_dict["test_auc"] = best_auc_test
         print(
             "recall {:.4f}, precision {:.4f},".format(
@@ -1049,7 +1405,7 @@ def inference(
             ),
             flush=True,
         )
-    return model_metrics_dict, is_best
+    return model_metrics_dict, is_best, best_acc_test, best_auc_test
 
 
 def run():
@@ -1891,7 +2247,7 @@ def run():
                         print(
                             "Testing at - {}/{} of epoch {},".format(j + 1, nbatches, k)
                         )
-                        model_metrics_dict, is_best = inference(
+                        model_metrics_dict, is_best, best_acc_test, best_auc_test = inference(
                             args,
                             dlrm,
                             best_acc_test,
