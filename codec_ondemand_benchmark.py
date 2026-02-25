@@ -1277,7 +1277,34 @@ def main():
                     scales.append(0.0)
                     zero_points.append(0)
 
-            _C.register_tables(table_kinds, weights, mappings, scales, zero_points)
+            # Use hash table to replace mapping tensors (saves ~113MB)
+            use_hash = True
+            _C.register_tables(table_kinds, weights, mappings, scales, zero_points,
+                               use_hash_table=use_hash)
+            if use_hash:
+                # With hash tables, the C++ side releases mapping tensors.
+                # For cold fixup, we need orig_to_cold_reordered.
+                # Load as numpy memory-mapped arrays (only accessed pages enter RAM).
+                import numpy as np
+                _cold_reordered_mmap = {}
+                for k in _cold_caches:
+                    E = dlrm.emb_l[k]
+                    # Convert .pt to .npy for mmap access if not already done
+                    mmap_path = os.path.join(REORDER_DIR, f'orig_to_cold_reordered_{k}.npy')
+                    if not os.path.exists(mmap_path):
+                        pt_path = os.path.join(REORDER_DIR, f'orig_to_cold_reordered_{k}.pt')
+                        o2c = torch.load(pt_path, map_location='cpu', weights_only=True)
+                        np.save(mmap_path, o2c.numpy())
+                        del o2c
+                    _cold_reordered_mmap[k] = np.load(mmap_path, mmap_mode='r')
+                    # Release the Python-side mapping tensor reference
+                    if hasattr(E, 'mapping'):
+                        del E.mapping
+                # Free the mapping list and dict
+                del mappings
+                _mappings.clear()
+                gc.collect()
+                log(f"  Hash table mode: mapping tensors released, cold lookup via mmap")
 
             def _fast_apply_emb(lS_o, lS_i, emb_l, v_W_l):
                 # Ensure lS_i and lS_o are 2D contiguous tensors
@@ -1309,8 +1336,15 @@ def main():
                         idx = lS_i_2d[k]
                         off = lS_o_2d[k]
                         cold_positions = torch.where(cold_mask)[0]
-                        cold_map_vals = _mappings[k][idx[cold_positions]]
-                        cold_reordered = -(cold_map_vals.long() + 1)
+                        cold_orig_indices = idx[cold_positions].numpy()
+                        if use_hash and k in _cold_reordered_mmap:
+                            # Hash mode: look up cold indices from mmap'd file
+                            cold_reordered_np = _cold_reordered_mmap[k][cold_orig_indices]
+                            cold_reordered = torch.from_numpy(cold_reordered_np.copy()).long()
+                        else:
+                            # Array mode: extract from merged mapping
+                            cold_map_vals = _mappings[k][idx[cold_positions]]
+                            cold_reordered = -(cold_map_vals.long() + 1)
                         valid = cold_reordered >= 0
                         if valid.any():
                             cold_result, frames_used = _cold_caches[k].lookup(cold_reordered[valid])
@@ -1388,7 +1422,26 @@ def main():
                 len(c.cache) * c.rows_per_frame * c.emb_dim * 4 / 1024 / 1024
                 for c in caches.values()
             )
-        total_mem_mb = total_hot_mb + compressed_in_mem_mb + lru_mb + total_mapping_mb
+        # When hash tables are used, mapping memory is replaced by hash table memory
+        # Hash table: ~60% load factor, 8 bytes per slot (key + value), capacity = ceil(n_hot / 0.6)
+        effective_mapping_mb = total_mapping_mb
+        if HAS_CPP_EXT and compressed_table_ids and use_hash:
+            hash_mb = 0
+            for t_idx in caches:
+                E = dlrm.emb_l[t_idx]
+                hw = getattr(E, 'hot_weight_q8', None)
+                if hw is None:
+                    hw = getattr(E, 'hot_weight', None)
+                if hw is None:
+                    continue
+                n_hot = hw.size(0)
+                capacity = 1
+                while capacity < n_hot * 5 // 3:
+                    capacity *= 2
+                hash_mb += capacity * 8 / 1024 / 1024  # 8 bytes per slot
+            effective_mapping_mb = hash_mb
+
+        total_mem_mb = total_hot_mb + compressed_in_mem_mb + lru_mb + effective_mapping_mb
 
         log(f"  AUC={auc:.6f}, Time={total_time:.2f}s, RSS={rss:.0f}MB")
         log(f"  Hit rate={hit_rate:.1%}, Demand={total_demand} ({avg_demand:.1f}/batch), "
@@ -1396,9 +1449,12 @@ def main():
         log(f"  Compression: {orig_cold_mb:.1f}MB fp32 -> {compressed_mb:.1f}MB "
             f"({compression_ratio:.1f}x)")
         log(f"  LRU cache: {lru_frames} frames = {lru_mb:.1f}MB")
-        log(f"  Mapping: {total_mapping_mb:.1f}MB (merged int32)")
+        if HAS_CPP_EXT and compressed_table_ids and use_hash:
+            log(f"  Hot hash table: {effective_mapping_mb:.1f}MB (vs {total_mapping_mb:.1f}MB mapping)")
+        else:
+            log(f"  Mapping: {total_mapping_mb:.1f}MB (merged int32)")
         log(f"  Total memory: hot={total_hot_mb:.1f} + cold={compressed_in_mem_mb:.1f} "
-            f"+ lru={lru_mb:.1f} + map={total_mapping_mb:.1f} = {total_mem_mb:.1f}MB "
+            f"+ lru={lru_mb:.1f} + map={effective_mapping_mb:.1f} = {total_mem_mb:.1f}MB "
             f"(vs {total_emb_mb:.1f}MB baseline, {total_emb_mb/total_mem_mb:.1f}x)")
         log(f"  Batch latency: mean={np.mean(blats)*1000:.2f}ms")
 
@@ -1416,7 +1472,7 @@ def main():
             'rss_mb': rss,
             'rss_after_setup_mb': rss_after_setup,
             'hot_mb': total_hot_mb,
-            'mapping_mb': total_mapping_mb,
+            'mapping_mb': effective_mapping_mb,
             'compressed_cold_mb': compressed_in_mem_mb,
             'compressed_on_disk_mb': total_compressed_mb,
             'disk_decode': disk_decode,
