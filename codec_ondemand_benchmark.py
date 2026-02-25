@@ -1082,7 +1082,7 @@ def main():
     def run_ondemand_inference(res_name, cache_capacity, predictor_type='markov',
                                lookahead_depth=3, tag="",
                                use_global_cache=False, disk_decode=False,
-                               quantize_hot=False):
+                               quantize_hot=False, use_hash_table=False):
         width, height = RESOLUTIONS[res_name]
         pixels_per_frame = width * height
         rows_per_frame = pixels_per_frame // EMB_DIM
@@ -1277,15 +1277,14 @@ def main():
                     scales.append(0.0)
                     zero_points.append(0)
 
-            # Use hash table to replace mapping tensors (saves ~113MB)
-            use_hash = True
+            # Use hash table to replace mapping tensors (saves ~113MB at cost of ~1.5ms/batch)
+            use_hash = use_hash_table
             _C.register_tables(table_kinds, weights, mappings, scales, zero_points,
                                use_hash_table=use_hash)
             if use_hash:
                 # With hash tables, the C++ side releases mapping tensors.
                 # For cold fixup, we need orig_to_cold_reordered.
                 # Load as numpy memory-mapped arrays (only accessed pages enter RAM).
-                import numpy as np
                 _cold_reordered_mmap = {}
                 for k in _cold_caches:
                     E = dlrm.emb_l[k]
@@ -1558,6 +1557,27 @@ def main():
         res_name=res_1080, cache_capacity=32,
         predictor_type='none', lookahead_depth=1, tag=key,
         use_global_cache=True, disk_decode=True, quantize_hot=False)
+
+    # === Memory-optimized experiments (hash table mode) ===
+    log(f"\n{'='*70}")
+    log("EXPERIMENTS: Hash Table Mode (memory-optimized)")
+    log(f"{'='*70}")
+
+    # Exp 5: 1080p, cache=32, disk, q8-hot + hash table (max compression)
+    key = f'{res_1080}_g32_disk_q8hot_hash'
+    all_results[key] = run_ondemand_inference(
+        res_name=res_1080, cache_capacity=32,
+        predictor_type='none', lookahead_depth=1, tag=key,
+        use_global_cache=True, disk_decode=True, quantize_hot=True,
+        use_hash_table=True)
+
+    # Exp 6: 4K, cache=8, disk, q8-hot + hash table
+    key = f'{res_name}_g8_disk_q8hot_hash'
+    all_results[key] = run_ondemand_inference(
+        res_name=res_name, cache_capacity=8,
+        predictor_type='none', lookahead_depth=1, tag=key,
+        use_global_cache=True, disk_decode=True, quantize_hot=True,
+        use_hash_table=True)
 
     # ---- Save results ----
     log(f"\n{'='*70}")
