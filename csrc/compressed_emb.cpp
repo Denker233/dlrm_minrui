@@ -5,6 +5,7 @@
 #include <vector>
 #include <cstring>
 #include <algorithm>
+#include <atomic>
 
 // Forward pass: hot/cold split embedding lookup with sum pooling.
 //
@@ -152,8 +153,9 @@ torch::Tensor hot_embedding_bag_forward(
     return output;  // cold_mask available via the second return
 }
 
-// Optimized version: returns both output and cold_mask.
+// Optimized version: returns output, cold_mask, and cold_count.
 // Uses at::parallel_for for multi-threaded bag processing.
+// cold_count avoids expensive Python .any() call.
 std::vector<torch::Tensor> compressed_emb_bag_forward(
     const torch::Tensor& indices,           // (N,) int64
     const torch::Tensor& offsets,           // (B,) int64
@@ -179,8 +181,11 @@ std::vector<torch::Tensor> compressed_emb_bag_forward(
     float* out_ptr = output.data_ptr<float>();
     bool* cold_mask_ptr = cold_mask.data_ptr<bool>();
 
+    std::atomic<int64_t> cold_count{0};
+
     // Parallel over bags — each bag is independent
     at::parallel_for(0, B, /* grain_size= */ 64, [&](int64_t b_begin, int64_t b_end) {
+        int64_t local_cold = 0;
         for (int64_t b = b_begin; b < b_end; b++) {
             int64_t start = off_ptr[b];
             int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
@@ -204,12 +209,155 @@ std::vector<torch::Tensor> compressed_emb_bag_forward(
                     }
                 } else {
                     cold_mask_ptr[i] = true;
+                    local_cold++;
                 }
             }
         }
+        cold_count.fetch_add(local_cold, std::memory_order_relaxed);
     });
 
-    return {output, cold_mask};
+    // Return cold count as a scalar tensor to avoid Python .any() overhead
+    auto cold_count_t = torch::tensor(cold_count.load(), torch::dtype(torch::kLong));
+    return {output, cold_mask, cold_count_t};
+}
+
+// Merged mapping version: uses a single int32 mapping tensor instead of
+// separate is_hot (bool), orig_to_hot (int64), and o2c (int64) tensors.
+// Saves ~418MB for 8 large tables (from 547MB to 129MB mapping overhead).
+//
+// Mapping encoding:
+//   mapping[i] >= 0            → hot index
+//   mapping[i] < 0 && != MIN   → cold index = -(mapping[i] + 1)
+//   mapping[i] == INT32_MIN    → invalid
+std::vector<torch::Tensor> compressed_emb_bag_forward_merged(
+    const torch::Tensor& indices,           // (N,) int64
+    const torch::Tensor& offsets,           // (B,) int64
+    const torch::Tensor& hot_weight,        // (n_hot, D) float32
+    const torch::Tensor& mapping,           // (num_emb,) int32 — merged hot/cold mapping
+    const torch::Tensor& per_sample_weights // (N,) float32 or empty
+) {
+    const int64_t N = indices.size(0);
+    const int64_t B = offsets.size(0);
+    const int64_t D = hot_weight.size(1);
+    const bool has_weights = per_sample_weights.numel() > 0;
+    constexpr int32_t INVALID = std::numeric_limits<int32_t>::min();
+
+    auto output = torch::zeros({B, D}, hot_weight.options());
+    auto cold_mask = torch::zeros({N}, torch::dtype(torch::kBool));
+
+    const int64_t* idx_ptr = indices.data_ptr<int64_t>();
+    const int64_t* off_ptr = offsets.data_ptr<int64_t>();
+    const int32_t* map_ptr = mapping.data_ptr<int32_t>();
+    const float* hw_ptr = hot_weight.data_ptr<float>();
+    const float* psw_ptr = has_weights ? per_sample_weights.data_ptr<float>() : nullptr;
+    float* out_ptr = output.data_ptr<float>();
+    bool* cold_mask_ptr = cold_mask.data_ptr<bool>();
+
+    std::atomic<int64_t> cold_count{0};
+
+    at::parallel_for(0, B, 64, [&](int64_t b_begin, int64_t b_end) {
+        int64_t local_cold = 0;
+        for (int64_t b = b_begin; b < b_end; b++) {
+            int64_t start = off_ptr[b];
+            int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+            float* out_row = out_ptr + b * D;
+
+            for (int64_t i = start; i < end; i++) {
+                int64_t orig_idx = idx_ptr[i];
+                int32_t m = map_ptr[orig_idx];
+
+                if (m >= 0) {
+                    // Hot path
+                    const float* emb_row = hw_ptr + static_cast<int64_t>(m) * D;
+                    if (has_weights) {
+                        float w = psw_ptr[i];
+                        for (int64_t d = 0; d < D; d++) {
+                            out_row[d] += emb_row[d] * w;
+                        }
+                    } else {
+                        for (int64_t d = 0; d < D; d++) {
+                            out_row[d] += emb_row[d];
+                        }
+                    }
+                } else if (m != INVALID) {
+                    // Cold path
+                    cold_mask_ptr[i] = true;
+                    local_cold++;
+                }
+            }
+        }
+        cold_count.fetch_add(local_cold, std::memory_order_relaxed);
+    });
+
+    auto cold_count_t = torch::tensor(cold_count.load(), torch::dtype(torch::kLong));
+    return {output, cold_mask, cold_count_t};
+}
+
+// Merged mapping version with q8 hot weights
+std::vector<torch::Tensor> compressed_emb_bag_forward_q8_merged(
+    const torch::Tensor& indices,           // (N,) int64
+    const torch::Tensor& offsets,           // (B,) int64
+    const torch::Tensor& hot_weight_q8,    // (n_hot, D) uint8
+    const torch::Tensor& mapping,           // (num_emb,) int32 — merged hot/cold mapping
+    const torch::Tensor& per_sample_weights,// (N,) float32 or empty
+    double hot_scale,
+    int64_t hot_zero_point
+) {
+    const int64_t N = indices.size(0);
+    const int64_t B = offsets.size(0);
+    const int64_t D = hot_weight_q8.size(1);
+    const bool has_weights = per_sample_weights.numel() > 0;
+    constexpr int32_t INVALID = std::numeric_limits<int32_t>::min();
+
+    auto output = torch::zeros({B, D}, torch::dtype(torch::kFloat32));
+    auto cold_mask = torch::zeros({N}, torch::dtype(torch::kBool));
+
+    const int64_t* idx_ptr = indices.data_ptr<int64_t>();
+    const int64_t* off_ptr = offsets.data_ptr<int64_t>();
+    const int32_t* map_ptr = mapping.data_ptr<int32_t>();
+    const uint8_t* hw_ptr = hot_weight_q8.data_ptr<uint8_t>();
+    const float* psw_ptr = has_weights ? per_sample_weights.data_ptr<float>() : nullptr;
+    float* out_ptr = output.data_ptr<float>();
+    bool* cold_mask_ptr = cold_mask.data_ptr<bool>();
+    const float s = static_cast<float>(hot_scale);
+    const float zp = static_cast<float>(hot_zero_point);
+
+    std::atomic<int64_t> cold_count{0};
+
+    at::parallel_for(0, B, 64, [&](int64_t b_begin, int64_t b_end) {
+        int64_t local_cold = 0;
+        for (int64_t b = b_begin; b < b_end; b++) {
+            int64_t start = off_ptr[b];
+            int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+            float* out_row = out_ptr + b * D;
+
+            for (int64_t i = start; i < end; i++) {
+                int64_t orig_idx = idx_ptr[i];
+                int32_t m = map_ptr[orig_idx];
+
+                if (m >= 0) {
+                    const uint8_t* emb_row = hw_ptr + static_cast<int64_t>(m) * D;
+                    if (has_weights) {
+                        float w = psw_ptr[i];
+                        for (int64_t d = 0; d < D; d++) {
+                            out_row[d] += (static_cast<float>(emb_row[d]) - zp) * s * w;
+                        }
+                    } else {
+                        for (int64_t d = 0; d < D; d++) {
+                            out_row[d] += (static_cast<float>(emb_row[d]) - zp) * s;
+                        }
+                    }
+                } else if (m != INVALID) {
+                    cold_mask_ptr[i] = true;
+                    local_cold++;
+                }
+            }
+        }
+        cold_count.fetch_add(local_cold, std::memory_order_relaxed);
+    });
+
+    auto cold_count_t = torch::tensor(cold_count.load(), torch::dtype(torch::kLong));
+    return {output, cold_mask, cold_count_t};
 }
 
 // Cold fixup: add cold embeddings into already-computed output.
@@ -299,7 +447,10 @@ std::vector<torch::Tensor> compressed_emb_bag_forward_q8(
     const float s = static_cast<float>(hot_scale);
     const float zp = static_cast<float>(hot_zero_point);
 
+    std::atomic<int64_t> cold_count{0};
+
     at::parallel_for(0, B, 64, [&](int64_t b_begin, int64_t b_end) {
+        int64_t local_cold = 0;
         for (int64_t b = b_begin; b < b_end; b++) {
             int64_t start = off_ptr[b];
             int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
@@ -323,12 +474,100 @@ std::vector<torch::Tensor> compressed_emb_bag_forward_q8(
                     }
                 } else {
                     cold_mask_ptr[i] = true;
+                    local_cold++;
                 }
             }
         }
+        cold_count.fetch_add(local_cold, std::memory_order_relaxed);
     });
 
-    return {output, cold_mask};
+    auto cold_count_t = torch::tensor(cold_count.load(), torch::dtype(torch::kLong));
+    return {output, cold_mask, cold_count_t};
+}
+
+
+// Batched multi-table forward: process all large tables in one C++ call.
+// Eliminates Python overhead of 8 separate C++ calls (~1.6ms saving).
+std::vector<torch::Tensor> batched_emb_forward(
+    const std::vector<torch::Tensor>& indices_list,    // N_tables tensors
+    const std::vector<torch::Tensor>& offsets_list,    // N_tables tensors
+    const std::vector<torch::Tensor>& hot_weights,     // N_tables tensors (fp32 or uint8)
+    const std::vector<torch::Tensor>& is_hot_list,     // N_tables tensors
+    const std::vector<torch::Tensor>& o2h_list,        // N_tables tensors
+    const std::vector<double>& scales,                 // N_tables scales (0.0 if fp32)
+    const std::vector<int64_t>& zero_points,           // N_tables zero points
+    const std::vector<bool>& is_quantized              // whether each table uses q8
+) {
+    const int64_t T = indices_list.size();
+    std::vector<torch::Tensor> results;
+    results.reserve(T * 2);  // output + cold_count per table
+
+    for (int64_t t = 0; t < T; t++) {
+        const auto& indices = indices_list[t];
+        const auto& offsets = offsets_list[t];
+        const auto& is_hot = is_hot_list[t];
+        const auto& o2h = o2h_list[t];
+
+        const int64_t N = indices.size(0);
+        const int64_t B = offsets.size(0);
+        const int64_t D = hot_weights[t].size(1);
+
+        auto output = torch::zeros({B, D}, torch::dtype(torch::kFloat32));
+        const int64_t* idx_ptr = indices.data_ptr<int64_t>();
+        const int64_t* off_ptr = offsets.data_ptr<int64_t>();
+        const bool* hot_ptr = is_hot.data_ptr<bool>();
+        const int64_t* o2h_ptr = o2h.data_ptr<int64_t>();
+        float* out_ptr = output.data_ptr<float>();
+
+        int64_t cold_count = 0;
+
+        if (is_quantized[t]) {
+            const uint8_t* hw_ptr = hot_weights[t].data_ptr<uint8_t>();
+            const float s = static_cast<float>(scales[t]);
+            const float zp = static_cast<float>(zero_points[t]);
+
+            for (int64_t b = 0; b < B; b++) {
+                int64_t start = off_ptr[b];
+                int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+                float* out_row = out_ptr + b * D;
+                for (int64_t i = start; i < end; i++) {
+                    int64_t orig_idx = idx_ptr[i];
+                    if (hot_ptr[orig_idx]) {
+                        int64_t hot_idx = o2h_ptr[orig_idx];
+                        const uint8_t* emb_row = hw_ptr + hot_idx * D;
+                        for (int64_t d = 0; d < D; d++) {
+                            out_row[d] += (static_cast<float>(emb_row[d]) - zp) * s;
+                        }
+                    } else {
+                        cold_count++;
+                    }
+                }
+            }
+        } else {
+            const float* hw_ptr = hot_weights[t].data_ptr<float>();
+            for (int64_t b = 0; b < B; b++) {
+                int64_t start = off_ptr[b];
+                int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+                float* out_row = out_ptr + b * D;
+                for (int64_t i = start; i < end; i++) {
+                    int64_t orig_idx = idx_ptr[i];
+                    if (hot_ptr[orig_idx]) {
+                        int64_t hot_idx = o2h_ptr[orig_idx];
+                        const float* emb_row = hw_ptr + hot_idx * D;
+                        for (int64_t d = 0; d < D; d++) {
+                            out_row[d] += emb_row[d];
+                        }
+                    } else {
+                        cold_count++;
+                    }
+                }
+            }
+        }
+
+        results.push_back(output);
+        results.push_back(torch::tensor(cold_count, torch::dtype(torch::kLong)));
+    }
+    return results;  // [output_0, cold_count_0, output_1, cold_count_1, ...]
 }
 
 
@@ -373,6 +612,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           "Compressed EmbeddingBag forward with uint8 hot weights");
     m.def("cold_fixup", &cold_fixup,
           "Add cold embeddings into output in-place");
+    m.def("batched_emb_forward", &batched_emb_forward,
+          "Process multiple tables in one C++ call");
     m.def("gather_dequant_uint8", &gather_dequant_uint8,
           "Gather rows from uint8 frame and dequantize to fp32");
+    m.def("compressed_emb_bag_forward_merged", &compressed_emb_bag_forward_merged,
+          "Compressed EmbeddingBag forward with merged int32 mapping (saves memory)");
+    m.def("compressed_emb_bag_forward_q8_merged", &compressed_emb_bag_forward_q8_merged,
+          "Compressed EmbeddingBag forward with q8 hot and merged int32 mapping");
 }
