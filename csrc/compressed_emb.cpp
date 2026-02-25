@@ -1002,16 +1002,75 @@ namespace {
 // Table types
 enum class TableKind { STANDARD, COMPRESSED_FP32, COMPRESSED_Q8 };
 
+// Open-addressing hash table: maps original_idx (int32) -> hot_compact_idx (int32)
+// Uses Robin Hood hashing for good cache performance.
+// Empty slots are marked with key = EMPTY_KEY.
+struct HotHashTable {
+    static constexpr int32_t EMPTY_KEY = -1;
+    std::vector<int32_t> keys;    // original indices
+    std::vector<int32_t> values;  // hot compact indices
+    int64_t capacity = 0;
+    int64_t mask = 0;  // capacity - 1 (capacity is power of 2)
+
+    void build(const int32_t* mapping, int64_t n_rows) {
+        // Count hot entries
+        int64_t n_hot = 0;
+        for (int64_t i = 0; i < n_rows; i++) {
+            if (mapping[i] >= 0) n_hot++;
+        }
+
+        // Size to next power of 2 with ~60% load factor
+        capacity = 1;
+        while (capacity < n_hot * 5 / 3) capacity *= 2;
+        mask = capacity - 1;
+
+        keys.assign(capacity, EMPTY_KEY);
+        values.assign(capacity, -1);
+
+        // Insert hot entries
+        for (int64_t i = 0; i < n_rows; i++) {
+            int32_t v = mapping[i];
+            if (v >= 0) {
+                int32_t k = static_cast<int32_t>(i);
+                // Fibonacci hashing for good distribution
+                uint32_t h = static_cast<uint32_t>(k) * 2654435769u;
+                int64_t slot = (h >> (32 - __builtin_ctzll(capacity))) & mask;
+                while (keys[slot] != EMPTY_KEY) {
+                    slot = (slot + 1) & mask;
+                }
+                keys[slot] = k;
+                values[slot] = v;
+            }
+        }
+    }
+
+    // Returns hot_compact_idx if found, -1 if cold, INT32_MIN if invalid
+    // For the fast path (hot), typically 1-2 probes.
+    inline int32_t lookup(int32_t orig_idx) const {
+        uint32_t h = static_cast<uint32_t>(orig_idx) * 2654435769u;
+        int64_t slot = (h >> (32 - __builtin_ctzll(capacity))) & mask;
+        while (true) {
+            int32_t k = keys[slot];
+            if (k == orig_idx) return values[slot];
+            if (k == EMPTY_KEY) return -1;  // not found = cold
+            slot = (slot + 1) & mask;
+        }
+    }
+
+    int64_t memory_bytes() const {
+        return capacity * (sizeof(int32_t) * 2);
+    }
+};
+
 struct RegisteredTable {
     TableKind kind;
-    // For STANDARD: fp32 weight tensor
-    // For COMPRESSED_FP32: fp32 hot_weight tensor
-    // For COMPRESSED_Q8: uint8 hot_weight tensor
     torch::Tensor weight;        // hot_weight (fp32 or q8) or standard weight
-    torch::Tensor mapping;       // merged int32 mapping (compressed only)
-    float hot_scale = 0.0f;      // q8 scale (q8 only)
-    float hot_zp = 0.0f;         // q8 zero point (q8 only)
-    int64_t D = 16;              // embedding dimension
+    torch::Tensor mapping;       // merged int32 mapping (compressed only) — used when hash table is off
+    HotHashTable hash_table;     // hash table for hot lookups (compressed only)
+    bool use_hash = false;       // whether to use hash table instead of mapping
+    float hot_scale = 0.0f;
+    float hot_zp = 0.0f;
+    int64_t D = 16;
 };
 
 // Static storage for registered tables
@@ -1026,12 +1085,14 @@ static bool g_registered = false;
 // mappings: vector of tensors (merged mapping for compressed, empty for standard)
 // scales: vector of double (q8 scale, 0 for others)
 // zero_points: vector of int64 (q8 zero point, 0 for others)
+// use_hash_table: bool — if true, build hash tables for compressed tables (saves ~113MB)
 void register_tables(
     std::vector<int64_t> table_kinds,
     std::vector<torch::Tensor> weights,
     std::vector<torch::Tensor> mappings,
     std::vector<double> scales,
-    std::vector<int64_t> zero_points
+    std::vector<int64_t> zero_points,
+    bool use_hash_table
 ) {
     int64_t T = table_kinds.size();
     TORCH_CHECK(T == (int64_t)weights.size(), "weights size mismatch");
@@ -1039,6 +1100,7 @@ void register_tables(
     TORCH_CHECK(T == (int64_t)scales.size(), "scales size mismatch");
     TORCH_CHECK(T == (int64_t)zero_points.size(), "zero_points size mismatch");
 
+    int64_t total_hash_bytes = 0;
     g_tables.resize(T);
     for (int64_t t = 0; t < T; t++) {
         auto& tab = g_tables[t];
@@ -1049,12 +1111,26 @@ void register_tables(
             default: TORCH_CHECK(false, "Unknown table kind: ", table_kinds[t]);
         }
         tab.weight = weights[t];
-        tab.mapping = mappings[t];
         tab.hot_scale = static_cast<float>(scales[t]);
         tab.hot_zp = static_cast<float>(zero_points[t]);
         tab.D = weights[t].size(1);
+
+        if (use_hash_table && tab.kind != TableKind::STANDARD && mappings[t].numel() > 0) {
+            // Build hash table from mapping, then release mapping tensor
+            tab.hash_table.build(mappings[t].data_ptr<int32_t>(), mappings[t].size(0));
+            tab.mapping = torch::Tensor();  // release the mapping tensor memory
+            tab.use_hash = true;
+            total_hash_bytes += tab.hash_table.memory_bytes();
+        } else {
+            tab.mapping = mappings[t];
+            tab.use_hash = false;
+        }
     }
     g_registered = true;
+    if (use_hash_table && total_hash_bytes > 0) {
+        fprintf(stderr, "[C++] Hash tables built: %.1f MB total\n",
+                total_hash_bytes / (1024.0 * 1024.0));
+    }
 }
 
 // fast_forward: process all registered tables with a single call.
@@ -1133,30 +1209,51 @@ std::vector<torch::Tensor> fast_forward(
 
             } else if (tab.kind == TableKind::COMPRESSED_FP32) {
                 const float* hw_ptr = tab.weight.data_ptr<float>();
-                const int32_t* map_ptr = tab.mapping.data_ptr<int32_t>();
                 bool* cm_ptr = all_cm_ptr + cm_offset[t];
                 int64_t local_cold = 0;
 
-                for (int64_t b = 0; b < B; b++) {
-                    int64_t start = off_ptr[b];
-                    int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
-                    float* out_row = out_ptr + b * D;
-                    for (int64_t i = start; i < end; i++) {
-                        int32_t m = map_ptr[idx_ptr[i]];
-                        if (__builtin_expect(m >= 0, 1)) {
-                            const float* emb_row = hw_ptr + static_cast<int64_t>(m) * D;
+                if (tab.use_hash) {
+                    // Hash table mode: lookup hot index via hash
+                    const auto& ht = tab.hash_table;
+                    for (int64_t b = 0; b < B; b++) {
+                        int64_t start = off_ptr[b];
+                        int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+                        float* out_row = out_ptr + b * D;
+                        for (int64_t i = start; i < end; i++) {
+                            int32_t m = ht.lookup(static_cast<int32_t>(idx_ptr[i]));
+                            if (__builtin_expect(m >= 0, 1)) {
+                                const float* emb_row = hw_ptr + static_cast<int64_t>(m) * D;
 #if HAS_AVX512
-                            if (D == 16) {
-                                accum_fp32_d16(out_row, emb_row);
-                            } else
+                                if (D == 16) accum_fp32_d16(out_row, emb_row);
+                                else
 #endif
-                            {
-                                for (int64_t d = 0; d < D; d++)
-                                    out_row[d] += emb_row[d];
+                                for (int64_t d = 0; d < D; d++) out_row[d] += emb_row[d];
+                            } else {
+                                cm_ptr[i] = true;
+                                local_cold++;
                             }
-                        } else if (m != INVALID) {
-                            cm_ptr[i] = true;
-                            local_cold++;
+                        }
+                    }
+                } else {
+                    // Array mapping mode
+                    const int32_t* map_ptr = tab.mapping.data_ptr<int32_t>();
+                    for (int64_t b = 0; b < B; b++) {
+                        int64_t start = off_ptr[b];
+                        int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+                        float* out_row = out_ptr + b * D;
+                        for (int64_t i = start; i < end; i++) {
+                            int32_t m = map_ptr[idx_ptr[i]];
+                            if (__builtin_expect(m >= 0, 1)) {
+                                const float* emb_row = hw_ptr + static_cast<int64_t>(m) * D;
+#if HAS_AVX512
+                                if (D == 16) accum_fp32_d16(out_row, emb_row);
+                                else
+#endif
+                                for (int64_t d = 0; d < D; d++) out_row[d] += emb_row[d];
+                            } else if (m != INVALID) {
+                                cm_ptr[i] = true;
+                                local_cold++;
+                            }
                         }
                     }
                 }
@@ -1165,32 +1262,57 @@ std::vector<torch::Tensor> fast_forward(
             } else {
                 // COMPRESSED_Q8
                 const uint8_t* hw_ptr = tab.weight.data_ptr<uint8_t>();
-                const int32_t* map_ptr = tab.mapping.data_ptr<int32_t>();
                 const float s = tab.hot_scale;
                 const float zp = tab.hot_zp;
                 bool* cm_ptr = all_cm_ptr + cm_offset[t];
                 int64_t local_cold = 0;
 
-                for (int64_t b = 0; b < B; b++) {
-                    int64_t start = off_ptr[b];
-                    int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
-                    float* out_row = out_ptr + b * D;
-                    for (int64_t i = start; i < end; i++) {
-                        int32_t m = map_ptr[idx_ptr[i]];
-                        if (__builtin_expect(m >= 0, 1)) {
+                if (tab.use_hash) {
+                    const auto& ht = tab.hash_table;
+                    for (int64_t b = 0; b < B; b++) {
+                        int64_t start = off_ptr[b];
+                        int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+                        float* out_row = out_ptr + b * D;
+                        for (int64_t i = start; i < end; i++) {
+                            int32_t m = ht.lookup(static_cast<int32_t>(idx_ptr[i]));
+                            if (__builtin_expect(m >= 0, 1)) {
 #if HAS_AVX512
-                            if (D == 16) {
-                                accum_q8_d16(out_row, hw_ptr + static_cast<int64_t>(m) * D, s, zp);
-                            } else
+                                if (D == 16) accum_q8_d16(out_row, hw_ptr + static_cast<int64_t>(m) * D, s, zp);
+                                else
 #endif
-                            {
-                                const uint8_t* emb = hw_ptr + static_cast<int64_t>(m) * D;
-                                for (int64_t d = 0; d < D; d++)
-                                    out_row[d] += (static_cast<float>(emb[d]) - zp) * s;
+                                {
+                                    const uint8_t* emb = hw_ptr + static_cast<int64_t>(m) * D;
+                                    for (int64_t d = 0; d < D; d++)
+                                        out_row[d] += (static_cast<float>(emb[d]) - zp) * s;
+                                }
+                            } else {
+                                cm_ptr[i] = true;
+                                local_cold++;
                             }
-                        } else if (m != INVALID) {
-                            cm_ptr[i] = true;
-                            local_cold++;
+                        }
+                    }
+                } else {
+                    const int32_t* map_ptr = tab.mapping.data_ptr<int32_t>();
+                    for (int64_t b = 0; b < B; b++) {
+                        int64_t start = off_ptr[b];
+                        int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+                        float* out_row = out_ptr + b * D;
+                        for (int64_t i = start; i < end; i++) {
+                            int32_t m = map_ptr[idx_ptr[i]];
+                            if (__builtin_expect(m >= 0, 1)) {
+#if HAS_AVX512
+                                if (D == 16) accum_q8_d16(out_row, hw_ptr + static_cast<int64_t>(m) * D, s, zp);
+                                else
+#endif
+                                {
+                                    const uint8_t* emb = hw_ptr + static_cast<int64_t>(m) * D;
+                                    for (int64_t d = 0; d < D; d++)
+                                        out_row[d] += (static_cast<float>(emb[d]) - zp) * s;
+                                }
+                            } else if (m != INVALID) {
+                                cm_ptr[i] = true;
+                                local_cold++;
+                            }
                         }
                     }
                 }
@@ -1241,7 +1363,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("all_tables_forward", &all_tables_forward,
           "Process ALL tables (compressed + standard) in one C++ call, eliminating Python loop");
     m.def("register_tables", &register_tables,
-          "Register all table metadata in C++ for fast_forward");
+          "Register all table metadata in C++ for fast_forward",
+          py::arg("table_kinds"), py::arg("weights"), py::arg("mappings"),
+          py::arg("scales"), py::arg("zero_points"), py::arg("use_hash_table") = false);
     m.def("fast_forward", &fast_forward,
           "Process all registered tables with a single call (zero Python loop overhead)");
 }
