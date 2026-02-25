@@ -1,0 +1,436 @@
+[20:30:25] ======================================================================
+[20:30:25] TRUE ON-DEMAND H.265 CODEC BENCHMARK
+[20:30:25] Per-frame files, proper video resolution, no pre-decode
+[20:30:25] ======================================================================
+[20:30:25] RSS at start: 606MB
+Unable to import mlperf_logging,  No module named 'mlperf_logging'
+Unable to import onnx.  No module named 'onnx'
+[20:30:25] Loading dataset...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+[20:32:32] Loading model checkpoint...
+[20:32:38] Model loaded. 26 tables, emb_dim=16
+[20:32:39] Tables: 26, Large: [2, 3, 9, 11, 15, 20, 23, 25]
+[20:32:39] Total embedding memory: 2060.7MB
+[20:32:39] 
+Loading existing profiling and hot/cold data...
+[20:32:40] Loaded profiling, hot/cold, and reorder data.
+[20:32:40] 
+Encoding for 1080p SKIPPED — already done
+[20:32:40] 
+Encoding for 4K SKIPPED — already done
+[20:32:40] 
+======================================================================
+[20:32:40] INFERENCE BENCHMARKS — True On-Demand Decode
+[20:32:40] ======================================================================
+[20:32:40] 
+--- Baseline: Full fp32 ---
+/home/cc/expr/dlrm_minrui/dlrm_data_pytorch.py:328: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor. (Triggered internally at /pytorch/torch/csrc/utils/tensor_new.cpp:253.)
+  X_int = torch.log(torch.tensor(transposed_data[0], dtype=torch.float) + 1)
+[20:32:44]     Batch 0
+[20:32:55]     Batch 500
+[20:33:16]     Batch 1000
+[20:33:32]     Batch 1500
+[20:33:37]   AUC=0.768613, Time=52.24s, RSS=41296MB
+[20:33:37]   Batch latency: mean=4.80ms, p50=4.94ms, p99=6.04ms
+[20:33:37] 
+======================================================================
+[20:33:37] EXPERIMENTS: 1080p — Markov d=3, cache sweep
+[20:33:37] ======================================================================
+[20:33:37] 
+--- 1080p_markov_d3_cache25: 1080p, cache=25, predictor=markov, depth=3 ---
+[20:33:37] Cache: 25 frames x 8100.0KB = 197.8MB budget (129600 rows/frame, 75 total frames)
+[20:33:37] Cache: 25 frames x 8100.0KB = 197.8MB budget (129600 rows/frame, 17 total frames)
+[20:33:37] Cache: 25 frames x 8100.0KB = 197.8MB budget (129600 rows/frame, 1 total frames)
+[20:33:38] Cache: 25 frames x 8100.0KB = 197.8MB budget (129600 rows/frame, 62 total frames)
+[20:33:38] Cache: 25 frames x 8100.0KB = 197.8MB budget (129600 rows/frame, 41 total frames)
+[20:33:38] Cache: 25 frames x 8100.0KB = 197.8MB budget (129600 rows/frame, 53 total frames)
+[20:33:38] Cache: 25 frames x 8100.0KB = 197.8MB budget (129600 rows/frame, 3 total frames)
+[20:33:38] Cache: 25 frames x 8100.0KB = 197.8MB budget (129600 rows/frame, 2 total frames)
+[20:33:41]   Memory: hot=87.4MB + compressed_cold=195.9MB = 283.4MB (vs 2060.7MB full fp32)
+[20:33:41]   RSS after setup: 39778MB
+[20:33:41]     Warming up Markov predictor (500 batches)...
+[20:33:56]     Batch 0: lat=279.0ms, RSS=39859MB
+[20:34:17]     Batch 500: lat=12.3ms, RSS=40022MB
+[20:34:39]     Batch 1000: lat=11.9ms, RSS=40169MB
+[20:35:05]     Batch 1500: lat=12.9ms, RSS=40250MB
+[20:35:10]   AUC=0.768613, Time=72.70s, RSS=40275MB
+[20:35:10]   Hit rate=99.9%, Demand=18 (0.0/batch), Prefetch hits=0, Demand time=412ms
+[20:35:10]   Compression: 1970.4MB fp32 -> 195.9MB (10.1x)
+[20:35:10]   Batch latency: mean=12.98ms
+[20:35:10]   Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=86ms | size=4/25
+[20:35:10]   Cache: 99.9% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=64ms | size=3/25
+[20:35:10]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=25ms | size=1/25
+[20:35:10]   Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=63ms | size=4/25
+[20:35:10]   Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=57ms | size=4/25
+[20:35:10]   Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=64ms | size=4/25
+[20:35:10]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=25ms | size=1/25
+[20:35:10]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=27ms | size=1/25
+[20:35:12] 
+--- 1080p_markov_d3_cache50: 1080p, cache=50, predictor=markov, depth=3 ---
+[20:35:12] Cache: 50 frames x 8100.0KB = 395.5MB budget (129600 rows/frame, 75 total frames)
+[20:35:12] Cache: 50 frames x 8100.0KB = 395.5MB budget (129600 rows/frame, 17 total frames)
+[20:35:12] Cache: 50 frames x 8100.0KB = 395.5MB budget (129600 rows/frame, 1 total frames)
+[20:35:12] Cache: 50 frames x 8100.0KB = 395.5MB budget (129600 rows/frame, 62 total frames)
+[20:35:12] Cache: 50 frames x 8100.0KB = 395.5MB budget (129600 rows/frame, 41 total frames)
+[20:35:13] Cache: 50 frames x 8100.0KB = 395.5MB budget (129600 rows/frame, 53 total frames)
+[20:35:13] Cache: 50 frames x 8100.0KB = 395.5MB budget (129600 rows/frame, 3 total frames)
+[20:35:13] Cache: 50 frames x 8100.0KB = 395.5MB budget (129600 rows/frame, 2 total frames)
+[20:35:14]   Memory: hot=87.4MB + compressed_cold=195.9MB = 283.4MB (vs 2060.7MB full fp32)
+[20:35:14]   RSS after setup: 40032MB
+[20:35:14]     Warming up Markov predictor (500 batches)...
+[20:35:28]     Batch 0: lat=225.7ms, RSS=40032MB
+[20:35:43]     Batch 500: lat=12.5ms, RSS=40097MB
+[20:36:01]     Batch 1000: lat=16.4ms, RSS=40176MB
+[20:36:21]     Batch 1500: lat=12.2ms, RSS=40246MB
+[20:36:25]   AUC=0.768613, Time=56.60s, RSS=40284MB
+[20:36:25]   Hit rate=99.9%, Demand=18 (0.0/batch), Prefetch hits=0, Demand time=395ms
+[20:36:25]   Compression: 1970.4MB fp32 -> 195.9MB (10.1x)
+[20:36:25]   Batch latency: mean=12.46ms
+[20:36:25]   Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=59ms | size=4/50
+[20:36:25]   Cache: 99.9% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=60ms | size=3/50
+[20:36:25]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=26ms | size=1/50
+[20:36:25]   Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=63ms | size=4/50
+[20:36:25]   Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=62ms | size=4/50
+[20:36:25]   Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=65ms | size=4/50
+[20:36:25]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=28ms | size=1/50
+[20:36:25]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=31ms | size=1/50
+[20:36:28] 
+--- 1080p_markov_d3_cache100: 1080p, cache=100, predictor=markov, depth=3 ---
+[20:36:28] Cache: 100 frames x 8100.0KB = 791.0MB budget (129600 rows/frame, 75 total frames)
+[20:36:28] Cache: 100 frames x 8100.0KB = 791.0MB budget (129600 rows/frame, 17 total frames)
+[20:36:28] Cache: 100 frames x 8100.0KB = 791.0MB budget (129600 rows/frame, 1 total frames)
+[20:36:29] Cache: 100 frames x 8100.0KB = 791.0MB budget (129600 rows/frame, 62 total frames)
+[20:36:29] Cache: 100 frames x 8100.0KB = 791.0MB budget (129600 rows/frame, 41 total frames)
+[20:36:29] Cache: 100 frames x 8100.0KB = 791.0MB budget (129600 rows/frame, 53 total frames)
+[20:36:29] Cache: 100 frames x 8100.0KB = 791.0MB budget (129600 rows/frame, 3 total frames)
+[20:36:29] Cache: 100 frames x 8100.0KB = 791.0MB budget (129600 rows/frame, 2 total frames)
+[20:36:31]   Memory: hot=87.4MB + compressed_cold=195.9MB = 283.4MB (vs 2060.7MB full fp32)
+[20:36:31]   RSS after setup: 39902MB
+[20:36:31]     Warming up Markov predictor (500 batches)...
+[20:36:43]     Batch 0: lat=259.2ms, RSS=39952MB
+[20:37:00]     Batch 500: lat=12.4ms, RSS=40028MB
+[20:37:18]     Batch 1000: lat=12.0ms, RSS=40158MB
+[20:37:38]     Batch 1500: lat=12.2ms, RSS=40245MB
+[20:37:42]   AUC=0.768613, Time=57.82s, RSS=40286MB
+[20:37:42]   Hit rate=99.9%, Demand=18 (0.0/batch), Prefetch hits=0, Demand time=409ms
+[20:37:42]   Compression: 1970.4MB fp32 -> 195.9MB (10.1x)
+[20:37:42]   Batch latency: mean=12.55ms
+[20:37:42]   Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=59ms | size=4/100
+[20:37:42]   Cache: 99.9% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=65ms | size=3/100
+[20:37:42]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=31ms | size=1/100
+[20:37:42]   Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=61ms | size=4/100
+[20:37:42]   Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=66ms | size=4/100
+[20:37:42]   Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=68ms | size=4/100
+[20:37:42]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=29ms | size=1/100
+[20:37:42]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=31ms | size=1/100
+[20:37:45] 
+--- 1080p_markov_d3_cache200: 1080p, cache=200, predictor=markov, depth=3 ---
+[20:37:45] Cache: 200 frames x 8100.0KB = 1582.0MB budget (129600 rows/frame, 75 total frames)
+[20:37:45] Cache: 200 frames x 8100.0KB = 1582.0MB budget (129600 rows/frame, 17 total frames)
+[20:37:45] Cache: 200 frames x 8100.0KB = 1582.0MB budget (129600 rows/frame, 1 total frames)
+[20:37:45] Cache: 200 frames x 8100.0KB = 1582.0MB budget (129600 rows/frame, 62 total frames)
+[20:37:45] Cache: 200 frames x 8100.0KB = 1582.0MB budget (129600 rows/frame, 41 total frames)
+[20:37:46] Cache: 200 frames x 8100.0KB = 1582.0MB budget (129600 rows/frame, 53 total frames)
+[20:37:46] Cache: 200 frames x 8100.0KB = 1582.0MB budget (129600 rows/frame, 3 total frames)
+[20:37:46] Cache: 200 frames x 8100.0KB = 1582.0MB budget (129600 rows/frame, 2 total frames)
+[20:37:47]   Memory: hot=87.4MB + compressed_cold=195.9MB = 283.4MB (vs 2060.7MB full fp32)
+[20:37:47]   RSS after setup: 39946MB
+[20:37:47]     Warming up Markov predictor (500 batches)...
+[20:37:59]     Batch 0: lat=261.4ms, RSS=39961MB
+[20:38:15]     Batch 500: lat=12.0ms, RSS=40018MB
+[20:38:33]     Batch 1000: lat=11.8ms, RSS=40183MB
+[20:38:53]     Batch 1500: lat=12.0ms, RSS=40279MB
+[20:38:57]   AUC=0.768613, Time=56.99s, RSS=40293MB
+[20:38:57]   Hit rate=99.9%, Demand=18 (0.0/batch), Prefetch hits=0, Demand time=399ms
+[20:38:57]   Compression: 1970.4MB fp32 -> 195.9MB (10.1x)
+[20:38:57]   Batch latency: mean=12.34ms
+[20:38:57]   Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=54ms | size=4/200
+[20:38:57]   Cache: 99.9% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=62ms | size=3/200
+[20:38:57]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=27ms | size=1/200
+[20:38:57]   Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=61ms | size=4/200
+[20:38:57]   Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=62ms | size=4/200
+[20:38:57]   Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=66ms | size=4/200
+[20:38:57]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=31ms | size=1/200
+[20:38:57]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=35ms | size=1/200
+[20:38:59] 
+======================================================================
+[20:38:59] EXPERIMENTS: 4K — Markov d=3, cache sweep
+[20:38:59] ======================================================================
+[20:38:59] 
+--- 4K_markov_d3_cache25: 4K, cache=25, predictor=markov, depth=3 ---
+[20:39:00] Cache: 25 frames x 32400.0KB = 791.0MB budget (518400 rows/frame, 19 total frames)
+[20:39:00] Cache: 25 frames x 32400.0KB = 791.0MB budget (518400 rows/frame, 5 total frames)
+[20:39:00] Cache: 25 frames x 32400.0KB = 791.0MB budget (518400 rows/frame, 1 total frames)
+[20:39:00] Cache: 25 frames x 32400.0KB = 791.0MB budget (518400 rows/frame, 16 total frames)
+[20:39:00] Cache: 25 frames x 32400.0KB = 791.0MB budget (518400 rows/frame, 11 total frames)
+[20:39:00] Cache: 25 frames x 32400.0KB = 791.0MB budget (518400 rows/frame, 14 total frames)
+[20:39:00] Cache: 25 frames x 32400.0KB = 791.0MB budget (518400 rows/frame, 1 total frames)
+[20:39:00] Cache: 25 frames x 32400.0KB = 791.0MB budget (518400 rows/frame, 1 total frames)
+[20:39:02]   Memory: hot=87.4MB + compressed_cold=193.5MB = 281.0MB (vs 2060.7MB full fp32)
+[20:39:02]   RSS after setup: 40060MB
+[20:39:02]     Warming up Markov predictor (500 batches)...
+[20:39:14]     Batch 0: lat=680.5ms, RSS=40126MB
+[20:39:31]     Batch 500: lat=11.8ms, RSS=40168MB
+[20:39:48]     Batch 1000: lat=11.4ms, RSS=40237MB
+[20:40:07]     Batch 1500: lat=11.8ms, RSS=40352MB
+[20:40:11]   AUC=0.768613, Time=57.02s, RSS=40330MB
+[20:40:11]   Hit rate=99.9%, Demand=8 (0.0/batch), Prefetch hits=0, Demand time=654ms
+[20:40:11]   Compression: 1970.4MB fp32 -> 193.5MB (10.2x)
+[20:40:11]   Batch latency: mean=12.40ms
+[20:40:11]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=65ms | size=1/25
+[20:40:11]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=83ms | size=1/25
+[20:40:11]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=44ms | size=1/25
+[20:40:11]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=86ms | size=1/25
+[20:40:11]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=106ms | size=1/25
+[20:40:11]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=128ms | size=1/25
+[20:40:11]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=83ms | size=1/25
+[20:40:11]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=59ms | size=1/25
+[20:40:13] 
+--- 4K_markov_d3_cache50: 4K, cache=50, predictor=markov, depth=3 ---
+[20:40:13] Cache: 50 frames x 32400.0KB = 1582.0MB budget (518400 rows/frame, 19 total frames)
+[20:40:14] Cache: 50 frames x 32400.0KB = 1582.0MB budget (518400 rows/frame, 5 total frames)
+[20:40:14] Cache: 50 frames x 32400.0KB = 1582.0MB budget (518400 rows/frame, 1 total frames)
+[20:40:14] Cache: 50 frames x 32400.0KB = 1582.0MB budget (518400 rows/frame, 16 total frames)
+[20:40:14] Cache: 50 frames x 32400.0KB = 1582.0MB budget (518400 rows/frame, 11 total frames)
+[20:40:14] Cache: 50 frames x 32400.0KB = 1582.0MB budget (518400 rows/frame, 14 total frames)
+[20:40:14] Cache: 50 frames x 32400.0KB = 1582.0MB budget (518400 rows/frame, 1 total frames)
+[20:40:14] Cache: 50 frames x 32400.0KB = 1582.0MB budget (518400 rows/frame, 1 total frames)
+[20:40:15]   Memory: hot=87.4MB + compressed_cold=193.5MB = 281.0MB (vs 2060.7MB full fp32)
+[20:40:15]   RSS after setup: 39946MB
+[20:40:15]     Warming up Markov predictor (500 batches)...
+[20:40:28]     Batch 0: lat=694.8ms, RSS=40139MB
+[20:40:43]     Batch 500: lat=11.8ms, RSS=40175MB
+[20:41:00]     Batch 1000: lat=11.7ms, RSS=40242MB
+[20:41:19]     Batch 1500: lat=12.4ms, RSS=40382MB
+[20:41:23]   AUC=0.768613, Time=54.95s, RSS=40416MB
+[20:41:23]   Hit rate=99.9%, Demand=8 (0.0/batch), Prefetch hits=0, Demand time=674ms
+[20:41:23]   Compression: 1970.4MB fp32 -> 193.5MB (10.2x)
+[20:41:23]   Batch latency: mean=12.27ms
+[20:41:23]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=81ms | size=1/50
+[20:41:23]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=83ms | size=1/50
+[20:41:23]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=43ms | size=1/50
+[20:41:23]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=93ms | size=1/50
+[20:41:23]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=104ms | size=1/50
+[20:41:23]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=121ms | size=1/50
+[20:41:23]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=86ms | size=1/50
+[20:41:23]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=62ms | size=1/50
+[20:41:25] 
+--- 4K_markov_d3_cache100: 4K, cache=100, predictor=markov, depth=3 ---
+[20:41:25] Cache: 100 frames x 32400.0KB = 3164.1MB budget (518400 rows/frame, 19 total frames)
+[20:41:25] Cache: 100 frames x 32400.0KB = 3164.1MB budget (518400 rows/frame, 5 total frames)
+[20:41:25] Cache: 100 frames x 32400.0KB = 3164.1MB budget (518400 rows/frame, 1 total frames)
+[20:41:25] Cache: 100 frames x 32400.0KB = 3164.1MB budget (518400 rows/frame, 16 total frames)
+[20:41:26] Cache: 100 frames x 32400.0KB = 3164.1MB budget (518400 rows/frame, 11 total frames)
+[20:41:26] Cache: 100 frames x 32400.0KB = 3164.1MB budget (518400 rows/frame, 14 total frames)
+[20:41:26] Cache: 100 frames x 32400.0KB = 3164.1MB budget (518400 rows/frame, 1 total frames)
+[20:41:26] Cache: 100 frames x 32400.0KB = 3164.1MB budget (518400 rows/frame, 1 total frames)
+[20:41:27]   Memory: hot=87.4MB + compressed_cold=193.5MB = 281.0MB (vs 2060.7MB full fp32)
+[20:41:27]   RSS after setup: 39937MB
+[20:41:27]     Warming up Markov predictor (500 batches)...
+[20:41:40]     Batch 0: lat=635.2ms, RSS=40129MB
+[20:41:56]     Batch 500: lat=12.0ms, RSS=40164MB
+[20:42:13]     Batch 1000: lat=11.7ms, RSS=40232MB
+[20:42:32]     Batch 1500: lat=12.3ms, RSS=40346MB
+[20:42:36]   AUC=0.768613, Time=55.11s, RSS=40324MB
+[20:42:36]   Hit rate=99.9%, Demand=8 (0.0/batch), Prefetch hits=0, Demand time=612ms
+[20:42:36]   Compression: 1970.4MB fp32 -> 193.5MB (10.2x)
+[20:42:36]   Batch latency: mean=12.55ms
+[20:42:36]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=72ms | size=1/100
+[20:42:36]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=78ms | size=1/100
+[20:42:36]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=38ms | size=1/100
+[20:42:36]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=90ms | size=1/100
+[20:42:36]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=91ms | size=1/100
+[20:42:36]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=116ms | size=1/100
+[20:42:36]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=74ms | size=1/100
+[20:42:36]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=53ms | size=1/100
+[20:42:37] 
+--- 4K_markov_d3_cache200: 4K, cache=200, predictor=markov, depth=3 ---
+[20:42:38] Cache: 200 frames x 32400.0KB = 6328.1MB budget (518400 rows/frame, 19 total frames)
+[20:42:38] Cache: 200 frames x 32400.0KB = 6328.1MB budget (518400 rows/frame, 5 total frames)
+[20:42:38] Cache: 200 frames x 32400.0KB = 6328.1MB budget (518400 rows/frame, 1 total frames)
+[20:42:38] Cache: 200 frames x 32400.0KB = 6328.1MB budget (518400 rows/frame, 16 total frames)
+[20:42:38] Cache: 200 frames x 32400.0KB = 6328.1MB budget (518400 rows/frame, 11 total frames)
+[20:42:38] Cache: 200 frames x 32400.0KB = 6328.1MB budget (518400 rows/frame, 14 total frames)
+[20:42:38] Cache: 200 frames x 32400.0KB = 6328.1MB budget (518400 rows/frame, 1 total frames)
+[20:42:38] Cache: 200 frames x 32400.0KB = 6328.1MB budget (518400 rows/frame, 1 total frames)
+[20:42:40]   Memory: hot=87.4MB + compressed_cold=193.5MB = 281.0MB (vs 2060.7MB full fp32)
+[20:42:40]   RSS after setup: 40074MB
+[20:42:40]     Warming up Markov predictor (500 batches)...
+[20:42:53]     Batch 0: lat=695.6ms, RSS=40138MB
+[20:43:09]     Batch 500: lat=11.7ms, RSS=40170MB
+[20:43:26]     Batch 1000: lat=11.7ms, RSS=40243MB
+[20:43:44]     Batch 1500: lat=12.3ms, RSS=40356MB
+[20:43:48]   AUC=0.768613, Time=54.19s, RSS=40333MB
+[20:43:48]   Hit rate=99.9%, Demand=8 (0.0/batch), Prefetch hits=0, Demand time=673ms
+[20:43:48]   Compression: 1970.4MB fp32 -> 193.5MB (10.2x)
+[20:43:48]   Batch latency: mean=12.34ms
+[20:43:48]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=62ms | size=1/200
+[20:43:48]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=91ms | size=1/200
+[20:43:48]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=56ms | size=1/200
+[20:43:48]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=91ms | size=1/200
+[20:43:48]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=115ms | size=1/200
+[20:43:48]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=137ms | size=1/200
+[20:43:48]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=61ms | size=1/200
+[20:43:48]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=59ms | size=1/200
+[20:43:49] 
+======================================================================
+[20:43:49] EXPERIMENTS: 1080p — No predictor, cache sweep
+[20:43:49] ======================================================================
+[20:43:49] 
+--- 1080p_nopred_cache50: 1080p, cache=50, predictor=none, depth=1 ---
+[20:43:50] Cache: 50 frames x 8100.0KB = 395.5MB budget (129600 rows/frame, 75 total frames)
+[20:43:50] Cache: 50 frames x 8100.0KB = 395.5MB budget (129600 rows/frame, 17 total frames)
+[20:43:50] Cache: 50 frames x 8100.0KB = 395.5MB budget (129600 rows/frame, 1 total frames)
+[20:43:50] Cache: 50 frames x 8100.0KB = 395.5MB budget (129600 rows/frame, 62 total frames)
+[20:43:50] Cache: 50 frames x 8100.0KB = 395.5MB budget (129600 rows/frame, 41 total frames)
+[20:43:50] Cache: 50 frames x 8100.0KB = 395.5MB budget (129600 rows/frame, 53 total frames)
+[20:43:50] Cache: 50 frames x 8100.0KB = 395.5MB budget (129600 rows/frame, 3 total frames)
+[20:43:50] Cache: 50 frames x 8100.0KB = 395.5MB budget (129600 rows/frame, 2 total frames)
+[20:43:52]   Memory: hot=87.4MB + compressed_cold=195.9MB = 283.4MB (vs 2060.7MB full fp32)
+[20:43:52]   RSS after setup: 39946MB
+[20:43:55]     Batch 0: lat=253.3ms, RSS=39973MB
+[20:44:13]     Batch 500: lat=12.3ms, RSS=40059MB
+[20:44:30]     Batch 1000: lat=11.5ms, RSS=40209MB
+[20:44:49]     Batch 1500: lat=12.7ms, RSS=40308MB
+[20:44:53]   AUC=0.768613, Time=57.35s, RSS=40322MB
+[20:44:53]   Hit rate=99.8%, Demand=22 (0.0/batch), Prefetch hits=0, Demand time=478ms
+[20:44:53]   Compression: 1970.4MB fp32 -> 195.9MB (10.1x)
+[20:44:53]   Batch latency: mean=12.63ms
+[20:44:53]   Cache: 99.8% hit | demand=4 (0.0/batch) | prefetch_hits=0 | demand_time=72ms | size=4/50
+[20:44:53]   Cache: 99.9% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=64ms | size=3/50
+[20:44:53]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=30ms | size=1/50
+[20:44:53]   Cache: 99.8% hit | demand=4 (0.0/batch) | prefetch_hits=0 | demand_time=81ms | size=4/50
+[20:44:53]   Cache: 99.8% hit | demand=4 (0.0/batch) | prefetch_hits=0 | demand_time=80ms | size=4/50
+[20:44:53]   Cache: 99.8% hit | demand=4 (0.0/batch) | prefetch_hits=0 | demand_time=87ms | size=4/50
+[20:44:53]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=30ms | size=1/50
+[20:44:53]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=35ms | size=1/50
+[20:44:55] 
+--- 1080p_nopred_cache100: 1080p, cache=100, predictor=none, depth=1 ---
+[20:44:56] Cache: 100 frames x 8100.0KB = 791.0MB budget (129600 rows/frame, 75 total frames)
+[20:44:56] Cache: 100 frames x 8100.0KB = 791.0MB budget (129600 rows/frame, 17 total frames)
+[20:44:56] Cache: 100 frames x 8100.0KB = 791.0MB budget (129600 rows/frame, 1 total frames)
+[20:44:56] Cache: 100 frames x 8100.0KB = 791.0MB budget (129600 rows/frame, 62 total frames)
+[20:44:56] Cache: 100 frames x 8100.0KB = 791.0MB budget (129600 rows/frame, 41 total frames)
+[20:44:56] Cache: 100 frames x 8100.0KB = 791.0MB budget (129600 rows/frame, 53 total frames)
+[20:44:56] Cache: 100 frames x 8100.0KB = 791.0MB budget (129600 rows/frame, 3 total frames)
+[20:44:56] Cache: 100 frames x 8100.0KB = 791.0MB budget (129600 rows/frame, 2 total frames)
+[20:44:58]   Memory: hot=87.4MB + compressed_cold=195.9MB = 283.4MB (vs 2060.7MB full fp32)
+[20:44:58]   RSS after setup: 40073MB
+[20:45:01]     Batch 0: lat=243.5ms, RSS=40073MB
+[20:45:17]     Batch 500: lat=12.0ms, RSS=40097MB
+[20:45:34]     Batch 1000: lat=11.9ms, RSS=40181MB
+[20:45:53]     Batch 1500: lat=12.1ms, RSS=40308MB
+[20:45:57]   AUC=0.768613, Time=54.77s, RSS=40315MB
+[20:45:57]   Hit rate=99.8%, Demand=22 (0.0/batch), Prefetch hits=0, Demand time=454ms
+[20:45:57]   Compression: 1970.4MB fp32 -> 195.9MB (10.1x)
+[20:45:57]   Batch latency: mean=12.42ms
+[20:45:57]   Cache: 99.8% hit | demand=4 (0.0/batch) | prefetch_hits=0 | demand_time=65ms | size=4/100
+[20:45:57]   Cache: 99.9% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=59ms | size=3/100
+[20:45:57]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=29ms | size=1/100
+[20:45:57]   Cache: 99.8% hit | demand=4 (0.0/batch) | prefetch_hits=0 | demand_time=75ms | size=4/100
+[20:45:57]   Cache: 99.8% hit | demand=4 (0.0/batch) | prefetch_hits=0 | demand_time=79ms | size=4/100
+[20:45:57]   Cache: 99.8% hit | demand=4 (0.0/batch) | prefetch_hits=0 | demand_time=83ms | size=4/100
+[20:45:57]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=33ms | size=1/100
+[20:45:57]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=31ms | size=1/100
+[20:45:59] 
+======================================================================
+[20:45:59] EXPERIMENTS: 4K — No predictor, cache sweep
+[20:45:59] ======================================================================
+[20:45:59] 
+--- 4K_nopred_cache50: 4K, cache=50, predictor=none, depth=1 ---
+[20:45:59] Cache: 50 frames x 32400.0KB = 1582.0MB budget (518400 rows/frame, 19 total frames)
+[20:45:59] Cache: 50 frames x 32400.0KB = 1582.0MB budget (518400 rows/frame, 5 total frames)
+[20:45:59] Cache: 50 frames x 32400.0KB = 1582.0MB budget (518400 rows/frame, 1 total frames)
+[20:45:59] Cache: 50 frames x 32400.0KB = 1582.0MB budget (518400 rows/frame, 16 total frames)
+[20:45:59] Cache: 50 frames x 32400.0KB = 1582.0MB budget (518400 rows/frame, 11 total frames)
+[20:45:59] Cache: 50 frames x 32400.0KB = 1582.0MB budget (518400 rows/frame, 14 total frames)
+[20:45:59] Cache: 50 frames x 32400.0KB = 1582.0MB budget (518400 rows/frame, 1 total frames)
+[20:45:59] Cache: 50 frames x 32400.0KB = 1582.0MB budget (518400 rows/frame, 1 total frames)
+[20:46:01]   Memory: hot=87.4MB + compressed_cold=193.5MB = 281.0MB (vs 2060.7MB full fp32)
+[20:46:01]   RSS after setup: 40016MB
+[20:46:04]     Batch 0: lat=781.6ms, RSS=40186MB
+[20:46:20]     Batch 500: lat=11.8ms, RSS=40200MB
+[20:46:38]     Batch 1000: lat=11.6ms, RSS=40263MB
+[20:46:56]     Batch 1500: lat=12.0ms, RSS=40344MB
+[20:47:00]   AUC=0.768613, Time=55.47s, RSS=40358MB
+[20:47:00]   Hit rate=99.9%, Demand=8 (0.0/batch), Prefetch hits=0, Demand time=759ms
+[20:47:00]   Compression: 1970.4MB fp32 -> 193.5MB (10.2x)
+[20:47:00]   Batch latency: mean=12.36ms
+[20:47:00]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=80ms | size=1/50
+[20:47:00]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=109ms | size=1/50
+[20:47:00]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=51ms | size=1/50
+[20:47:00]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=111ms | size=1/50
+[20:47:00]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=124ms | size=1/50
+[20:47:00]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=125ms | size=1/50
+[20:47:00]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=91ms | size=1/50
+[20:47:00]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=69ms | size=1/50
+[20:47:02] 
+--- 4K_nopred_cache100: 4K, cache=100, predictor=none, depth=1 ---
+[20:47:02] Cache: 100 frames x 32400.0KB = 3164.1MB budget (518400 rows/frame, 19 total frames)
+[20:47:02] Cache: 100 frames x 32400.0KB = 3164.1MB budget (518400 rows/frame, 5 total frames)
+[20:47:02] Cache: 100 frames x 32400.0KB = 3164.1MB budget (518400 rows/frame, 1 total frames)
+[20:47:02] Cache: 100 frames x 32400.0KB = 3164.1MB budget (518400 rows/frame, 16 total frames)
+[20:47:02] Cache: 100 frames x 32400.0KB = 3164.1MB budget (518400 rows/frame, 11 total frames)
+[20:47:03] Cache: 100 frames x 32400.0KB = 3164.1MB budget (518400 rows/frame, 14 total frames)
+[20:47:03] Cache: 100 frames x 32400.0KB = 3164.1MB budget (518400 rows/frame, 1 total frames)
+[20:47:03] Cache: 100 frames x 32400.0KB = 3164.1MB budget (518400 rows/frame, 1 total frames)
+[20:47:04]   Memory: hot=87.4MB + compressed_cold=193.5MB = 281.0MB (vs 2060.7MB full fp32)
+[20:47:04]   RSS after setup: 40095MB
+[20:47:07]     Batch 0: lat=735.6ms, RSS=40158MB
+[20:47:22]     Batch 500: lat=11.8ms, RSS=40167MB
+[20:47:40]     Batch 1000: lat=11.3ms, RSS=40245MB
+[20:47:59]     Batch 1500: lat=11.9ms, RSS=40320MB
+[20:48:03]   AUC=0.768613, Time=54.97s, RSS=40335MB
+[20:48:03]   Hit rate=99.9%, Demand=8 (0.0/batch), Prefetch hits=0, Demand time=713ms
+[20:48:03]   Compression: 1970.4MB fp32 -> 193.5MB (10.2x)
+[20:48:03]   Batch latency: mean=12.32ms
+[20:48:03]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=86ms | size=1/100
+[20:48:03]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=99ms | size=1/100
+[20:48:03]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=45ms | size=1/100
+[20:48:03]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=103ms | size=1/100
+[20:48:03]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=117ms | size=1/100
+[20:48:03]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=128ms | size=1/100
+[20:48:03]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=77ms | size=1/100
+[20:48:03]   Cache: 99.9% hit | demand=1 (0.0/batch) | prefetch_hits=0 | demand_time=58ms | size=1/100
+[20:48:04] 
+======================================================================
+[20:48:04] GENERATING REPORTS
+[20:48:04] ======================================================================
+[20:48:04]   Saved: results/ondemand_results.json
+[20:48:04] 
+# On-Demand Codec Results
+
+Date: 2026-02-24 20:48:04
+Baseline AUC: 0.768613, Time: 52.24s
+
+Config                                        AUC  Time(s)   Hit% Demand/B  Hot(MB)  Cold(MB)  Ratio  RSS(MB)   BatLat
+----------------------------------------------------------------------------------------------------------------------
+1080p_markov_d3_cache100                 0.768613    57.82 99.9%      0.0     87.4     195.9  10.1x    40286   12.55ms
+1080p_markov_d3_cache200                 0.768613    56.99 99.9%      0.0     87.4     195.9  10.1x    40293   12.34ms
+1080p_markov_d3_cache25                  0.768613    72.70 99.9%      0.0     87.4     195.9  10.1x    40275   12.98ms
+1080p_markov_d3_cache50                  0.768613    56.60 99.9%      0.0     87.4     195.9  10.1x    40284   12.46ms
+1080p_nopred_cache100                    0.768613    54.77 99.8%      0.0     87.4     195.9  10.1x    40315   12.42ms
+1080p_nopred_cache50                     0.768613    57.35 99.8%      0.0     87.4     195.9  10.1x    40322   12.63ms
+4K_markov_d3_cache100                    0.768613    55.11 99.9%      0.0     87.4     193.5  10.2x    40324   12.55ms
+4K_markov_d3_cache200                    0.768613    54.19 99.9%      0.0     87.4     193.5  10.2x    40333   12.34ms
+4K_markov_d3_cache25                     0.768613    57.02 99.9%      0.0     87.4     193.5  10.2x    40330   12.40ms
+4K_markov_d3_cache50                     0.768613    54.95 99.9%      0.0     87.4     193.5  10.2x    40416   12.27ms
+4K_nopred_cache100                       0.768613    54.97 99.9%      0.0     87.4     193.5  10.2x    40335   12.32ms
+4K_nopred_cache50                        0.768613    55.47 99.9%      0.0     87.4     193.5  10.2x    40358   12.36ms
+A_baseline                               0.768613    52.24  0.0%      0.0   2060.7       0.0   0.0x    41296    4.80ms
+[20:48:04] 
+  Saved: results/ondemand_results.md
+[20:48:04] 
+======================================================================
+[20:48:04] ALL ON-DEMAND EXPERIMENTS COMPLETE
+[20:48:04] ======================================================================
+[20:48:04] Final RSS: 42022MB
