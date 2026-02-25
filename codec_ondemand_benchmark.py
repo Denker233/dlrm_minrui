@@ -1084,7 +1084,8 @@ def main():
                                lookahead_depth=3, tag="",
                                use_global_cache=False, disk_decode=False,
                                quantize_hot=False, use_hash_table=False,
-                               use_bitmap=False, warmup_batches=0):
+                               use_bitmap=False, warmup_batches=0,
+                               full_cpp=False):
         width, height = RESOLUTIONS[res_name]
         pixels_per_frame = width * height
         rows_per_frame = pixels_per_frame // EMB_DIM
@@ -1099,11 +1100,14 @@ def main():
         restore_weights()
 
         # Create global cache if requested
+        # When full_cpp=True, use unlimited capacity since we pre-decode all needed frames
         global_cache = None
         if use_global_cache:
-            global_cache = GlobalFrameCache(capacity=cache_capacity, store_uint8=True)
+            cap = 9999 if full_cpp else cache_capacity
+            global_cache = GlobalFrameCache(capacity=cap, store_uint8=True)
             log(f"  Global cache: {cache_capacity} frames total across all tables "
-                f"(uint8, ~{cache_capacity * rows_per_frame * EMB_DIM / 1024 / 1024:.1f}MB)")
+                f"(uint8, ~{cache_capacity * rows_per_frame * EMB_DIM / 1024 / 1024:.1f}MB)"
+                + (f" [full_cpp: unlimited capacity for pre-decode]" if full_cpp else ""))
 
         # Build CompressedEmbeddingBag for each large table
         caches = {}
@@ -1379,7 +1383,109 @@ def main():
             # Reset cache stats after warmup
             for c in caches.values():
                 c.reset_stats()
-            log(f"  Cache warmed ({len(global_cache) if global_cache else sum(len(c.cache) for c in caches.values())} frames loaded)")
+            n_warmed = len(global_cache) if global_cache is not None else sum(len(c.cache) for c in caches.values() if c.cache is not None)
+            log(f"  Cache warmed ({n_warmed} frames loaded)")
+
+        # Full C++ mode: register cold frame data in C++ for zero-Python cold lookup
+        _full_cpp_active = False
+        _cold_frame_mb = 0.0
+        if full_cpp and HAS_CPP_EXT and compressed_table_ids and global_cache is not None:
+            # Comprehensive cold frame scan: find ALL unique cold frame IDs across all batches
+            log(f"  Scanning all batches for cold frame coverage...")
+            t_scan0 = time.time()
+            needed_frames = {t_idx: set() for t_idx in caches}  # table_idx -> set of frame_ids
+            for _, (X_s, lS_o_s, lS_i_s, T_s) in enumerate(test_ld):
+                for t_idx in caches:
+                    indices = lS_i_s[t_idx]
+                    cold_mask = ~is_hot[t_idx][indices]
+                    if cold_mask.any():
+                        cold_orig = indices[cold_mask]
+                        cold_mapped = o2c_map[t_idx][cold_orig]
+                        valid = cold_mapped >= 0
+                        if valid.any():
+                            fids = (cold_mapped[valid] // rows_per_frame).unique().tolist()
+                            needed_frames[t_idx].update(fids)
+            total_needed = sum(len(v) for v in needed_frames.values())
+            log(f"  Found {total_needed} unique cold frames across all batches "
+                f"({time.time()-t_scan0:.1f}s)")
+
+            # Decode all needed frames that aren't already in the global cache
+            for t_idx in caches:
+                for fid in sorted(needed_frames[t_idx]):
+                    cached = global_cache.get(t_idx, fid)
+                    if cached is None:
+                        # Demand decode this frame
+                        frame_data = caches[t_idx]._decode_raw(fid)
+                        global_cache.put(t_idx, fid, frame_data)
+            final_cached = len(global_cache)
+            log(f"  All cold frames loaded: {final_cached} frames in global cache")
+
+            # Register cold frames in C++ for each table
+            log(f"  Registering cold frames in C++ for full C++ cold lookup...")
+            total_cold_frame_mb = 0
+            for t_idx in caches:
+                # Extract cached frames for this table from global cache
+                table_frames = {}
+                for (tid, fid), data in global_cache.cache.items():
+                    if tid == t_idx:
+                        table_frames[fid] = data
+                if not table_frames:
+                    continue
+                # Sort by frame ID and concatenate into contiguous uint8 buffer
+                sorted_fids = sorted(table_frames.keys())
+                padded_frames = []
+                for fid in sorted_fids:
+                    frame = table_frames[fid]
+                    if frame.shape[0] < rows_per_frame:
+                        pad = np.zeros((rows_per_frame - frame.shape[0], EMB_DIM), dtype=np.uint8)
+                        frame = np.concatenate([frame, pad], axis=0)
+                    padded_frames.append(frame)
+                all_data = np.concatenate(padded_frames, axis=0)
+                frame_data_tensor = torch.from_numpy(all_data.copy())
+                frame_ids_tensor = torch.tensor(sorted_fids, dtype=torch.long)
+
+                # For bitmap mode: need cold mapping (orig_idx -> cold_reordered_idx)
+                cold_mapping_tensor = torch.empty(0, dtype=torch.long)
+                if use_bitmap:
+                    mmap_path = os.path.join(REORDER_DIR, f'orig_to_cold_reordered_{t_idx}.npy')
+                    if os.path.exists(mmap_path):
+                        cold_mapping_tensor = torch.from_numpy(
+                            np.load(mmap_path).copy()).int()  # int32 to save 50% memory
+                    else:
+                        pt_path = os.path.join(REORDER_DIR, f'orig_to_cold_reordered_{t_idx}.pt')
+                        cold_mapping_tensor = torch.load(
+                            pt_path, map_location='cpu', weights_only=True).int()
+
+                _C.register_cold_frames_for_table(
+                    t_idx, frame_ids_tensor, frame_data_tensor,
+                    float(cold_quant_scale[t_idx]),
+                    float(cold_quant_zp[t_idx]),
+                    rows_per_frame,
+                    cold_mapping_tensor)
+                total_cold_frame_mb += all_data.nbytes / 1024 / 1024
+
+            _full_cpp_active = True
+            _cold_frame_mb = total_cold_frame_mb
+            log(f"  Cold frames registered: {total_cold_frame_mb:.1f}MB uint8")
+
+            # Replace _fast_apply_emb with simplified version (no Python cold path)
+            def _full_cpp_apply_emb(lS_o, lS_i, emb_l, v_W_l):
+                if isinstance(lS_i, (list, tuple)):
+                    lS_i_2d = torch.stack(lS_i)
+                elif lS_i.dim() == 2:
+                    lS_i_2d = lS_i
+                else:
+                    lS_i_2d = lS_i.view(num_tabs, -1)
+                if isinstance(lS_o, (list, tuple)):
+                    lS_o_2d = torch.stack(lS_o)
+                elif lS_o.dim() == 2:
+                    lS_o_2d = lS_o
+                else:
+                    lS_o_2d = lS_o.view(num_tabs, -1)
+                results = _C.fast_forward(lS_i_2d, lS_o_2d)
+                return list(results[:num_tabs])
+            dlrm.apply_emb = _full_cpp_apply_emb
+            log(f"  Full C++ apply_emb enabled (zero Python cold overhead)")
 
         scores, targets, blats, rss_trace = [], [], [], []
         t0 = time.time()
@@ -1392,10 +1498,12 @@ def main():
                 blats.append(time.time() - bt0)
 
                 # Launch prefetch based on frames accessed during forward
-                for t_idx in caches:
-                    if isinstance(dlrm.emb_l[t_idx], CompressedEmbeddingBag):
-                        frames = dlrm.emb_l[t_idx].last_frames_used
-                        caches[t_idx].launch_prefetch(frames)
+                # (skip in full_cpp mode — cold handled entirely in C++)
+                if not _full_cpp_active:
+                    for t_idx in caches:
+                        if isinstance(dlrm.emb_l[t_idx], CompressedEmbeddingBag):
+                            frames = dlrm.emb_l[t_idx].last_frames_used
+                            caches[t_idx].launch_prefetch(frames)
 
                 scores.extend(Z.detach().cpu().numpy().flatten().tolist())
                 targets.extend(T.detach().cpu().numpy().flatten().tolist())
@@ -1428,15 +1536,20 @@ def main():
         compression_ratio = orig_cold_mb / compressed_mb if compressed_mb > 0 else 0
 
         # LRU cache actual memory: count decoded frames actually held
-        if use_global_cache and global_cache is not None:
+        if _full_cpp_active:
+            # In full_cpp mode, cold frames are registered in C++ (not in Python cache)
+            # Report the actual cold frame memory registered in C++
+            lru_frames = 0
+            lru_mb = _cold_frame_mb
+        elif use_global_cache and global_cache is not None:
             lru_frames = len(global_cache)
             # uint8 frames in global cache
             lru_mb = lru_frames * rows_per_frame * EMB_DIM / 1024 / 1024
         else:
-            lru_frames = sum(len(c.cache) for c in caches.values())
+            lru_frames = sum(len(c.cache) for c in caches.values() if c.cache is not None)
             lru_mb = sum(
                 len(c.cache) * c.rows_per_frame * c.emb_dim * 4 / 1024 / 1024
-                for c in caches.values()
+                for c in caches.values() if c.cache is not None
             )
         # When hash/bitmap tables are used, mapping memory is replaced
         effective_mapping_mb = total_mapping_mb
@@ -1449,6 +1562,10 @@ def main():
                     n_words = (n_rows + 63) // 64
                     bm_mb += (n_words * 8 + (n_words + 1) * 4) / 1024 / 1024
                 effective_mapping_mb = bm_mb
+                # Full C++ bitmap mode also needs cold mapping (int32, 4 bytes/row)
+                if _full_cpp_active:
+                    cold_map_mb = sum(ln_emb[t] * 4 for t in caches) / 1024 / 1024
+                    effective_mapping_mb += cold_map_mb
             else:
                 # Hash table: ~60% load factor, 8 bytes per slot
                 hash_mb = 0
@@ -1546,41 +1663,49 @@ def main():
         return result
 
     # ---- Run experiments ----
-    # === Speed-optimized: fp32 hot + bitmap (avoid dequant overhead) ===
+    # === Full C++ cold lookup (v21): zero Python cold overhead ===
     log(f"\n{'='*70}")
-    log("EXPERIMENTS: FP32 hot + bitmap (speed-optimized)")
+    log("EXPERIMENTS: Full C++ cold lookup (v21)")
     log(f"{'='*70}")
 
-    # 1080p fp32hot + bitmap: ~137MB, potentially faster batches
-    key = '1080p_g32_fp32hot_bitmap'
+    # 1080p array + full_cpp: array mapping for both hot and cold
+    key = '1080p_g32_q8hot_fullcpp'
     all_results[key] = run_ondemand_inference(
         res_name='1080p', cache_capacity=32,
         predictor_type='none', lookahead_depth=1, tag=key,
-        use_global_cache=True, disk_decode=True, quantize_hot=False,
-        use_bitmap=True, warmup_batches=1)
+        use_global_cache=True, disk_decode=True, quantize_hot=True,
+        warmup_batches=1, full_cpp=True)
 
-    # 4K fp32hot + bitmap: ~157MB
-    key = '4K_g8_fp32hot_bitmap'
+    # 1080p bitmap + full_cpp: bitmap for hot, cold mapping for cold
+    key = '1080p_g32_q8hot_bitmap_fullcpp'
+    all_results[key] = run_ondemand_inference(
+        res_name='1080p', cache_capacity=32,
+        predictor_type='none', lookahead_depth=1, tag=key,
+        use_global_cache=True, disk_decode=True, quantize_hot=True,
+        use_bitmap=True, warmup_batches=1, full_cpp=True)
+
+    # 4K array + full_cpp: 100% hit rate, should be fastest
+    key = '4K_g8_q8hot_fullcpp'
     all_results[key] = run_ondemand_inference(
         res_name='4K', cache_capacity=8,
         predictor_type='none', lookahead_depth=1, tag=key,
-        use_global_cache=True, disk_decode=True, quantize_hot=False,
-        use_bitmap=True, warmup_batches=1)
+        use_global_cache=True, disk_decode=True, quantize_hot=True,
+        warmup_batches=1, full_cpp=True)
 
-    # === Memory-optimized: q8 hot + bitmap ===
-    log(f"\n{'='*70}")
-    log("EXPERIMENTS: Q8 hot + bitmap (memory-optimized)")
-    log(f"{'='*70}")
-
-    # 480p q8hot bitmap g64: ~47MB (extreme compression)
-    key = '480p_g64_q8hot_bitmap'
+    # 480p bitmap + full_cpp: extreme compression with full C++
+    key = '480p_g64_q8hot_bitmap_fullcpp'
     all_results[key] = run_ondemand_inference(
         res_name='480p', cache_capacity=64,
         predictor_type='none', lookahead_depth=1, tag=key,
         use_global_cache=True, disk_decode=True, quantize_hot=True,
-        use_bitmap=True, warmup_batches=1)
+        use_bitmap=True, warmup_batches=1, full_cpp=True)
 
-    # 1080p q8hot bitmap: ~71MB
+    # === Reference: previous best configurations (no full_cpp) ===
+    log(f"\n{'='*70}")
+    log("EXPERIMENTS: Reference baselines")
+    log(f"{'='*70}")
+
+    # 1080p q8hot bitmap (previous best for memory)
     key = '1080p_g32_q8hot_bitmap'
     all_results[key] = run_ondemand_inference(
         res_name='1080p', cache_capacity=32,
@@ -1588,12 +1713,7 @@ def main():
         use_global_cache=True, disk_decode=True, quantize_hot=True,
         use_bitmap=True, warmup_batches=1)
 
-    # === Comparison baselines ===
-    log(f"\n{'='*70}")
-    log("EXPERIMENTS: Comparison baselines")
-    log(f"{'='*70}")
-
-    # 1080p array (no hash/bitmap) for speed comparison
+    # 1080p array (previous best for speed)
     key = '1080p_g32_q8hot'
     all_results[key] = run_ondemand_inference(
         res_name='1080p', cache_capacity=32,
@@ -1626,7 +1746,7 @@ def main():
     summary.append(f"Date: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     summary.append(f"Baseline AUC: {baseline_auc:.6f}, Time: {baseline_time:.2f}s\n")
 
-    header = f"{'Config':<30} {'AUC':>8} {'Time(s)':>7} {'Hit%':>6} {'Hot':>6} {'Cold':>6} {'LRU':>6} {'Total':>7} {'Reduc':>6} {'RSS':>7} {'BLat':>7}"
+    header = f"{'Config':<36} {'AUC':>8} {'Time(s)':>7} {'Hit%':>6} {'Hot':>6} {'Cold':>6} {'LRU':>6} {'Total':>7} {'Reduc':>6} {'RSS':>7} {'BLat':>7}"
     summary.append(header)
     summary.append("-" * len(header))
 
@@ -1642,7 +1762,7 @@ def main():
         reduc = total_emb_mb / tmem if tmem > 0 else 0
         rss = r.get('rss_mb', 0)
         blat = r.get('mean_lat_ms', 0)
-        line = f"{key:<30} {auc:>8.6f} {t:>7.1f} {hit:>5.1%} {hot_mb:>5.0f}M {cold_mb:>5.0f}M {lru:>5.0f}M {tmem:>6.0f}M {reduc:>5.1f}x {rss:>6.0f}M {blat:>6.1f}ms"
+        line = f"{key:<36} {auc:>8.6f} {t:>7.1f} {hit:>5.1%} {hot_mb:>5.0f}M {cold_mb:>5.0f}M {lru:>5.0f}M {tmem:>6.0f}M {reduc:>5.1f}x {rss:>6.0f}M {blat:>6.1f}ms"
         summary.append(line)
 
     summary_text = "\n".join(summary)

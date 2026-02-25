@@ -1129,6 +1129,21 @@ struct RegisteredTable {
     float hot_scale = 0.0f;
     float hot_zp = 0.0f;
     int64_t D = 16;
+
+    // Cold frame data (registered after warmup for full C++ cold lookup)
+    bool has_cold_frames = false;
+    std::vector<torch::Tensor> cold_frame_tensors;  // keep references to prevent GC
+    std::vector<int64_t> cold_frame_offsets;  // frame_id -> offset in concatenated buffer (-1 if not cached)
+    const uint8_t* cold_frame_data_ptr = nullptr;
+    int64_t rows_per_frame = 0;
+    float cold_scale = 0.0f;
+    float cold_zp = 0.0f;
+    torch::Tensor cold_frame_concat;  // concatenated uint8 frame data (keeps memory alive)
+
+    // Cold mapping for bitmap mode (orig_idx -> cold_reordered_idx, int32)
+    torch::Tensor cold_mapping;
+    const int32_t* cold_mapping_ptr = nullptr;
+    bool has_cold_mapping = false;
 };
 
 // Static storage for registered tables
@@ -1162,6 +1177,8 @@ void register_tables(
 
     int64_t total_hash_bytes = 0;
     int64_t total_bitmap_bytes = 0;
+    // Clear all previous state (including cold frame registrations from prior runs)
+    g_tables.clear();
     g_tables.resize(T);
     for (int64_t t = 0; t < T; t++) {
         auto& tab = g_tables[t];
@@ -1207,6 +1224,100 @@ void register_tables(
         fprintf(stderr, "[C++] Bitmap-rank built: %.1f MB total\n",
                 total_bitmap_bytes / (1024.0 * 1024.0));
     }
+}
+
+// register_cold_frames_for_table: register pre-decoded cold frame data for a single table.
+// After warmup, call this for each compressed table so fast_forward can handle cold lookups
+// directly in C++ without any Python overhead.
+//
+// table_idx: index into g_tables
+// frame_ids: [num_frames] int64 — which frame IDs are stored (sorted)
+// frame_data: [num_frames * actual_rows_per_frame, D] uint8 — concatenated decoded frame data
+// cold_scale, cold_zp: dequantization parameters for cold weights
+// rows_per_frame: number of rows per frame (last frame may have fewer)
+// cold_mapping: optional [num_rows] int64 — maps orig_idx -> cold_reordered_idx (for bitmap mode)
+void register_cold_frames_for_table(
+    int64_t table_idx,
+    const torch::Tensor& frame_ids,
+    const torch::Tensor& frame_data,
+    double cold_scale,
+    double cold_zp,
+    int64_t rows_per_frame,
+    const torch::Tensor& cold_mapping
+) {
+    TORCH_CHECK(g_registered, "Tables not registered. Call register_tables first.");
+    TORCH_CHECK(table_idx >= 0 && table_idx < (int64_t)g_tables.size(),
+                "Invalid table index: ", table_idx);
+
+    auto& tab = g_tables[table_idx];
+    tab.has_cold_frames = true;
+    tab.cold_frame_concat = frame_data.contiguous();
+    tab.cold_frame_data_ptr = tab.cold_frame_concat.data_ptr<uint8_t>();
+    tab.cold_scale = static_cast<float>(cold_scale);
+    tab.cold_zp = static_cast<float>(cold_zp);
+    tab.rows_per_frame = rows_per_frame;
+
+    // Build frame_id -> offset mapping
+    int64_t num_frames = frame_ids.size(0);
+    const int64_t* fid_ptr = frame_ids.data_ptr<int64_t>();
+    int64_t max_fid = 0;
+    for (int64_t i = 0; i < num_frames; i++)
+        max_fid = std::max(max_fid, fid_ptr[i]);
+
+    tab.cold_frame_offsets.assign(max_fid + 1, -1);
+    int64_t cumulative_rows = 0;
+    for (int64_t i = 0; i < num_frames; i++) {
+        tab.cold_frame_offsets[fid_ptr[i]] = cumulative_rows;
+        // Compute actual rows for this frame
+        // For simplicity, use rows_per_frame for all frames
+        // (last frame may have fewer rows, but cold_reordered_idx is always valid)
+        cumulative_rows += rows_per_frame;
+    }
+
+    // Register cold mapping if provided (for bitmap mode, int32 to save memory)
+    if (cold_mapping.numel() > 0) {
+        if (cold_mapping.scalar_type() == torch::kInt32) {
+            tab.cold_mapping = cold_mapping.contiguous();
+        } else {
+            tab.cold_mapping = cold_mapping.to(torch::kInt32).contiguous();
+        }
+        tab.cold_mapping_ptr = tab.cold_mapping.data_ptr<int32_t>();
+        tab.has_cold_mapping = true;
+    }
+
+    int64_t frame_mb = frame_data.numel() / (1024 * 1024);
+    fprintf(stderr, "[C++] Table %ld: registered %ld cold frames (%ld MB uint8), "
+            "rows_per_frame=%ld, scale=%.6f, zp=%.1f\n",
+            table_idx, num_frames, frame_mb, rows_per_frame, tab.cold_scale, tab.cold_zp);
+}
+
+// Helper: look up a cold row from registered frame cache and accumulate into output.
+// cold_reordered_idx: the row index in the reordered cold table
+// Returns true if handled in C++, false if needs Python fallback.
+static inline bool cold_frame_accum(
+    float* __restrict__ out_row,
+    const RegisteredTable& tab,
+    int64_t cold_reordered_idx,
+    int64_t D
+) {
+    int64_t fid = cold_reordered_idx / tab.rows_per_frame;
+    if (__builtin_expect(fid < (int64_t)tab.cold_frame_offsets.size() &&
+                         tab.cold_frame_offsets[fid] >= 0, 1)) {
+        int64_t off_in_frame = cold_reordered_idx % tab.rows_per_frame;
+        int64_t buf_row = tab.cold_frame_offsets[fid] + off_in_frame;
+        const uint8_t* emb = tab.cold_frame_data_ptr + buf_row * D;
+#if HAS_AVX512
+        if (D == 16) {
+            accum_q8_d16(out_row, emb, tab.cold_scale, tab.cold_zp);
+        } else
+#endif
+        {
+            for (int64_t d = 0; d < D; d++)
+                out_row[d] += (static_cast<float>(emb[d]) - tab.cold_zp) * tab.cold_scale;
+        }
+        return true;
+    }
+    return false;
 }
 
 // fast_forward: process all registered tables with a single call.
@@ -1288,6 +1399,22 @@ std::vector<torch::Tensor> fast_forward(
                 bool* cm_ptr = all_cm_ptr + cm_offset[t];
                 int64_t local_cold = 0;
 
+                // Macro-like cold handling for each mode:
+                // When cold frames are registered, handle cold in C++ directly.
+                // Otherwise fall back to cold_mask for Python fixup.
+                #define COLD_FP32_FROM_MAP(m_val) do { \
+                    if (tab.has_cold_frames) { \
+                        int64_t ci = -(static_cast<int64_t>(m_val) + 1); \
+                        cold_frame_accum(out_row, tab, ci, D); \
+                    } else { cm_ptr[i] = true; local_cold++; } \
+                } while(0)
+                #define COLD_FROM_BITMAP() do { \
+                    if (tab.has_cold_frames && tab.has_cold_mapping) { \
+                        int32_t ci = tab.cold_mapping_ptr[idx_ptr[i]]; \
+                        if (ci >= 0) cold_frame_accum(out_row, tab, static_cast<int64_t>(ci), D); \
+                    } else { cm_ptr[i] = true; local_cold++; } \
+                } while(0)
+
                 if (tab.use_bitmap) {
                     // Bitmap-rank mode: O(1) lookup using popcount
                     const auto& br = tab.bitmap_rank;
@@ -1296,7 +1423,6 @@ std::vector<torch::Tensor> fast_forward(
                         int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
                         float* out_row = out_ptr + b * D;
                         for (int64_t i = start; i < end; i++) {
-                            // Prefetch bitmap word for next index
                             if (i + 1 < end) {
                                 __builtin_prefetch(&br.bitmap[idx_ptr[i+1] / 64], 0, 0);
                             }
@@ -1309,8 +1435,7 @@ std::vector<torch::Tensor> fast_forward(
 #endif
                                 for (int64_t d = 0; d < D; d++) out_row[d] += emb_row[d];
                             } else {
-                                cm_ptr[i] = true;
-                                local_cold++;
+                                COLD_FROM_BITMAP();
                             }
                         }
                     }
@@ -1364,13 +1489,15 @@ std::vector<torch::Tensor> fast_forward(
 #endif
                                 for (int64_t d = 0; d < D; d++) out_row[d] += emb_row[d];
                             } else if (m != INVALID) {
-                                cm_ptr[i] = true;
-                                local_cold++;
+                                COLD_FP32_FROM_MAP(m);
                             }
                         }
                     }
                 }
                 cold_counts[t] = local_cold;
+
+                #undef COLD_FP32_FROM_MAP
+                #undef COLD_FROM_BITMAP
 
             } else {
                 // COMPRESSED_Q8
@@ -1379,6 +1506,20 @@ std::vector<torch::Tensor> fast_forward(
                 const float zp = tab.hot_zp;
                 bool* cm_ptr = all_cm_ptr + cm_offset[t];
                 int64_t local_cold = 0;
+
+                // Cold handling macros for Q8 mode
+                #define COLD_Q8_FROM_MAP(m_val) do { \
+                    if (tab.has_cold_frames) { \
+                        int64_t ci = -(static_cast<int64_t>(m_val) + 1); \
+                        cold_frame_accum(out_row, tab, ci, D); \
+                    } else { cm_ptr[i] = true; local_cold++; } \
+                } while(0)
+                #define COLD_Q8_FROM_BITMAP() do { \
+                    if (tab.has_cold_frames && tab.has_cold_mapping) { \
+                        int32_t ci = tab.cold_mapping_ptr[idx_ptr[i]]; \
+                        if (ci >= 0) cold_frame_accum(out_row, tab, static_cast<int64_t>(ci), D); \
+                    } else { cm_ptr[i] = true; local_cold++; } \
+                } while(0)
 
                 if (tab.use_bitmap) {
                     // Bitmap-rank mode for Q8
@@ -1403,8 +1544,7 @@ std::vector<torch::Tensor> fast_forward(
                                         out_row[d] += (static_cast<float>(emb[d]) - zp) * s;
                                 }
                             } else {
-                                cm_ptr[i] = true;
-                                local_cold++;
+                                COLD_Q8_FROM_BITMAP();
                             }
                         }
                     }
@@ -1462,13 +1602,15 @@ std::vector<torch::Tensor> fast_forward(
                                         out_row[d] += (static_cast<float>(emb[d]) - zp) * s;
                                 }
                             } else if (m != INVALID) {
-                                cm_ptr[i] = true;
-                                local_cold++;
+                                COLD_Q8_FROM_MAP(m);
                             }
                         }
                     }
                 }
                 cold_counts[t] = local_cold;
+
+                #undef COLD_Q8_FROM_MAP
+                #undef COLD_Q8_FROM_BITMAP
             }
         }
     });
@@ -1521,4 +1663,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           py::arg("use_bitmap") = false);
     m.def("fast_forward", &fast_forward,
           "Process all registered tables with a single call (zero Python loop overhead)");
+    m.def("register_cold_frames_for_table", &register_cold_frames_for_table,
+          "Register pre-decoded cold frames for a table (enables full C++ cold lookup)",
+          py::arg("table_idx"), py::arg("frame_ids"), py::arg("frame_data"),
+          py::arg("cold_scale"), py::arg("cold_zp"), py::arg("rows_per_frame"),
+          py::arg("cold_mapping") = torch::Tensor());
 }
