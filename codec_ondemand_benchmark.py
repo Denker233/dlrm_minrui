@@ -15,6 +15,7 @@ import os, sys, time, json, threading, gc, subprocess, tempfile, io
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from collections import defaultdict, Counter, OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 import psutil
@@ -749,6 +750,9 @@ class CompressedEmbeddingBag(nn.Module):
     Drop-in replacement for nn.EmbeddingBag that stores:
     - Hot rows: uncompressed fp32 OR quantized uint8 in a compact tensor
     - Cold rows: H.265 compressed in memory, decoded on demand
+
+    Uses merged int32 mapping to save ~418MB vs separate is_hot/orig_to_hot/o2c tensors.
+    Mapping encoding: >=0 = hot index, <0 = cold index (-(val+1)), INT32_MIN = invalid
     """
     def __init__(self, hot_weight, is_hot, orig_to_hot, orig_to_cold_reordered,
                  cold_cache, num_embeddings, embedding_dim,
@@ -756,16 +760,36 @@ class CompressedEmbeddingBag(nn.Module):
         super().__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
-        self.is_hot = is_hot                  # (num_embeddings,) bool
-        self.orig_to_hot = orig_to_hot        # (num_embeddings,) long, -1 for cold
-        self.o2c = orig_to_cold_reordered     # (num_embeddings,) long, -1 for hot/invalid
-        self.cold_cache = cold_cache          # OnDemandPrefetchCache (in-memory decoder)
+        self.cold_cache = cold_cache
         self.last_frames_used = set()
         self.mode = 'sum'
         self.quantize_hot = quantize_hot
 
+        # Build merged int32 mapping: saves ~418MB for 8 large tables
+        # vs storing separate is_hot (bool), orig_to_hot (int64), o2c (int64)
+        INT32_MIN = -2147483648  # torch.iinfo(torch.int32).min
+        mapping = torch.full((num_embeddings,), INT32_MIN, dtype=torch.int32)
+        hot_mask = is_hot.bool()
+        # Hot indices: mapping[i] = hot_compact_idx (>= 0)
+        mapping[hot_mask] = orig_to_hot[hot_mask].to(torch.int32)
+        # Cold indices: mapping[i] = -(cold_reordered_idx + 1) (< 0, != INT32_MIN)
+        cold_mask = orig_to_cold_reordered >= 0
+        mapping[cold_mask] = (-(orig_to_cold_reordered[cold_mask] + 1)).to(torch.int32)
+        self.mapping = mapping
+
+        # Keep legacy tensors only if no C++ merged support
+        self._has_merged = HAS_CPP_EXT and hasattr(_C, 'compressed_emb_bag_forward_merged')
+        if not self._has_merged:
+            self.is_hot = is_hot
+            self.orig_to_hot = orig_to_hot
+            self.o2c = orig_to_cold_reordered
+        else:
+            # Free the large legacy tensors
+            self.is_hot = None
+            self.orig_to_hot = None
+            self.o2c = None
+
         if quantize_hot:
-            # Quantize hot weights to uint8 — saves 4x memory
             mn = hot_weight.min().item()
             mx = hot_weight.max().item()
             s = (mx - mn) / 255.0
@@ -775,12 +799,14 @@ class CompressedEmbeddingBag(nn.Module):
             self.hot_weight_q8 = ((hot_weight / s).round() + zp).clamp(0, 255).to(torch.uint8)
             self.hot_scale = s
             self.hot_zp = zp
-            self.hot_weight = None  # don't keep fp32 copy
+            self.hot_weight = None
         else:
-            self.hot_weight = hot_weight      # (n_hot, emb_dim) fp32
+            self.hot_weight = hot_weight
             self.hot_weight_q8 = None
             self.hot_scale = 0.0
             self.hot_zp = 0
+
+        self._empty_psw = torch.empty(0)
 
     def forward(self, indices, offsets, per_sample_weights=None):
         if HAS_CPP_EXT:
@@ -788,29 +814,36 @@ class CompressedEmbeddingBag(nn.Module):
         return self._forward_python(indices, offsets, per_sample_weights)
 
     def _forward_cpp(self, indices, offsets, per_sample_weights=None):
-        psw = per_sample_weights if per_sample_weights is not None else torch.empty(0)
+        psw = per_sample_weights if per_sample_weights is not None else self._empty_psw
 
-        if self.quantize_hot:
-            # Use uint8 hot forward with on-the-fly dequant
-            output, cold_mask = _C.compressed_emb_bag_forward_q8(
-                indices, offsets, self.hot_weight_q8, self.is_hot,
-                self.orig_to_hot, psw, self.hot_scale, self.hot_zp)
+        if self._has_merged:
+            if self.quantize_hot:
+                output, cold_mask, cold_count = _C.compressed_emb_bag_forward_q8_merged(
+                    indices, offsets, self.hot_weight_q8, self.mapping,
+                    psw, self.hot_scale, self.hot_zp)
+            else:
+                output, cold_mask, cold_count = _C.compressed_emb_bag_forward_merged(
+                    indices, offsets, self.hot_weight, self.mapping, psw)
         else:
-            # C++ handles hot lookups + sum pooling, returns cold_mask for rare cold hits
-            output, cold_mask = _C.compressed_emb_bag_forward(
-                indices, offsets, self.hot_weight, self.is_hot,
-                self.orig_to_hot, psw)
+            if self.quantize_hot:
+                output, cold_mask, cold_count = _C.compressed_emb_bag_forward_q8(
+                    indices, offsets, self.hot_weight_q8, self.is_hot,
+                    self.orig_to_hot, psw, self.hot_scale, self.hot_zp)
+            else:
+                output, cold_mask, cold_count = _C.compressed_emb_bag_forward(
+                    indices, offsets, self.hot_weight, self.is_hot,
+                    self.orig_to_hot, psw)
 
-        # Cold fixup (rare: ~0.1% of batches have any cold indices)
-        if cold_mask.any():
+        if cold_count.item() > 0:
             cold_positions = torch.where(cold_mask)[0]
             cold_orig = indices[cold_positions]
-            cold_mapped = self.o2c[cold_orig]
-            valid = cold_mapped >= 0
+            # Extract cold reordered indices from merged mapping
+            cold_map_vals = self.mapping[cold_orig]
+            cold_reordered = -(cold_map_vals.long() + 1)
+            valid = cold_reordered >= 0
             if valid.any():
-                cold_result, frames_used = self.cold_cache.lookup(cold_mapped[valid])
+                cold_result, frames_used = self.cold_cache.lookup(cold_reordered[valid])
                 valid_positions = cold_positions[valid]
-                # Use C++ cold_fixup to add cold embeddings into output
                 _C.cold_fixup(output, indices, offsets, cold_mask,
                               cold_result, valid_positions, psw)
                 self.last_frames_used = frames_used
@@ -822,12 +855,13 @@ class CompressedEmbeddingBag(nn.Module):
         return output
 
     def _forward_python(self, indices, offsets, per_sample_weights=None):
-        hot_mask = self.is_hot[indices]
+        map_vals = self.mapping[indices]
+        hot_mask = map_vals >= 0
         all_embeds = torch.zeros(len(indices), self.embedding_dim)
 
         # Hot lookups from compact tensor
         if hot_mask.any():
-            hot_compact_idx = self.orig_to_hot[indices[hot_mask]]
+            hot_compact_idx = map_vals[hot_mask].long()
             if self.quantize_hot:
                 q = self.hot_weight_q8[hot_compact_idx]
                 all_embeds[hot_mask] = (q.float() - self.hot_zp) * self.hot_scale
@@ -835,13 +869,15 @@ class CompressedEmbeddingBag(nn.Module):
                 all_embeds[hot_mask] = self.hot_weight[hot_compact_idx]
 
         # Cold lookups via on-demand H.265 decode
-        if (~hot_mask).any():
-            cold_orig = indices[~hot_mask]
-            cold_mapped = self.o2c[cold_orig]
-            valid = cold_mapped >= 0
+        INT32_MIN = -2147483648
+        cold_mask = (map_vals < 0) & (map_vals != INT32_MIN)
+        if cold_mask.any():
+            cold_map = map_vals[cold_mask]
+            cold_reordered = -(cold_map.long() + 1)
+            valid = cold_reordered >= 0
             if valid.any():
-                cold_result, frames_used = self.cold_cache.lookup(cold_mapped[valid])
-                cold_positions = torch.where(~hot_mask)[0]
+                cold_result, frames_used = self.cold_cache.lookup(cold_reordered[valid])
+                cold_positions = torch.where(cold_mask)[0]
                 all_embeds[cold_positions[valid]] = cold_result
                 self.last_frames_used = frames_used
             else:
@@ -1071,6 +1107,7 @@ def main():
         caches = {}
         total_compressed_bytes = 0
         total_hot_mb = 0
+        total_mapping_mb = 0
 
         for t_idx in large_tables:
             n_cold = cold_num_rows.get(t_idx, 0)
@@ -1151,6 +1188,8 @@ def main():
                 embedding_dim=EMB_DIM,
                 quantize_hot=quantize_hot,
             )
+            # Track mapping memory: int32 = 4 bytes/row
+            total_mapping_mb += ln_emb[t_idx] * 4 / 1024 / 1024
             dlrm.emb_l[t_idx] = comp_emb
 
         # Free full fp32 weights to show true memory savings:
@@ -1194,6 +1233,54 @@ def main():
             for t_idx in caches:
                 caches[t_idx].reset_stats()
                 caches[t_idx].clear_cache()
+
+        # Fast apply_emb: bypass nn.Module.__call__ to eliminate Python overhead
+        # Each nn.Module.__call__ adds ~0.15-0.2ms overhead (hooks, autograd, etc.)
+        # With 26 tables, this saves ~3-4ms per batch
+        compressed_table_ids = set(caches.keys())
+        _orig_apply_emb = dlrm.apply_emb
+        _use_merged = HAS_CPP_EXT and hasattr(_C, 'compressed_emb_bag_forward_merged')
+        def _fast_apply_emb(lS_o, lS_i, emb_l, v_W_l):
+            ly = []
+            for k in range(len(emb_l)):
+                E = emb_l[k]
+                idx = lS_i[k]
+                off = lS_o[k]
+                if k in compressed_table_ids and isinstance(E, CompressedEmbeddingBag):
+                    # Direct C++ call — single pass through indices with hot/cold routing
+                    if E.quantize_hot:
+                        output, cold_mask, cold_count = _C.compressed_emb_bag_forward_q8_merged(
+                            idx, off, E.hot_weight_q8, E.mapping,
+                            E._empty_psw, E.hot_scale, E.hot_zp)
+                    else:
+                        output, cold_mask, cold_count = _C.compressed_emb_bag_forward_merged(
+                            idx, off, E.hot_weight, E.mapping, E._empty_psw)
+                    # Cold fixup (very rare: ~0.1% of batches)
+                    if cold_count.item() > 0:
+                        cold_positions = torch.where(cold_mask)[0]
+                        cold_orig = idx[cold_positions]
+                        cold_map_vals = E.mapping[cold_orig]
+                        cold_reordered = -(cold_map_vals.long() + 1)
+                        valid = cold_reordered >= 0
+                        if valid.any():
+                            cold_result, frames_used = E.cold_cache.lookup(cold_reordered[valid])
+                            _C.cold_fixup(output, idx, off, cold_mask,
+                                          cold_result, cold_positions[valid], E._empty_psw)
+                            E.last_frames_used = frames_used
+                        else:
+                            E.last_frames_used = set()
+                    else:
+                        E.last_frames_used = set()
+                    ly.append(output)
+                else:
+                    # Standard EmbeddingBag - use F.embedding_bag directly
+                    psw = v_W_l[k].gather(0, idx) if v_W_l[k] is not None else None
+                    ly.append(F.embedding_bag(idx, E.weight, off,
+                                              per_sample_weights=psw, mode='sum'))
+            return ly
+        if HAS_CPP_EXT and compressed_table_ids:
+            dlrm.apply_emb = _fast_apply_emb
+            log(f"  Fast apply_emb enabled (bypasses nn.Module.__call__)")
 
         # Run inference — CompressedEmbeddingBag handles lookups inside dlrm.forward()
         drop_caches()
@@ -1257,7 +1344,7 @@ def main():
                 len(c.cache) * c.rows_per_frame * c.emb_dim * 4 / 1024 / 1024
                 for c in caches.values()
             )
-        total_mem_mb = total_hot_mb + compressed_in_mem_mb + lru_mb
+        total_mem_mb = total_hot_mb + compressed_in_mem_mb + lru_mb + total_mapping_mb
 
         log(f"  AUC={auc:.6f}, Time={total_time:.2f}s, RSS={rss:.0f}MB")
         log(f"  Hit rate={hit_rate:.1%}, Demand={total_demand} ({avg_demand:.1f}/batch), "
@@ -1265,8 +1352,9 @@ def main():
         log(f"  Compression: {orig_cold_mb:.1f}MB fp32 -> {compressed_mb:.1f}MB "
             f"({compression_ratio:.1f}x)")
         log(f"  LRU cache: {lru_frames} frames = {lru_mb:.1f}MB")
+        log(f"  Mapping: {total_mapping_mb:.1f}MB (merged int32)")
         log(f"  Total memory: hot={total_hot_mb:.1f} + cold={compressed_in_mem_mb:.1f} "
-            f"+ lru={lru_mb:.1f} = {total_mem_mb:.1f}MB "
+            f"+ lru={lru_mb:.1f} + map={total_mapping_mb:.1f} = {total_mem_mb:.1f}MB "
             f"(vs {total_emb_mb:.1f}MB baseline, {total_emb_mb/total_mem_mb:.1f}x)")
         log(f"  Batch latency: mean={np.mean(blats)*1000:.2f}ms")
 
@@ -1284,6 +1372,7 @@ def main():
             'rss_mb': rss,
             'rss_after_setup_mb': rss_after_setup,
             'hot_mb': total_hot_mb,
+            'mapping_mb': total_mapping_mb,
             'compressed_cold_mb': compressed_in_mem_mb,
             'compressed_on_disk_mb': total_compressed_mb,
             'disk_decode': disk_decode,
@@ -1310,6 +1399,10 @@ def main():
             c.close()
         del caches
 
+        # Restore original apply_emb
+        if HAS_CPP_EXT and compressed_table_ids:
+            dlrm.apply_emb = _orig_apply_emb
+
         # Restore state_dict entries first
         for k, v in freed_state.items():
             state_dict[k] = v
@@ -1331,41 +1424,40 @@ def main():
     log(f"EXPERIMENTS: {res_name}")
     log(f"{'='*70}")
 
-    # Exp 1: Global cache=8, disk, uint8, fp32-hot (our best from prev run)
+    # === 4K experiments ===
+    # Exp 1: Global cache=8, disk, fp32-hot (v3 best config)
     key = f'{res_name}_g8_disk_fp32hot'
     all_results[key] = run_ondemand_inference(
         res_name=res_name, cache_capacity=8,
         predictor_type='none', lookahead_depth=1, tag=key,
         use_global_cache=True, disk_decode=True, quantize_hot=False)
 
-    # Exp 2: Global cache=8, disk, uint8, int8-hot (quantize hot for max memory savings)
+    # Exp 2: Global cache=8, disk, q8-hot (max memory savings)
     key = f'{res_name}_g8_disk_q8hot'
     all_results[key] = run_ondemand_inference(
         res_name=res_name, cache_capacity=8,
         predictor_type='none', lookahead_depth=1, tag=key,
         use_global_cache=True, disk_decode=True, quantize_hot=True)
 
-    # Exp 3: Global cache=8, in-memory, uint8, fp32-hot
-    key = f'{res_name}_g8_inmem_fp32hot'
-    all_results[key] = run_ondemand_inference(
-        res_name=res_name, cache_capacity=8,
-        predictor_type='none', lookahead_depth=1, tag=key,
-        use_global_cache=True, disk_decode=False, quantize_hot=False)
+    # === 1080p experiments ===
+    res_1080 = '1080p'
+    log(f"\n{'='*70}")
+    log(f"EXPERIMENTS: {res_1080}")
+    log(f"{'='*70}")
 
-    # Exp 4-6: Global cache sweep (disk decode, user-requested sizes)
-    for cache_sz in [5, 7, 10]:
-        key = f'{res_name}_g{cache_sz}_disk_fp32hot'
-        all_results[key] = run_ondemand_inference(
-            res_name=res_name, cache_capacity=cache_sz,
-            predictor_type='none', lookahead_depth=1, tag=key,
-            use_global_cache=True, disk_decode=True, quantize_hot=False)
-
-    # Exp 7: Per-table cache=1, in-memory (legacy for comparison)
-    key = f'{res_name}_pertable1_inmem'
+    # Exp 3: 1080p, cache=32, disk, q8-hot (same LRU budget as 4K cache=8)
+    key = f'{res_1080}_g32_disk_q8hot'
     all_results[key] = run_ondemand_inference(
-        res_name=res_name, cache_capacity=1,
+        res_name=res_1080, cache_capacity=32,
         predictor_type='none', lookahead_depth=1, tag=key,
-        use_global_cache=False, disk_decode=False, quantize_hot=False)
+        use_global_cache=True, disk_decode=True, quantize_hot=True)
+
+    # Exp 4: 1080p, cache=32, disk, fp32-hot
+    key = f'{res_1080}_g32_disk_fp32hot'
+    all_results[key] = run_ondemand_inference(
+        res_name=res_1080, cache_capacity=32,
+        predictor_type='none', lookahead_depth=1, tag=key,
+        use_global_cache=True, disk_decode=True, quantize_hot=False)
 
     # ---- Save results ----
     log(f"\n{'='*70}")

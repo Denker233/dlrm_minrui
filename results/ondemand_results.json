@@ -1,34 +1,35 @@
 {
   "A_baseline": {
     "auc": 0.7686130644508489,
-    "total_time": 58.4818274974823,
+    "total_time": 54.82569622993469,
     "num_batches": 1599,
-    "rss_mb": 41289.96484375,
-    "mean_lat_ms": 5.1575055936487715,
-    "p50_lat_ms": 5.18345832824707,
-    "p99_lat_ms": 7.246861457824706,
+    "rss_mb": 41274.203125,
+    "mean_lat_ms": 4.562444579534191,
+    "p50_lat_ms": 4.198312759399414,
+    "p99_lat_ms": 6.550230979919433,
     "emb_memory_mb": 2060.7041625976562
   },
   "4K_g8_disk_fp32hot": {
     "auc": 0.7686134299547189,
-    "total_time": 52.992852449417114,
+    "total_time": 63.40945792198181,
     "num_batches": 1599,
-    "mean_lat_ms": 8.359673472029332,
-    "p50_lat_ms": 7.926702499389648,
-    "p99_lat_ms": 11.15087032318115,
-    "rss_mb": 39923.0078125,
-    "rss_after_setup_mb": 39599.4921875,
+    "mean_lat_ms": 8.17719483986879,
+    "p50_lat_ms": 7.758140563964844,
+    "p99_lat_ms": 11.154861450195312,
+    "rss_mb": 39875.93359375,
+    "rss_after_setup_mb": 39542.0546875,
     "hot_mb": 87.4344482421875,
+    "mapping_mb": 128.61320114135742,
     "compressed_cold_mb": 0.0,
     "compressed_on_disk_mb": 193.51897430419922,
     "disk_decode": true,
     "lru_mb": 63.28125,
-    "total_mem_mb": 150.7156982421875,
+    "total_mem_mb": 279.3288993835449,
     "hit_rate": 0.9993746091307066,
     "demand_decomps": 8,
     "avg_demand_per_batch": 0.0006253908692933083,
     "prefetch_hits": 0,
-    "demand_time_ms": 405.7600498199463,
+    "demand_time_ms": 427.0505905151367,
     "compressed_mb": 193.51897430419922,
     "orig_cold_mb": 1970.3767700195312,
     "compression_ratio": 10.181827270964279,
@@ -40,42 +41,43 @@
     "rss_trace": [
       [
         0,
-        39643.38671875
+        39548.70703125
       ],
       [
         500,
-        39718.83203125
+        39620.3125
       ],
       [
         1000,
-        39823.953125
+        39722.6484375
       ],
       [
         1500,
-        39917.87109375
+        39818.47265625
       ]
     ]
   },
   "4K_g8_disk_q8hot": {
     "auc": 0.7686186910463152,
-    "total_time": 54.569408655166626,
+    "total_time": 63.022671937942505,
     "num_batches": 1599,
-    "mean_lat_ms": 8.004369849037422,
-    "p50_lat_ms": 7.683277130126953,
-    "p99_lat_ms": 11.11396312713623,
-    "rss_mb": 39820.11328125,
-    "rss_after_setup_mb": 39525.99609375,
+    "mean_lat_ms": 7.94999102937795,
+    "p50_lat_ms": 7.589578628540039,
+    "p99_lat_ms": 11.489181518554686,
+    "rss_mb": 39744.1640625,
+    "rss_after_setup_mb": 39563.4375,
     "hot_mb": 21.858612060546875,
+    "mapping_mb": 128.61320114135742,
     "compressed_cold_mb": 0.0,
     "compressed_on_disk_mb": 193.51897430419922,
     "disk_decode": true,
     "lru_mb": 63.28125,
-    "total_mem_mb": 85.13986206054688,
+    "total_mem_mb": 213.7530632019043,
     "hit_rate": 0.9993746091307066,
     "demand_decomps": 8,
     "avg_demand_per_batch": 0.0006253908692933083,
     "prefetch_hits": 0,
-    "demand_time_ms": 399.2924690246582,
+    "demand_time_ms": 406.8756103515625,
     "compressed_mb": 193.51897430419922,
     "orig_cold_mb": 1970.3767700195312,
     "compression_ratio": 10.181827270964279,
@@ -87,254 +89,115 @@
     "rss_trace": [
       [
         0,
-        39573.9609375
+        39571.9609375
       ],
       [
         500,
-        39656.640625
+        39626.97265625
       ],
       [
         1000,
-        39747.17578125
+        39690.03515625
       ],
       [
         1500,
-        39839.74609375
+        39752.921875
       ]
     ]
   },
-  "4K_g8_inmem_fp32hot": {
-    "auc": 0.7686134299547189,
-    "total_time": 49.4903826713562,
+  "1080p_g32_disk_q8hot": {
+    "auc": 0.7686186910463152,
+    "total_time": 58.45621585845947,
     "num_batches": 1599,
-    "mean_lat_ms": 7.839560135966022,
-    "p50_lat_ms": 7.360696792602539,
-    "p99_lat_ms": 9.638333320617676,
-    "rss_mb": 40091.0390625,
-    "rss_after_setup_mb": 39804.9453125,
-    "hot_mb": 87.4344482421875,
-    "compressed_cold_mb": 193.51897430419922,
-    "compressed_on_disk_mb": 193.51897430419922,
-    "disk_decode": false,
-    "lru_mb": 63.28125,
-    "total_mem_mb": 344.2346725463867,
-    "hit_rate": 0.9993746091307066,
-    "demand_decomps": 8,
-    "avg_demand_per_batch": 0.0006253908692933083,
-    "prefetch_hits": 0,
-    "demand_time_ms": 607.9831123352051,
-    "compressed_mb": 193.51897430419922,
-    "orig_cold_mb": 1970.3767700195312,
-    "compression_ratio": 10.181827270964279,
-    "cache_capacity": 8,
-    "predictor": "none",
-    "lookahead_depth": 1,
-    "resolution": "4K",
-    "rows_per_frame": 518400,
-    "rss_trace": [
-      [
-        0,
-        39841.046875
-      ],
-      [
-        500,
-        39912.56640625
-      ],
-      [
-        1000,
-        40018.1015625
-      ],
-      [
-        1500,
-        40113.84765625
-      ]
-    ]
-  },
-  "4K_g5_disk_fp32hot": {
-    "auc": 0.7686134299547189,
-    "total_time": 804.8622736930847,
-    "num_batches": 1599,
-    "mean_lat_ms": 465.4849477676096,
-    "p50_lat_ms": 440.60540199279785,
-    "p99_lat_ms": 654.533576965332,
-    "rss_mb": 39936.1875,
-    "rss_after_setup_mb": 39692.421875,
-    "hot_mb": 87.4344482421875,
+    "mean_lat_ms": 8.084811740849,
+    "p50_lat_ms": 7.715702056884766,
+    "p99_lat_ms": 12.918992042541458,
+    "rss_mb": 39879.703125,
+    "rss_after_setup_mb": 39656.75390625,
+    "hot_mb": 21.858612060546875,
+    "mapping_mb": 128.61320114135742,
     "compressed_cold_mb": 0.0,
-    "compressed_on_disk_mb": 193.51897430419922,
+    "compressed_on_disk_mb": 195.92793560028076,
     "disk_decode": true,
-    "lru_mb": 39.55078125,
-    "total_mem_mb": 126.9852294921875,
-    "hit_rate": 0.0,
-    "demand_decomps": 12792,
-    "avg_demand_per_batch": 1.0,
+    "lru_mb": 43.505859375,
+    "total_mem_mb": 193.9776725769043,
+    "hit_rate": 0.9984071821604402,
+    "demand_decomps": 22,
+    "avg_demand_per_batch": 0.0017198248905565979,
     "prefetch_hits": 0,
-    "demand_time_ms": 721705.6226730347,
-    "compressed_mb": 193.51897430419922,
+    "demand_time_ms": 418.1859493255615,
+    "compressed_mb": 195.92793560028076,
     "orig_cold_mb": 1970.3767700195312,
-    "compression_ratio": 10.181827270964279,
-    "cache_capacity": 5,
+    "compression_ratio": 10.056640284514424,
+    "cache_capacity": 32,
     "predictor": "none",
     "lookahead_depth": 1,
-    "resolution": "4K",
-    "rows_per_frame": 518400,
+    "resolution": "1080p",
+    "rows_per_frame": 129600,
     "rss_trace": [
       [
         0,
-        39701.51171875
+        39657.26953125
       ],
       [
         500,
-        39747.03515625
+        39716.328125
       ],
       [
         1000,
-        39841.26171875
+        39779.26953125
       ],
       [
         1500,
-        39922.29296875
+        39842.28515625
       ]
     ]
   },
-  "4K_g7_disk_fp32hot": {
+  "1080p_g32_disk_fp32hot": {
     "auc": 0.7686134299547189,
-    "total_time": 780.1607682704926,
+    "total_time": 52.526001930236816,
     "num_batches": 1599,
-    "mean_lat_ms": 451.0798030827029,
-    "p50_lat_ms": 424.0250587463379,
-    "p99_lat_ms": 654.9014663696289,
-    "rss_mb": 39925.515625,
-    "rss_after_setup_mb": 39684.98046875,
+    "mean_lat_ms": 7.96181802230749,
+    "p50_lat_ms": 7.533073425292969,
+    "p99_lat_ms": 14.594120979309062,
+    "rss_mb": 39883.65234375,
+    "rss_after_setup_mb": 39648.30078125,
     "hot_mb": 87.4344482421875,
+    "mapping_mb": 128.61320114135742,
     "compressed_cold_mb": 0.0,
-    "compressed_on_disk_mb": 193.51897430419922,
+    "compressed_on_disk_mb": 195.92793560028076,
     "disk_decode": true,
-    "lru_mb": 55.37109375,
-    "total_mem_mb": 142.8055419921875,
-    "hit_rate": 0.0,
-    "demand_decomps": 12792,
-    "avg_demand_per_batch": 1.0,
+    "lru_mb": 43.505859375,
+    "total_mem_mb": 259.5535087585449,
+    "hit_rate": 0.9984071821604402,
+    "demand_decomps": 22,
+    "avg_demand_per_batch": 0.0017198248905565979,
     "prefetch_hits": 0,
-    "demand_time_ms": 699203.3271789551,
-    "compressed_mb": 193.51897430419922,
+    "demand_time_ms": 412.4429225921631,
+    "compressed_mb": 195.92793560028076,
     "orig_cold_mb": 1970.3767700195312,
-    "compression_ratio": 10.181827270964279,
-    "cache_capacity": 7,
+    "compression_ratio": 10.056640284514424,
+    "cache_capacity": 32,
     "predictor": "none",
     "lookahead_depth": 1,
-    "resolution": "4K",
-    "rows_per_frame": 518400,
+    "resolution": "1080p",
+    "rows_per_frame": 129600,
     "rss_trace": [
       [
         0,
-        39686.046875
+        39648.51953125
       ],
       [
         500,
-        39743.296875
+        39703.39453125
       ],
       [
         1000,
-        39836.19921875
+        39766.265625
       ],
       [
         1500,
-        39950.15625
-      ]
-    ]
-  },
-  "4K_g10_disk_fp32hot": {
-    "auc": 0.7686134299547189,
-    "total_time": 48.3287513256073,
-    "num_batches": 1599,
-    "mean_lat_ms": 7.868162612008482,
-    "p50_lat_ms": 7.57288932800293,
-    "p99_lat_ms": 9.588484764099121,
-    "rss_mb": 40009.328125,
-    "rss_after_setup_mb": 39697.06640625,
-    "hot_mb": 87.4344482421875,
-    "compressed_cold_mb": 0.0,
-    "compressed_on_disk_mb": 193.51897430419922,
-    "disk_decode": true,
-    "lru_mb": 63.28125,
-    "total_mem_mb": 150.7156982421875,
-    "hit_rate": 0.9993746091307066,
-    "demand_decomps": 8,
-    "avg_demand_per_batch": 0.0006253908692933083,
-    "prefetch_hits": 0,
-    "demand_time_ms": 381.05106353759766,
-    "compressed_mb": 193.51897430419922,
-    "orig_cold_mb": 1970.3767700195312,
-    "compression_ratio": 10.181827270964279,
-    "cache_capacity": 10,
-    "predictor": "none",
-    "lookahead_depth": 1,
-    "resolution": "4K",
-    "rows_per_frame": 518400,
-    "rss_trace": [
-      [
-        0,
-        39697.06640625
-      ],
-      [
-        500,
-        39741.8203125
-      ],
-      [
-        1000,
-        39833.09765625
-      ],
-      [
-        1500,
-        39950.30078125
-      ]
-    ]
-  },
-  "4K_pertable1_inmem": {
-    "auc": 0.7686134299547189,
-    "total_time": 49.71384644508362,
-    "num_batches": 1599,
-    "mean_lat_ms": 7.795045642721571,
-    "p50_lat_ms": 7.235050201416016,
-    "p99_lat_ms": 9.869723320007324,
-    "rss_mb": 40300.0234375,
-    "rss_after_setup_mb": 39825.90234375,
-    "hot_mb": 87.4344482421875,
-    "compressed_cold_mb": 193.51897430419922,
-    "compressed_on_disk_mb": 193.51897430419922,
-    "disk_decode": false,
-    "lru_mb": 253.125,
-    "total_mem_mb": 534.0784225463867,
-    "hit_rate": 0.9993746091307066,
-    "demand_decomps": 8,
-    "avg_demand_per_batch": 0.0006253908692933083,
-    "prefetch_hits": 0,
-    "demand_time_ms": 728.6169528961182,
-    "compressed_mb": 193.51897430419922,
-    "orig_cold_mb": 1970.3767700195312,
-    "compression_ratio": 10.181827270964279,
-    "cache_capacity": 1,
-    "predictor": "none",
-    "lookahead_depth": 1,
-    "resolution": "4K",
-    "rows_per_frame": 518400,
-    "rss_trace": [
-      [
-        0,
-        40020.08984375
-      ],
-      [
-        500,
-        40054.97265625
-      ],
-      [
-        1000,
-        40140.5703125
-      ],
-      [
-        1500,
-        40241.375
+        39829.26171875
       ]
     ]
   }
