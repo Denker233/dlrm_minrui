@@ -1,35 +1,35 @@
 {
   "A_baseline": {
     "auc": 0.7686130644508489,
-    "total_time": 51.02180600166321,
+    "total_time": 51.76524806022644,
     "num_batches": 1599,
-    "rss_mb": 41282.875,
-    "mean_lat_ms": 4.345431336766112,
-    "p50_lat_ms": 4.045248031616211,
-    "p99_lat_ms": 6.037483215332031,
+    "rss_mb": 41309.77734375,
+    "mean_lat_ms": 4.340106058746968,
+    "p50_lat_ms": 4.045724868774414,
+    "p99_lat_ms": 6.238059997558594,
     "emb_memory_mb": 2060.7041625976562
   },
-  "4K_g8_disk_fp32hot": {
-    "auc": 0.7686134299547189,
-    "total_time": 56.377596378326416,
+  "4K_g8_q8hot_bitmap": {
+    "auc": 0.7686186910463152,
+    "total_time": 55.90625500679016,
     "num_batches": 1599,
-    "mean_lat_ms": 6.759348625388274,
-    "p50_lat_ms": 6.444454193115234,
-    "p99_lat_ms": 9.557785987853999,
-    "rss_mb": 39894.8671875,
-    "rss_after_setup_mb": 39538.30078125,
-    "hot_mb": 87.4344482421875,
-    "mapping_mb": 128.61320114135742,
+    "mean_lat_ms": 7.113119600115902,
+    "p50_lat_ms": 6.462335586547852,
+    "p99_lat_ms": 15.37887096405028,
+    "rss_mb": 39917.13671875,
+    "rss_after_setup_mb": 39412.578125,
+    "hot_mb": 21.858612060546875,
+    "mapping_mb": 6.028812408447266,
     "compressed_cold_mb": 0.0,
     "compressed_on_disk_mb": 193.51897430419922,
     "disk_decode": true,
     "lru_mb": 63.28125,
-    "total_mem_mb": 279.3288993835449,
-    "hit_rate": 0.9993746091307066,
-    "demand_decomps": 8,
-    "avg_demand_per_batch": 0.0006253908692933083,
+    "total_mem_mb": 91.16867446899414,
+    "hit_rate": 1.0,
+    "demand_decomps": 0,
+    "avg_demand_per_batch": 0.0,
     "prefetch_hits": 0,
-    "demand_time_ms": 412.4619960784912,
+    "demand_time_ms": 0.0,
     "compressed_mb": 193.51897430419922,
     "orig_cold_mb": 1970.3767700195312,
     "compression_ratio": 10.181827270964279,
@@ -41,91 +41,43 @@
     "rss_trace": [
       [
         0,
-        39545.515625
+        39394.27734375
       ],
       [
         500,
-        39616.015625
+        39647.21875
       ],
       [
         1000,
-        39737.3515625
+        39761.48828125
       ],
       [
         1500,
-        39837.35546875
+        39858.6953125
       ]
     ]
   },
-  "4K_g8_disk_q8hot": {
+  "1080p_g32_q8hot_bitmap": {
     "auc": 0.7686186910463152,
-    "total_time": 53.624807596206665,
+    "total_time": 54.269006967544556,
     "num_batches": 1599,
-    "mean_lat_ms": 6.767494817164781,
-    "p50_lat_ms": 6.25157356262207,
-    "p99_lat_ms": 9.674243927001951,
-    "rss_mb": 39827.78515625,
-    "rss_after_setup_mb": 39727.54296875,
+    "mean_lat_ms": 7.035166714771455,
+    "p50_lat_ms": 6.108999252319336,
+    "p99_lat_ms": 23.447070121765133,
+    "rss_mb": 40029.99609375,
+    "rss_after_setup_mb": 39640.25390625,
     "hot_mb": 21.858612060546875,
-    "mapping_mb": 128.61320114135742,
-    "compressed_cold_mb": 0.0,
-    "compressed_on_disk_mb": 193.51897430419922,
-    "disk_decode": true,
-    "lru_mb": 63.28125,
-    "total_mem_mb": 213.7530632019043,
-    "hit_rate": 0.9993746091307066,
-    "demand_decomps": 8,
-    "avg_demand_per_batch": 0.0006253908692933083,
-    "prefetch_hits": 0,
-    "demand_time_ms": 384.9050998687744,
-    "compressed_mb": 193.51897430419922,
-    "orig_cold_mb": 1970.3767700195312,
-    "compression_ratio": 10.181827270964279,
-    "cache_capacity": 8,
-    "predictor": "none",
-    "lookahead_depth": 1,
-    "resolution": "4K",
-    "rows_per_frame": 518400,
-    "rss_trace": [
-      [
-        0,
-        39633.80078125
-      ],
-      [
-        500,
-        39689.4765625
-      ],
-      [
-        1000,
-        39752.46875
-      ],
-      [
-        1500,
-        39815.3203125
-      ]
-    ]
-  },
-  "1080p_g32_disk_q8hot": {
-    "auc": 0.7686186910463152,
-    "total_time": 50.31702494621277,
-    "num_batches": 1599,
-    "mean_lat_ms": 6.581308992301173,
-    "p50_lat_ms": 6.247997283935547,
-    "p99_lat_ms": 12.864685058593732,
-    "rss_mb": 39976.484375,
-    "rss_after_setup_mb": 39825.0546875,
-    "hot_mb": 21.858612060546875,
-    "mapping_mb": 128.61320114135742,
+    "mapping_mb": 6.028812408447266,
     "compressed_cold_mb": 0.0,
     "compressed_on_disk_mb": 195.92793560028076,
     "disk_decode": true,
     "lru_mb": 43.505859375,
-    "total_mem_mb": 193.9776725769043,
-    "hit_rate": 0.9984071821604402,
-    "demand_decomps": 22,
-    "avg_demand_per_batch": 0.0017198248905565979,
+    "total_mem_mb": 71.39328384399414,
+    "hit_rate": 0.9989863886475528,
+    "demand_decomps": 14,
+    "avg_demand_per_batch": 0.0010944340212632896,
     "prefetch_hits": 0,
-    "demand_time_ms": 376.0957717895508,
+    "demand_time_ms": 225.42428970336914,
     "compressed_mb": 195.92793560028076,
     "orig_cold_mb": 1970.3767700195312,
     "compression_ratio": 10.056640284514424,
@@ -137,127 +89,79 @@
     "rss_trace": [
       [
         0,
-        39762.16015625
+        39639.42578125
       ],
       [
         500,
-        39812.8125
+        39887.30859375
       ],
       [
         1000,
-        39875.96484375
+        39952.2578125
       ],
       [
         1500,
-        39939.05859375
+        40016.5625
       ]
     ]
   },
-  "1080p_g32_disk_fp32hot": {
-    "auc": 0.7686134299547189,
-    "total_time": 48.25389552116394,
-    "num_batches": 1599,
-    "mean_lat_ms": 6.387218823650616,
-    "p50_lat_ms": 6.070852279663086,
-    "p99_lat_ms": 9.854717254638652,
-    "rss_mb": 40015.9375,
-    "rss_after_setup_mb": 39821.68359375,
-    "hot_mb": 87.4344482421875,
-    "mapping_mb": 128.61320114135742,
-    "compressed_cold_mb": 0.0,
-    "compressed_on_disk_mb": 195.92793560028076,
-    "disk_decode": true,
-    "lru_mb": 43.505859375,
-    "total_mem_mb": 259.5535087585449,
-    "hit_rate": 0.9984071821604402,
-    "demand_decomps": 22,
-    "avg_demand_per_batch": 0.0017198248905565979,
-    "prefetch_hits": 0,
-    "demand_time_ms": 385.84113121032715,
-    "compressed_mb": 195.92793560028076,
-    "orig_cold_mb": 1970.3767700195312,
-    "compression_ratio": 10.056640284514424,
-    "cache_capacity": 32,
-    "predictor": "none",
-    "lookahead_depth": 1,
-    "resolution": "1080p",
-    "rows_per_frame": 129600,
-    "rss_trace": [
-      [
-        0,
-        39822.18359375
-      ],
-      [
-        500,
-        39877.71484375
-      ],
-      [
-        1000,
-        39940.61328125
-      ],
-      [
-        1500,
-        40003.51171875
-      ]
-    ]
-  },
-  "1080p_g32_disk_q8hot_hash": {
+  "480p_g64_q8hot_bitmap": {
     "auc": 0.7686186910463152,
-    "total_time": 48.99101161956787,
+    "total_time": 50.85906791687012,
     "num_batches": 1599,
-    "mean_lat_ms": 7.24993279906196,
-    "p50_lat_ms": 6.045341491699219,
-    "p99_lat_ms": 23.26655387878417,
-    "rss_mb": 40202.31640625,
-    "rss_after_setup_mb": 39888.08984375,
+    "mean_lat_ms": 7.884542221870924,
+    "p50_lat_ms": 6.844758987426758,
+    "p99_lat_ms": 17.357816696166985,
+    "rss_mb": 40162.81640625,
+    "rss_after_setup_mb": 39714.1328125,
     "hot_mb": 21.858612060546875,
-    "mapping_mb": 24.75,
+    "mapping_mb": 6.028812408447266,
     "compressed_cold_mb": 0.0,
-    "compressed_on_disk_mb": 195.92793560028076,
+    "compressed_on_disk_mb": 202.29011726379395,
     "disk_decode": true,
-    "lru_mb": 43.505859375,
-    "total_mem_mb": 90.11447143554688,
-    "hit_rate": 0.9984071821604402,
-    "demand_decomps": 22,
-    "avg_demand_per_batch": 0.0017198248905565979,
+    "lru_mb": 18.75,
+    "total_mem_mb": 46.63742446899414,
+    "hit_rate": 0.9965403517847905,
+    "demand_decomps": 107,
+    "avg_demand_per_batch": 0.008364602876798,
     "prefetch_hits": 0,
-    "demand_time_ms": 403.4419059753418,
-    "compressed_mb": 195.92793560028076,
+    "demand_time_ms": 633.9173316955566,
+    "compressed_mb": 202.29011726379395,
     "orig_cold_mb": 1970.3767700195312,
-    "compression_ratio": 10.056640284514424,
-    "cache_capacity": 32,
+    "compression_ratio": 9.74035111883437,
+    "cache_capacity": 64,
     "predictor": "none",
     "lookahead_depth": 1,
-    "resolution": "1080p",
-    "rows_per_frame": 129600,
+    "resolution": "480p",
+    "rows_per_frame": 19200,
     "rss_trace": [
       [
         0,
-        39887.7421875
+        39751.953125
       ],
       [
         500,
-        40118.46875
+        39995.296875
       ],
       [
         1000,
-        40187.62109375
+        40060.1484375
       ],
       [
         1500,
-        40251.93359375
+        40124.5390625
       ]
     ]
   },
-  "4K_g8_disk_q8hot_hash": {
+  "4K_g8_q8hot_hash": {
     "auc": 0.7686186910463152,
-    "total_time": 47.89116454124451,
+    "total_time": 46.4818959236145,
     "num_batches": 1599,
-    "mean_lat_ms": 7.127925259683787,
-    "p50_lat_ms": 5.994081497192383,
-    "p99_lat_ms": 13.80960464477537,
-    "rss_mb": 40202.3828125,
-    "rss_after_setup_mb": 39790.33203125,
+    "mean_lat_ms": 6.481532233442792,
+    "p50_lat_ms": 5.835056304931641,
+    "p99_lat_ms": 11.358647346496545,
+    "rss_mb": 40162.75,
+    "rss_after_setup_mb": 39745.25390625,
     "hot_mb": 21.858612060546875,
     "mapping_mb": 24.75,
     "compressed_cold_mb": 0.0,
@@ -265,11 +169,11 @@
     "disk_decode": true,
     "lru_mb": 63.28125,
     "total_mem_mb": 109.88986206054688,
-    "hit_rate": 0.9993746091307066,
-    "demand_decomps": 8,
-    "avg_demand_per_batch": 0.0006253908692933083,
+    "hit_rate": 1.0,
+    "demand_decomps": 0,
+    "avg_demand_per_batch": 0.0,
     "prefetch_hits": 0,
-    "demand_time_ms": 363.24429512023926,
+    "demand_time_ms": 0.0,
     "compressed_mb": 193.51897430419922,
     "orig_cold_mb": 1970.3767700195312,
     "compression_ratio": 10.181827270964279,
@@ -281,19 +185,67 @@
     "rss_trace": [
       [
         0,
-        39831.390625
+        39785.17578125
       ],
       [
         500,
-        40060.0390625
+        40020.30859375
       ],
       [
         1000,
-        40124.8125
+        40085.19140625
       ],
       [
         1500,
-        40189.1640625
+        40149.453125
+      ]
+    ]
+  },
+  "1080p_g32_q8hot": {
+    "auc": 0.7686186910463152,
+    "total_time": 47.62423300743103,
+    "num_batches": 1599,
+    "mean_lat_ms": 6.270721452246613,
+    "p50_lat_ms": 6.032466888427734,
+    "p99_lat_ms": 10.339727401733393,
+    "rss_mb": 39900.80078125,
+    "rss_after_setup_mb": 39712.66015625,
+    "hot_mb": 21.858612060546875,
+    "mapping_mb": 128.61320114135742,
+    "compressed_cold_mb": 0.0,
+    "compressed_on_disk_mb": 195.92793560028076,
+    "disk_decode": true,
+    "lru_mb": 43.505859375,
+    "total_mem_mb": 193.9776725769043,
+    "hit_rate": 0.9989863886475528,
+    "demand_decomps": 14,
+    "avg_demand_per_batch": 0.0010944340212632896,
+    "prefetch_hits": 0,
+    "demand_time_ms": 222.46623039245605,
+    "compressed_mb": 195.92793560028076,
+    "orig_cold_mb": 1970.3767700195312,
+    "compression_ratio": 10.056640284514424,
+    "cache_capacity": 32,
+    "predictor": "none",
+    "lookahead_depth": 1,
+    "resolution": "1080p",
+    "rows_per_frame": 129600,
+    "rss_trace": [
+      [
+        0,
+        39712.66015625
+      ],
+      [
+        500,
+        39761.16796875
+      ],
+      [
+        1000,
+        39824.0703125
+      ],
+      [
+        1500,
+        39886.984375
       ]
     ]
   }
