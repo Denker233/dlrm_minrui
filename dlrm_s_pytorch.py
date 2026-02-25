@@ -924,22 +924,25 @@ class DLRM_Net(nn.Module):
         if self.arch_interaction_op == "dot":
             # concatenate dense and sparse features
             (batch_size, d) = x.shape
-            T = torch.cat([x] + ly, dim=1).view((batch_size, -1, d))
+            if isinstance(ly, torch.Tensor) and ly.dim() == 3:
+                # Stacked [T, B, D] tensor from full C++ mode — avoid 26-tensor cat
+                T = torch.cat([x.unsqueeze(0), ly], dim=0)  # [T+1, B, D]
+                T = T.permute(1, 0, 2).contiguous()  # [B, T+1, D]
+            else:
+                T = torch.cat([x] + ly, dim=1).view((batch_size, -1, d))
             # perform a dot product
             Z = torch.bmm(T, torch.transpose(T, 1, 2))
             # append dense feature with the interactions (into a row vector)
-            # approach 1: all
-            # Zflat = Z.view((batch_size, -1))
-            # approach 2: unique
             _, ni, nj = Z.shape
-            # approach 1: tril_indices
-            # offset = 0 if self.arch_interaction_itself else -1
-            # li, lj = torch.tril_indices(ni, nj, offset=offset)
-            # approach 2: custom
-            offset = 1 if self.arch_interaction_itself else 0
-            li = torch.tensor([i for i in range(ni) for j in range(i + offset)])
-            lj = torch.tensor([j for i in range(nj) for j in range(i + offset)])
-            Zflat = Z[:, li, lj]
+            # Cache tril indices (computed once, reused every batch)
+            if not hasattr(self, '_tril_li') or self._tril_ni != ni:
+                offset = 1 if self.arch_interaction_itself else 0
+                li = torch.tensor([i for i in range(ni) for j in range(i + offset)])
+                lj = torch.tensor([j for i in range(nj) for j in range(i + offset)])
+                self._tril_li = li
+                self._tril_lj = lj
+                self._tril_ni = ni
+            Zflat = Z[:, self._tril_li, self._tril_lj]
             # concatenate dense features and interactions
             R = torch.cat([x] + [Zflat], dim=1)
         elif self.arch_interaction_op == "cat":
@@ -1066,12 +1069,12 @@ class DLRM_Net(nn.Module):
         # print("intermediate")
         # print(x.detach().cpu().numpy())
 
-        # start_time = time.time()
+        start_time = time.time()
         # process sparse features(using embeddings), resulting in a list of row vectors
         ly = self.apply_emb(lS_o, lS_i, self.emb_l, self.v_W_l)
-        # end_time = time.time()
-        # elapsed_time = end_time - start_time
-        # self.time_look_up += elapsed_time
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        self.time_look_up += elapsed_time
         # for y in ly:
         #     print(y.detach().cpu().numpy())
 

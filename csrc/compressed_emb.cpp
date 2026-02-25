@@ -1616,9 +1616,9 @@ std::vector<torch::Tensor> fast_forward(
     });
 
     // Pack results as views into pre-allocated buffers
-    // [output_0, ..., output_{T-1}, cold_mask_0, ..., cold_mask_{T-1}, cc_0, ..., cc_{T-1}]
+    // [output_0, ..., output_{T-1}, cold_mask_0, ..., cold_mask_{T-1}, cc_0, ..., cc_{T-1}, stacked_3d]
     std::vector<torch::Tensor> results;
-    results.reserve(T * 3);
+    results.reserve(T * 3 + 1);
     // Reshape and slice outputs
     auto outputs_3d = all_outputs.view({T, B, D});
     for (int64_t t = 0; t < T; t++)
@@ -1633,6 +1633,8 @@ std::vector<torch::Tensor> fast_forward(
     // Cold counts as scalar tensors
     for (int64_t t = 0; t < T; t++)
         results.push_back(torch::tensor(cold_counts[t], torch::dtype(torch::kLong)));
+    // Stacked [T, B, D] output for direct use in interact (avoids 26-tensor cat)
+    results.push_back(outputs_3d);
     return results;
 }
 

@@ -1,0 +1,368 @@
+[15:30:41] ======================================================================
+[15:30:41] TRUE ON-DEMAND H.265 CODEC BENCHMARK
+[15:30:41] Per-frame files, proper video resolution, no pre-decode
+[15:30:41] ======================================================================
+[15:30:41] RSS at start: 600MB
+Unable to import mlperf_logging,  No module named 'mlperf_logging'
+Unable to import onnx.  No module named 'onnx'
+[15:30:41] Loading dataset...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+[15:32:48] Loading model checkpoint...
+[15:32:53] Model loaded. 26 tables, emb_dim=16
+[15:32:54] Tables: 26, Large: [2, 3, 9, 11, 15, 20, 23, 25]
+[15:32:54] C++ extension: ENABLED
+[15:32:54] Total embedding memory: 2060.7MB
+[15:32:54] 
+Loading existing profiling and hot/cold data...
+[15:32:55] Loaded profiling, hot/cold, and reorder data.
+[15:32:55] 
+Encoding for 480p SKIPPED — already done
+[15:32:55] 
+Encoding for 1080p SKIPPED — already done
+[15:32:55] 
+Encoding for 4K SKIPPED — already done
+[15:32:55] 
+======================================================================
+[15:32:55] INFERENCE BENCHMARKS — True On-Demand Decode
+[15:32:55] ======================================================================
+[15:32:55] Pre-caching test batches...
+/home/cc/expr/dlrm_minrui/dlrm_data_pytorch.py:328: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor. (Triggered internally at /pytorch/torch/csrc/utils/tensor_new.cpp:253.)
+  X_int = torch.log(torch.tensor(transposed_data[0], dtype=torch.float) + 1)
+[15:33:40] Pre-cached 1599 batches in 44.6s
+[15:33:40] 
+--- Baseline: Full fp32 ---
+[15:33:43]     Batch 0
+[15:33:45]     Batch 500
+[15:33:48]     Batch 1000
+[15:33:50]     Batch 1500
+[15:33:51]   AUC=0.768613, Time=7.96s, RSS=42985MB
+[15:33:51]   Batch latency: mean=4.94ms, p50=4.85ms, p99=7.04ms
+[15:33:51]   Forward breakdown: emb=4.04ms, interact=2.36ms, mlp=1.68ms
+[15:33:51] 
+======================================================================
+[15:33:51] EXPERIMENTS: v22 — fast inference loop (pre-cached batches + numpy scores)
+[15:33:51] ======================================================================
+[15:33:51] 
+--- 1080p_g32_q8hot_fullcpp: 1080p, cache=32 (GLOBAL), decode=disk, predictor=none ---
+[15:33:52]   Global cache: 32 frames total across all tables (uint8, ~63.3MB) [full_cpp: unlimited capacity for pre-decode]
+[15:33:52]   Table 2: using global cache (75 frames, 2025.0KB/frame uint8)
+[15:33:52]   Table 3: using global cache (17 frames, 2025.0KB/frame uint8)
+[15:33:52]   Table 9: using global cache (1 frames, 2025.0KB/frame uint8)
+[15:33:52]   Table 11: using global cache (62 frames, 2025.0KB/frame uint8)
+[15:33:52]   Table 15: using global cache (41 frames, 2025.0KB/frame uint8)
+[15:33:52]   Table 20: using global cache (53 frames, 2025.0KB/frame uint8)
+[15:33:52]   Table 23: using global cache (3 frames, 2025.0KB/frame uint8)
+[15:33:52]   Table 25: using global cache (2 frames, 2025.0KB/frame uint8)
+[15:33:55]   Memory: hot=21.9MB + compressed_cold=0 (on disk) = 21.9MB (vs 2060.7MB full fp32)
+[15:33:55]   RSS after setup: 41245MB
+[15:33:55]   Fast apply_emb enabled (C++ fast_forward, zero Python loop overhead)
+[15:33:57]   Warming up cache (1 batches)...
+[15:33:58]   Cache warmed (8 frames loaded)
+[15:33:58]   Scanning all batches for cold frame coverage...
+[15:33:59]   Found 22 unique cold frames across all batches (1.4s)
+[15:33:59]   All cold frames loaded: 22 frames in global cache
+[15:33:59]   Registering cold frames in C++ for full C++ cold lookup...
+[C++] Table 2: registered 4 cold frames (7 MB uint8), rows_per_frame=129600, scale=0.000190, zp=144.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000194, zp=133.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000113, zp=133.0
+[C++] Table 11: registered 4 cold frames (7 MB uint8), rows_per_frame=129600, scale=0.000128, zp=125.0
+[C++] Table 15: registered 4 cold frames (7 MB uint8), rows_per_frame=129600, scale=0.000104, zp=122.0
+[C++] Table 20: registered 4 cold frames (7 MB uint8), rows_per_frame=129600, scale=0.000055, zp=121.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000306, zp=118.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000219, zp=118.0
+[15:33:59]   Cold frames registered: 43.5MB uint8
+[15:33:59]   Full C++ apply_emb enabled (zero Python cold overhead, stacked output)
+[15:33:59]     Batch 0: lat=6.0ms, RSS=41259MB
+[15:34:00]     Batch 500: lat=2.4ms, RSS=41260MB
+[15:34:02]     Batch 1000: lat=2.4ms, RSS=41260MB
+[15:34:03]     Batch 1500: lat=2.5ms, RSS=41260MB
+[15:34:04]   AUC=0.768619, Time=4.11s, RSS=41283MB
+[15:34:04]   Hit rate=0.0%, Demand=0 (0.0/batch), Prefetch hits=0, Demand time=0ms
+[15:34:04]   Compression: 1970.4MB fp32 -> 195.9MB (10.1x)
+[15:34:04]   LRU cache: 0 frames = 43.5MB
+[15:34:04]   Mapping: 128.6MB (merged int32)
+[15:34:04]   Total memory: hot=21.9 + cold=0.0 + lru=43.5 + map=128.6 = 194.0MB (vs 2060.7MB baseline, 10.6x)
+[15:34:04]   Batch latency: mean=2.54ms
+[15:34:04]   Forward breakdown: emb=0.48ms, interact=1.17ms, mlp=1.59ms
+[15:34:04]   Table 2 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:04]   Table 3 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:04]   Table 9 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:04]   Table 11 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:04]   Table 15 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:04]   Table 20 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:04]   Table 23 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:04]   Table 25 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:04]   GlobalCache: 22/9999 frames, 34.8% hit rate, 0 evictions
+[15:34:06] 
+--- 1080p_g32_q8hot_bitmap_fullcpp: 1080p, cache=32 (GLOBAL), decode=disk, predictor=none ---
+[15:34:06]   Global cache: 32 frames total across all tables (uint8, ~63.3MB) [full_cpp: unlimited capacity for pre-decode]
+[15:34:06]   Table 2: using global cache (75 frames, 2025.0KB/frame uint8)
+[15:34:06]   Table 3: using global cache (17 frames, 2025.0KB/frame uint8)
+[15:34:06]   Table 9: using global cache (1 frames, 2025.0KB/frame uint8)
+[15:34:06]   Table 11: using global cache (62 frames, 2025.0KB/frame uint8)
+[15:34:06]   Table 15: using global cache (41 frames, 2025.0KB/frame uint8)
+[15:34:06]   Table 20: using global cache (53 frames, 2025.0KB/frame uint8)
+[15:34:06]   Table 23: using global cache (3 frames, 2025.0KB/frame uint8)
+[15:34:06]   Table 25: using global cache (2 frames, 2025.0KB/frame uint8)
+[15:34:08]   Memory: hot=21.9MB + compressed_cold=0 (on disk) = 21.9MB (vs 2060.7MB full fp32)
+[15:34:08]   RSS after setup: 41547MB
+[C++] Bitmap-rank built: 6.0 MB total
+[15:34:09]   Bitmap-rank mode: mapping tensors released, cold lookup via mmap
+[15:34:09]   Fast apply_emb enabled (C++ fast_forward, zero Python loop overhead)
+[15:34:11]   Warming up cache (1 batches)...
+[15:34:12]   Cache warmed (8 frames loaded)
+[15:34:12]   Scanning all batches for cold frame coverage...
+[15:34:13]   Found 22 unique cold frames across all batches (1.3s)
+[15:34:14]   All cold frames loaded: 22 frames in global cache
+[15:34:14]   Registering cold frames in C++ for full C++ cold lookup...
+[C++] Table 2: registered 4 cold frames (7 MB uint8), rows_per_frame=129600, scale=0.000190, zp=144.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000194, zp=133.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000113, zp=133.0
+[C++] Table 11: registered 4 cold frames (7 MB uint8), rows_per_frame=129600, scale=0.000128, zp=125.0
+[C++] Table 15: registered 4 cold frames (7 MB uint8), rows_per_frame=129600, scale=0.000104, zp=122.0
+[C++] Table 20: registered 4 cold frames (7 MB uint8), rows_per_frame=129600, scale=0.000055, zp=121.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000306, zp=118.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000219, zp=118.0
+[15:34:14]   Cold frames registered: 43.5MB uint8
+[15:34:14]   Full C++ apply_emb enabled (zero Python cold overhead, stacked output)
+[15:34:14]     Batch 0: lat=6.1ms, RSS=41518MB
+[15:34:16]     Batch 500: lat=2.4ms, RSS=41518MB
+[15:34:17]     Batch 1000: lat=2.4ms, RSS=41518MB
+[15:34:18]     Batch 1500: lat=2.4ms, RSS=41518MB
+[15:34:19]   AUC=0.768619, Time=3.91s, RSS=41546MB
+[15:34:19]   Hit rate=0.0%, Demand=0 (0.0/batch), Prefetch hits=0, Demand time=0ms
+[15:34:19]   Compression: 1970.4MB fp32 -> 195.9MB (10.1x)
+[15:34:19]   LRU cache: 0 frames = 43.5MB
+[15:34:19]   Bitmap-rank: 134.6MB (vs 128.6MB mapping)
+[15:34:19]   Total memory: hot=21.9 + cold=0.0 + lru=43.5 + map=134.6 = 200.0MB (vs 2060.7MB baseline, 10.3x)
+[15:34:19]   Batch latency: mean=2.42ms
+[15:34:19]   Forward breakdown: emb=0.59ms, interact=1.27ms, mlp=1.52ms
+[15:34:19]   Table 2 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:19]   Table 3 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:19]   Table 9 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:19]   Table 11 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:19]   Table 15 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:19]   Table 20 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:19]   Table 23 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:19]   Table 25 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:19]   GlobalCache: 22/9999 frames, 34.8% hit rate, 0 evictions
+[15:34:22] 
+--- 4K_g8_q8hot_fullcpp: 4K, cache=8 (GLOBAL), decode=disk, predictor=none ---
+[15:34:22]   Global cache: 8 frames total across all tables (uint8, ~63.3MB) [full_cpp: unlimited capacity for pre-decode]
+[15:34:22]   Table 2: using global cache (19 frames, 8100.0KB/frame uint8)
+[15:34:22]   Table 3: using global cache (5 frames, 8100.0KB/frame uint8)
+[15:34:22]   Table 9: using global cache (1 frames, 8100.0KB/frame uint8)
+[15:34:22]   Table 11: using global cache (16 frames, 8100.0KB/frame uint8)
+[15:34:22]   Table 15: using global cache (11 frames, 8100.0KB/frame uint8)
+[15:34:22]   Table 20: using global cache (14 frames, 8100.0KB/frame uint8)
+[15:34:22]   Table 23: using global cache (1 frames, 8100.0KB/frame uint8)
+[15:34:22]   Table 25: using global cache (1 frames, 8100.0KB/frame uint8)
+[15:34:24]   Memory: hot=21.9MB + compressed_cold=0 (on disk) = 21.9MB (vs 2060.7MB full fp32)
+[15:34:24]   RSS after setup: 41607MB
+[15:34:24]   Fast apply_emb enabled (C++ fast_forward, zero Python loop overhead)
+[15:34:26]   Warming up cache (1 batches)...
+[15:34:27]   Cache warmed (8 frames loaded)
+[15:34:27]   Scanning all batches for cold frame coverage...
+[15:34:28]   Found 8 unique cold frames across all batches (1.3s)
+[15:34:28]   All cold frames loaded: 8 frames in global cache
+[15:34:28]   Registering cold frames in C++ for full C++ cold lookup...
+[C++] Table 2: registered 1 cold frames (7 MB uint8), rows_per_frame=518400, scale=0.000190, zp=144.0
+[C++] Table 3: registered 1 cold frames (7 MB uint8), rows_per_frame=518400, scale=0.000194, zp=133.0
+[C++] Table 9: registered 1 cold frames (7 MB uint8), rows_per_frame=518400, scale=0.000113, zp=133.0
+[C++] Table 11: registered 1 cold frames (7 MB uint8), rows_per_frame=518400, scale=0.000128, zp=125.0
+[C++] Table 15: registered 1 cold frames (7 MB uint8), rows_per_frame=518400, scale=0.000104, zp=122.0
+[C++] Table 20: registered 1 cold frames (7 MB uint8), rows_per_frame=518400, scale=0.000055, zp=121.0
+[C++] Table 23: registered 1 cold frames (7 MB uint8), rows_per_frame=518400, scale=0.000306, zp=118.0
+[C++] Table 25: registered 1 cold frames (7 MB uint8), rows_per_frame=518400, scale=0.000219, zp=118.0
+[15:34:28]   Cold frames registered: 63.3MB uint8
+[15:34:28]   Full C++ apply_emb enabled (zero Python cold overhead, stacked output)
+[15:34:28]     Batch 0: lat=5.0ms, RSS=41612MB
+[15:34:29]     Batch 500: lat=2.4ms, RSS=41618MB
+[15:34:30]     Batch 1000: lat=2.3ms, RSS=41618MB
+[15:34:32]     Batch 1500: lat=3.3ms, RSS=41618MB
+[15:34:33]   AUC=0.768619, Time=4.25s, RSS=41641MB
+[15:34:33]   Hit rate=0.0%, Demand=0 (0.0/batch), Prefetch hits=0, Demand time=0ms
+[15:34:33]   Compression: 1970.4MB fp32 -> 193.5MB (10.2x)
+[15:34:33]   LRU cache: 0 frames = 63.3MB
+[15:34:33]   Mapping: 128.6MB (merged int32)
+[15:34:33]   Total memory: hot=21.9 + cold=0.0 + lru=63.3 + map=128.6 = 213.8MB (vs 2060.7MB baseline, 9.6x)
+[15:34:33]   Batch latency: mean=2.62ms
+[15:34:33]   Forward breakdown: emb=0.51ms, interact=1.32ms, mlp=1.64ms
+[15:34:33]   Table 2 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:33]   Table 3 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:33]   Table 9 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:33]   Table 11 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:33]   Table 15 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:33]   Table 20 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:33]   Table 23 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:33]   Table 25 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:33]   GlobalCache: 8/9999 frames, 50.0% hit rate, 0 evictions
+[15:34:37] 
+--- 480p_g64_q8hot_bitmap_fullcpp: 480p, cache=64 (GLOBAL), decode=disk, predictor=none ---
+[15:34:37]   Global cache: 64 frames total across all tables (uint8, ~18.8MB) [full_cpp: unlimited capacity for pre-decode]
+[15:34:37]   Table 2: using global cache (502 frames, 300.0KB/frame uint8)
+[15:34:37]   Table 3: using global cache (113 frames, 300.0KB/frame uint8)
+[15:34:37]   Table 9: using global cache (5 frames, 300.0KB/frame uint8)
+[15:34:37]   Table 11: using global cache (415 frames, 300.0KB/frame uint8)
+[15:34:37]   Table 15: using global cache (275 frames, 300.0KB/frame uint8)
+[15:34:37]   Table 20: using global cache (352 frames, 300.0KB/frame uint8)
+[15:34:37]   Table 23: using global cache (15 frames, 300.0KB/frame uint8)
+[15:34:37]   Table 25: using global cache (8 frames, 300.0KB/frame uint8)
+[15:34:42]   Memory: hot=21.9MB + compressed_cold=0 (on disk) = 21.9MB (vs 2060.7MB full fp32)
+[15:34:42]   RSS after setup: 41633MB
+[C++] Bitmap-rank built: 6.0 MB total
+[15:34:44]   Bitmap-rank mode: mapping tensors released, cold lookup via mmap
+[15:34:44]   Fast apply_emb enabled (C++ fast_forward, zero Python loop overhead)
+[15:34:47]   Warming up cache (1 batches)...
+[15:34:47]   Cache warmed (8 frames loaded)
+[15:34:47]   Scanning all batches for cold frame coverage...
+[15:34:49]   Found 115 unique cold frames across all batches (1.5s)
+[15:34:49]   All cold frames loaded: 115 frames in global cache
+[15:34:49]   Registering cold frames in C++ for full C++ cold lookup...
+[C++] Table 2: registered 24 cold frames (7 MB uint8), rows_per_frame=19200, scale=0.000190, zp=144.0
+[C++] Table 3: registered 15 cold frames (4 MB uint8), rows_per_frame=19200, scale=0.000194, zp=133.0
+[C++] Table 9: registered 3 cold frames (0 MB uint8), rows_per_frame=19200, scale=0.000113, zp=133.0
+[C++] Table 11: registered 23 cold frames (6 MB uint8), rows_per_frame=19200, scale=0.000128, zp=125.0
+[C++] Table 15: registered 21 cold frames (6 MB uint8), rows_per_frame=19200, scale=0.000104, zp=122.0
+[C++] Table 20: registered 22 cold frames (6 MB uint8), rows_per_frame=19200, scale=0.000055, zp=121.0
+[C++] Table 23: registered 4 cold frames (1 MB uint8), rows_per_frame=19200, scale=0.000306, zp=118.0
+[C++] Table 25: registered 3 cold frames (0 MB uint8), rows_per_frame=19200, scale=0.000219, zp=118.0
+[15:34:50]   Cold frames registered: 33.7MB uint8
+[15:34:50]   Full C++ apply_emb enabled (zero Python cold overhead, stacked output)
+[15:34:50]     Batch 0: lat=5.9ms, RSS=41571MB
+[15:34:51]     Batch 500: lat=2.5ms, RSS=41571MB
+[15:34:53]     Batch 1000: lat=2.5ms, RSS=41571MB
+[15:34:54]     Batch 1500: lat=2.5ms, RSS=41571MB
+[15:34:55]   AUC=0.768619, Time=4.13s, RSS=41571MB
+[15:34:55]   Hit rate=0.0%, Demand=0 (0.0/batch), Prefetch hits=0, Demand time=0ms
+[15:34:55]   Compression: 1970.4MB fp32 -> 202.3MB (9.7x)
+[15:34:55]   LRU cache: 0 frames = 33.7MB
+[15:34:55]   Bitmap-rank: 134.6MB (vs 128.6MB mapping)
+[15:34:55]   Total memory: hot=21.9 + cold=0.0 + lru=33.7 + map=134.6 = 190.2MB (vs 2060.7MB baseline, 10.8x)
+[15:34:55]   Batch latency: mean=2.55ms
+[15:34:55]   Forward breakdown: emb=0.52ms, interact=1.41ms, mlp=1.58ms
+[15:34:55]   Table 2 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:55]   Table 3 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:55]   Table 9 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:55]   Table 11 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:55]   Table 15 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:55]   Table 20 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:55]   Table 23 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:55]   Table 25 Cache: 0.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:34:55]   GlobalCache: 115/9999 frames, 11.5% hit rate, 0 evictions
+[15:34:59] 
+======================================================================
+[15:34:59] EXPERIMENTS: Reference baselines
+[15:34:59] ======================================================================
+[15:34:59] 
+--- 1080p_g32_q8hot_bitmap: 1080p, cache=32 (GLOBAL), decode=disk, predictor=none ---
+[15:34:59]   Global cache: 32 frames total across all tables (uint8, ~63.3MB)
+[15:34:59]   Table 2: using global cache (75 frames, 2025.0KB/frame uint8)
+[15:34:59]   Table 3: using global cache (17 frames, 2025.0KB/frame uint8)
+[15:34:59]   Table 9: using global cache (1 frames, 2025.0KB/frame uint8)
+[15:34:59]   Table 11: using global cache (62 frames, 2025.0KB/frame uint8)
+[15:34:59]   Table 15: using global cache (41 frames, 2025.0KB/frame uint8)
+[15:34:59]   Table 20: using global cache (53 frames, 2025.0KB/frame uint8)
+[15:34:59]   Table 23: using global cache (3 frames, 2025.0KB/frame uint8)
+[15:34:59]   Table 25: using global cache (2 frames, 2025.0KB/frame uint8)
+[15:35:01]   Memory: hot=21.9MB + compressed_cold=0 (on disk) = 21.9MB (vs 2060.7MB full fp32)
+[15:35:01]   RSS after setup: 41585MB
+[C++] Bitmap-rank built: 6.0 MB total
+[15:35:03]   Bitmap-rank mode: mapping tensors released, cold lookup via mmap
+[15:35:03]   Fast apply_emb enabled (C++ fast_forward, zero Python loop overhead)
+[15:35:07]   Warming up cache (1 batches)...
+[15:35:08]   Cache warmed (8 frames loaded)
+[15:35:08]     Batch 0: lat=8.7ms, RSS=41632MB
+[15:35:12]     Batch 500: lat=6.1ms, RSS=41817MB
+[15:35:15]     Batch 1000: lat=5.5ms, RSS=41819MB
+[15:35:18]     Batch 1500: lat=6.3ms, RSS=41821MB
+[15:35:20]   AUC=0.768619, Time=10.88s, RSS=41822MB
+[15:35:20]   Hit rate=99.9%, Demand=14 (0.0/batch), Prefetch hits=0, Demand time=240ms
+[15:35:20]   Compression: 1970.4MB fp32 -> 195.9MB (10.1x)
+[15:35:20]   LRU cache: 22 frames = 43.5MB
+[15:35:20]   Bitmap-rank: 6.0MB (vs 128.6MB mapping)
+[15:35:20]   Total memory: hot=21.9 + cold=0.0 + lru=43.5 + map=6.0 = 71.4MB (vs 2060.7MB baseline, 28.9x)
+[15:35:20]   Batch latency: mean=6.73ms
+[15:35:20]   Forward breakdown: emb=4.00ms, interact=2.77ms, mlp=1.63ms
+[15:35:20]   Table 2 Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=48ms
+[15:35:20]   Table 3 Cache: 99.9% hit | demand=2 (0.0/batch) | prefetch_hits=0 | demand_time=33ms
+[15:35:20]   Table 9 Cache: 100.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:35:20]   Table 11 Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=54ms
+[15:35:20]   Table 15 Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=51ms
+[15:35:20]   Table 20 Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=54ms
+[15:35:20]   Table 23 Cache: 100.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:35:20]   Table 25 Cache: 100.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:35:20]   GlobalCache: 22/32 frames, 99.8% hit rate, 0 evictions
+[15:35:23] 
+--- 1080p_g32_q8hot: 1080p, cache=32 (GLOBAL), decode=disk, predictor=none ---
+[15:35:23]   Global cache: 32 frames total across all tables (uint8, ~63.3MB)
+[15:35:23]   Table 2: using global cache (75 frames, 2025.0KB/frame uint8)
+[15:35:23]   Table 3: using global cache (17 frames, 2025.0KB/frame uint8)
+[15:35:23]   Table 9: using global cache (1 frames, 2025.0KB/frame uint8)
+[15:35:23]   Table 11: using global cache (62 frames, 2025.0KB/frame uint8)
+[15:35:23]   Table 15: using global cache (41 frames, 2025.0KB/frame uint8)
+[15:35:23]   Table 20: using global cache (53 frames, 2025.0KB/frame uint8)
+[15:35:23]   Table 23: using global cache (3 frames, 2025.0KB/frame uint8)
+[15:35:23]   Table 25: using global cache (2 frames, 2025.0KB/frame uint8)
+[15:35:25]   Memory: hot=21.9MB + compressed_cold=0 (on disk) = 21.9MB (vs 2060.7MB full fp32)
+[15:35:25]   RSS after setup: 41594MB
+[15:35:25]   Fast apply_emb enabled (C++ fast_forward, zero Python loop overhead)
+[15:35:27]   Warming up cache (1 batches)...
+[15:35:27]   Cache warmed (8 frames loaded)
+[15:35:27]     Batch 0: lat=7.8ms, RSS=41520MB
+[15:35:30]     Batch 500: lat=6.2ms, RSS=41520MB
+[15:35:34]     Batch 1000: lat=5.9ms, RSS=41520MB
+[15:35:37]     Batch 1500: lat=6.3ms, RSS=41520MB
+[15:35:38]   AUC=0.768619, Time=10.37s, RSS=41520MB
+[15:35:38]   Hit rate=99.9%, Demand=14 (0.0/batch), Prefetch hits=0, Demand time=233ms
+[15:35:38]   Compression: 1970.4MB fp32 -> 195.9MB (10.1x)
+[15:35:38]   LRU cache: 22 frames = 43.5MB
+[15:35:38]   Mapping: 128.6MB (merged int32)
+[15:35:38]   Total memory: hot=21.9 + cold=0.0 + lru=43.5 + map=128.6 = 194.0MB (vs 2060.7MB baseline, 10.6x)
+[15:35:38]   Batch latency: mean=6.40ms
+[15:35:38]   Forward breakdown: emb=3.46ms, interact=2.60ms, mlp=1.70ms
+[15:35:38]   Table 2 Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=44ms
+[15:35:38]   Table 3 Cache: 99.9% hit | demand=2 (0.0/batch) | prefetch_hits=0 | demand_time=34ms
+[15:35:38]   Table 9 Cache: 100.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:35:38]   Table 11 Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=46ms
+[15:35:38]   Table 15 Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=56ms
+[15:35:38]   Table 20 Cache: 99.8% hit | demand=3 (0.0/batch) | prefetch_hits=0 | demand_time=54ms
+[15:35:38]   Table 23 Cache: 100.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:35:38]   Table 25 Cache: 100.0% hit | demand=0 (0.0/batch) | prefetch_hits=0 | demand_time=0ms
+[15:35:38]   GlobalCache: 22/32 frames, 99.8% hit rate, 0 evictions
+[15:35:43] 
+======================================================================
+[15:35:43] GENERATING REPORTS
+[15:35:43] ======================================================================
+[15:35:43]   Saved: results/ondemand_results.json
+[15:35:43] 
+# On-Demand Codec Results
+
+Date: 2026-02-25 15:35:43
+Baseline AUC: 0.768613, Time: 7.96s
+
+Config                                    AUC Time(s)   Hit%    Hot   Cold    LRU   Total  Reduc     RSS    BLat
+----------------------------------------------------------------------------------------------------------------
+1080p_g32_q8hot                      0.768619    10.4 99.9%    22M     0M    44M    194M  10.6x  41520M    6.4ms
+1080p_g32_q8hot_bitmap               0.768619    10.9 99.9%    22M     0M    44M     71M  28.9x  41822M    6.7ms
+1080p_g32_q8hot_bitmap_fullcpp       0.768619     3.9  0.0%    22M     0M    44M    200M  10.3x  41546M    2.4ms
+1080p_g32_q8hot_fullcpp              0.768619     4.1  0.0%    22M     0M    44M    194M  10.6x  41283M    2.5ms
+480p_g64_q8hot_bitmap_fullcpp        0.768619     4.1  0.0%    22M     0M    34M    190M  10.8x  41571M    2.5ms
+4K_g8_q8hot_fullcpp                  0.768619     4.2  0.0%    22M     0M    63M    214M   9.6x  41641M    2.6ms
+A_baseline                           0.768613     8.0  0.0%  2061M     0M     0M   2061M   1.0x  42985M    4.9ms
+[15:35:43] 
+  Saved: results/ondemand_results.md
+[15:35:43] 
+======================================================================
+[15:35:43] ALL ON-DEMAND EXPERIMENTS COMPLETE
+[15:35:43] ======================================================================
+[15:35:43] Final RSS: 43541MB

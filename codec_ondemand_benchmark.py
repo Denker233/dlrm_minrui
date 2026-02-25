@@ -1079,6 +1079,11 @@ def main():
     log(f"  AUC={baseline_auc:.6f}, Time={baseline_time:.2f}s, RSS={baseline_rss:.0f}MB")
     log(f"  Batch latency: mean={np.mean(blats)*1000:.2f}ms, "
         f"p50={np.percentile(blats,50)*1000:.2f}ms, p99={np.percentile(blats,99)*1000:.2f}ms")
+    n_b = len(blats)
+    log(f"  Forward breakdown: emb={dlrm.time_look_up/n_b*1000:.2f}ms, "
+        f"interact={dlrm.time_interact/n_b*1000:.2f}ms, "
+        f"mlp={dlrm.time_mlp/n_b*1000:.2f}ms")
+    dlrm.time_look_up = 0; dlrm.time_interact = 0; dlrm.time_mlp = 0
 
     all_results = {
         'A_baseline': {
@@ -1500,9 +1505,10 @@ def main():
                 else:
                     lS_o_2d = lS_o.view(num_tabs, -1)
                 results = _C.fast_forward(lS_i_2d, lS_o_2d)
-                return list(results[:num_tabs])
+                # Return stacked [T, B, D] tensor (last element) for fast interact
+                return results[-1]  # [T, B, D] view, no copy
             dlrm.apply_emb = _full_cpp_apply_emb
-            log(f"  Full C++ apply_emb enabled (zero Python cold overhead)")
+            log(f"  Full C++ apply_emb enabled (zero Python cold overhead, stacked output)")
 
         # Pre-allocate numpy arrays for scores/targets (avoid Python list.extend + .tolist overhead)
         num_test_batches = len(test_batches)
@@ -1632,6 +1638,12 @@ def main():
             f"+ lru={lru_mb:.1f} + map={effective_mapping_mb:.1f} = {total_mem_mb:.1f}MB "
             f"(vs {total_emb_mb:.1f}MB baseline, {total_emb_mb/total_mem_mb:.1f}x)")
         log(f"  Batch latency: mean={np.mean(blats)*1000:.2f}ms")
+        # Forward pass timing breakdown
+        n_b = len(blats)
+        log(f"  Forward breakdown: emb={dlrm.time_look_up/n_b*1000:.2f}ms, "
+            f"interact={dlrm.time_interact/n_b*1000:.2f}ms, "
+            f"mlp={dlrm.time_mlp/n_b*1000:.2f}ms")
+        dlrm.time_look_up = 0; dlrm.time_interact = 0; dlrm.time_mlp = 0
 
         for t_idx in caches:
             caches[t_idx].report_stats()
