@@ -7,6 +7,54 @@
 #include <algorithm>
 #include <atomic>
 
+// SIMD helpers for D=16 embedding accumulation
+#ifdef __AVX512F__
+#include <immintrin.h>
+
+// Accumulate fp32 embedding (D=16) into output using AVX-512 (single 512-bit op)
+static inline void accum_fp32_d16(float* __restrict__ dst, const float* __restrict__ src) {
+    __m512 d = _mm512_loadu_ps(dst);
+    __m512 s = _mm512_loadu_ps(src);
+    _mm512_storeu_ps(dst, _mm512_add_ps(d, s));
+}
+
+static inline void accum_fp32_d16_weighted(float* __restrict__ dst, const float* __restrict__ src, float w) {
+    __m512 d = _mm512_loadu_ps(dst);
+    __m512 s = _mm512_loadu_ps(src);
+    __m512 wv = _mm512_set1_ps(w);
+    _mm512_storeu_ps(dst, _mm512_fmadd_ps(s, wv, d));
+}
+
+// Dequantize uint8 embedding (D=16) and accumulate into fp32 output using AVX-512
+static inline void accum_q8_d16(float* __restrict__ dst, const uint8_t* __restrict__ src,
+                                  float scale, float zp) {
+    // Load 16 uint8 values, zero-extend to int32, convert to float, dequantize, accumulate
+    __m128i u8 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src));
+    __m512i u32 = _mm512_cvtepu8_epi32(u8);
+    __m512 f32 = _mm512_cvtepi32_ps(u32);
+    __m512 zpv = _mm512_set1_ps(zp);
+    __m512 sv = _mm512_set1_ps(scale);
+    __m512 dequant = _mm512_mul_ps(_mm512_sub_ps(f32, zpv), sv);
+    __m512 d = _mm512_loadu_ps(dst);
+    _mm512_storeu_ps(dst, _mm512_add_ps(d, dequant));
+}
+
+static inline void accum_q8_d16_weighted(float* __restrict__ dst, const uint8_t* __restrict__ src,
+                                          float scale, float zp, float w) {
+    __m128i u8 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src));
+    __m512i u32 = _mm512_cvtepu8_epi32(u8);
+    __m512 f32 = _mm512_cvtepi32_ps(u32);
+    __m512 zpv = _mm512_set1_ps(zp);
+    __m512 sv = _mm512_set1_ps(scale * w);
+    __m512 dequant = _mm512_mul_ps(_mm512_sub_ps(f32, zpv), sv);
+    __m512 d = _mm512_loadu_ps(dst);
+    _mm512_storeu_ps(dst, _mm512_add_ps(d, dequant));
+}
+#define HAS_AVX512 1
+#else
+#define HAS_AVX512 0
+#endif
+
 // Forward pass: hot/cold split embedding lookup with sum pooling.
 //
 // For each index in `indices`:
@@ -266,17 +314,40 @@ std::vector<torch::Tensor> compressed_emb_bag_forward_merged(
                 int64_t orig_idx = idx_ptr[i];
                 int32_t m = map_ptr[orig_idx];
 
-                if (m >= 0) {
+                // Prefetch next embedding row
+                if (i + 1 < end) {
+                    int32_t nm = map_ptr[idx_ptr[i + 1]];
+                    if (nm >= 0) __builtin_prefetch(hw_ptr + static_cast<int64_t>(nm) * D, 0, 1);
+                } else if (b + 1 < b_end) {
+                    int64_t ns = off_ptr[b + 1];
+                    if (ns < N) {
+                        int32_t nm = map_ptr[idx_ptr[ns]];
+                        if (nm >= 0) __builtin_prefetch(hw_ptr + static_cast<int64_t>(nm) * D, 0, 1);
+                    }
+                }
+
+                if (__builtin_expect(m >= 0, 1)) {
                     // Hot path
                     const float* emb_row = hw_ptr + static_cast<int64_t>(m) * D;
-                    if (has_weights) {
-                        float w = psw_ptr[i];
-                        for (int64_t d = 0; d < D; d++) {
-                            out_row[d] += emb_row[d] * w;
+#if HAS_AVX512
+                    if (D == 16) {
+                        if (has_weights) {
+                            accum_fp32_d16_weighted(out_row, emb_row, psw_ptr[i]);
+                        } else {
+                            accum_fp32_d16(out_row, emb_row);
                         }
-                    } else {
-                        for (int64_t d = 0; d < D; d++) {
-                            out_row[d] += emb_row[d];
+                    } else
+#endif
+                    {
+                        if (has_weights) {
+                            float w = psw_ptr[i];
+                            for (int64_t d = 0; d < D; d++) {
+                                out_row[d] += emb_row[d] * w;
+                            }
+                        } else {
+                            for (int64_t d = 0; d < D; d++) {
+                                out_row[d] += emb_row[d];
+                            }
                         }
                     }
                 } else if (m != INVALID) {
@@ -335,16 +406,39 @@ std::vector<torch::Tensor> compressed_emb_bag_forward_q8_merged(
                 int64_t orig_idx = idx_ptr[i];
                 int32_t m = map_ptr[orig_idx];
 
-                if (m >= 0) {
+                // Prefetch next embedding row
+                if (i + 1 < end) {
+                    int32_t nm = map_ptr[idx_ptr[i + 1]];
+                    if (nm >= 0) __builtin_prefetch(hw_ptr + static_cast<int64_t>(nm) * D, 0, 1);
+                } else if (b + 1 < b_end) {
+                    int64_t ns = off_ptr[b + 1];
+                    if (ns < N) {
+                        int32_t nm = map_ptr[idx_ptr[ns]];
+                        if (nm >= 0) __builtin_prefetch(hw_ptr + static_cast<int64_t>(nm) * D, 0, 1);
+                    }
+                }
+
+                if (__builtin_expect(m >= 0, 1)) {
                     const uint8_t* emb_row = hw_ptr + static_cast<int64_t>(m) * D;
-                    if (has_weights) {
-                        float w = psw_ptr[i];
-                        for (int64_t d = 0; d < D; d++) {
-                            out_row[d] += (static_cast<float>(emb_row[d]) - zp) * s * w;
+#if HAS_AVX512
+                    if (D == 16) {
+                        if (has_weights) {
+                            accum_q8_d16_weighted(out_row, emb_row, s, zp, psw_ptr[i]);
+                        } else {
+                            accum_q8_d16(out_row, emb_row, s, zp);
                         }
-                    } else {
-                        for (int64_t d = 0; d < D; d++) {
-                            out_row[d] += (static_cast<float>(emb_row[d]) - zp) * s;
+                    } else
+#endif
+                    {
+                        if (has_weights) {
+                            float w = psw_ptr[i];
+                            for (int64_t d = 0; d < D; d++) {
+                                out_row[d] += (static_cast<float>(emb_row[d]) - zp) * s * w;
+                            }
+                        } else {
+                            for (int64_t d = 0; d < D; d++) {
+                                out_row[d] += (static_cast<float>(emb_row[d]) - zp) * s;
+                            }
                         }
                     }
                 } else if (m != INVALID) {
@@ -605,6 +699,528 @@ torch::Tensor gather_dequant_uint8(
 }
 
 
+// Multi-table batched forward: process ALL compressed tables in one C++ call.
+// Parallelizes across all bags from all tables in a single at::parallel_for,
+// eliminating both pybind11 dispatch overhead AND separate parallel_for setups.
+//
+// Returns: [output_0, cold_count_0, output_1, cold_count_1, ...]
+std::vector<torch::Tensor> multi_table_forward_merged(
+    const std::vector<torch::Tensor>& indices_list,
+    const std::vector<torch::Tensor>& offsets_list,
+    const std::vector<torch::Tensor>& hot_weights,
+    const std::vector<torch::Tensor>& mappings,
+    const std::vector<bool>& is_quantized,
+    const std::vector<double>& scales,
+    const std::vector<int64_t>& zero_points
+) {
+    const int64_t T = static_cast<int64_t>(indices_list.size());
+    constexpr int32_t INVALID = std::numeric_limits<int32_t>::min();
+
+    // Pre-allocate all outputs and extract pointers
+    struct TableCtx {
+        const int64_t* idx_ptr;
+        const int64_t* off_ptr;
+        const int32_t* map_ptr;
+        const void* hw_ptr;   // float* or uint8_t*
+        float* out_ptr;
+        int64_t N, B, D;
+        bool q8;
+        float scale, zp;
+    };
+
+    std::vector<TableCtx> ctx(T);
+    std::vector<torch::Tensor> outputs(T);
+    std::vector<std::atomic<int64_t>> cold_counts(T);
+    for (int64_t t = 0; t < T; t++) {
+        cold_counts[t].store(0);
+    }
+
+    // Compute flattened bag offsets: table t starts at bag_starts[t]
+    std::vector<int64_t> bag_starts(T + 1);
+    bag_starts[0] = 0;
+    for (int64_t t = 0; t < T; t++) {
+        int64_t B = offsets_list[t].size(0);
+        bag_starts[t + 1] = bag_starts[t] + B;
+
+        outputs[t] = torch::zeros({B, 16}, torch::dtype(torch::kFloat32));
+        auto& c = ctx[t];
+        c.idx_ptr = indices_list[t].data_ptr<int64_t>();
+        c.off_ptr = offsets_list[t].data_ptr<int64_t>();
+        c.map_ptr = mappings[t].data_ptr<int32_t>();
+        c.out_ptr = outputs[t].data_ptr<float>();
+        c.N = indices_list[t].size(0);
+        c.B = B;
+        c.D = hot_weights[t].size(1);
+        c.q8 = is_quantized[t];
+        c.scale = static_cast<float>(scales[t]);
+        c.zp = static_cast<float>(zero_points[t]);
+        if (c.q8) {
+            c.hw_ptr = hot_weights[t].data_ptr<uint8_t>();
+        } else {
+            c.hw_ptr = hot_weights[t].data_ptr<float>();
+        }
+    }
+
+    int64_t total_bags = bag_starts[T];
+
+    // Single parallel_for across ALL bags from ALL tables
+    at::parallel_for(0, total_bags, 64, [&](int64_t flat_begin, int64_t flat_end) {
+        // For each table, process its portion of bags
+        for (int64_t t = 0; t < T; t++) {
+            int64_t t_start = bag_starts[t];
+            int64_t t_end = bag_starts[t + 1];
+            // Intersection of [flat_begin, flat_end) with [t_start, t_end)
+            int64_t b_begin = std::max(flat_begin, t_start) - t_start;
+            int64_t b_end = std::min(flat_end, t_end) - t_start;
+            if (b_begin >= b_end) continue;
+
+            const auto& c = ctx[t];
+            int64_t local_cold = 0;
+
+            if (c.q8) {
+                const uint8_t* hw = static_cast<const uint8_t*>(c.hw_ptr);
+                for (int64_t b = b_begin; b < b_end; b++) {
+                    int64_t start = c.off_ptr[b];
+                    int64_t end = (b + 1 < c.B) ? c.off_ptr[b + 1] : c.N;
+                    float* out_row = c.out_ptr + b * c.D;
+                    for (int64_t i = start; i < end; i++) {
+                        int32_t m = c.map_ptr[c.idx_ptr[i]];
+                        // Prefetch next
+                        if (i + 1 < end) {
+                            int32_t nm = c.map_ptr[c.idx_ptr[i + 1]];
+                            if (nm >= 0) __builtin_prefetch(hw + static_cast<int64_t>(nm) * c.D, 0, 1);
+                        } else if (b + 1 < b_end) {
+                            int64_t ns = c.off_ptr[b + 1];
+                            if (ns < c.N) {
+                                int32_t nm = c.map_ptr[c.idx_ptr[ns]];
+                                if (nm >= 0) __builtin_prefetch(hw + static_cast<int64_t>(nm) * c.D, 0, 1);
+                            }
+                        }
+                        if (__builtin_expect(m >= 0, 1)) {
+#if HAS_AVX512
+                            if (c.D == 16) {
+                                accum_q8_d16(out_row, hw + static_cast<int64_t>(m) * c.D, c.scale, c.zp);
+                            } else
+#endif
+                            {
+                                const uint8_t* emb = hw + static_cast<int64_t>(m) * c.D;
+                                for (int64_t d = 0; d < c.D; d++)
+                                    out_row[d] += (static_cast<float>(emb[d]) - c.zp) * c.scale;
+                            }
+                        } else if (m != INVALID) {
+                            local_cold++;
+                        }
+                    }
+                }
+            } else {
+                const float* hw = static_cast<const float*>(c.hw_ptr);
+                for (int64_t b = b_begin; b < b_end; b++) {
+                    int64_t start = c.off_ptr[b];
+                    int64_t end = (b + 1 < c.B) ? c.off_ptr[b + 1] : c.N;
+                    float* out_row = c.out_ptr + b * c.D;
+                    for (int64_t i = start; i < end; i++) {
+                        int32_t m = c.map_ptr[c.idx_ptr[i]];
+                        // Prefetch next
+                        if (i + 1 < end) {
+                            int32_t nm = c.map_ptr[c.idx_ptr[i + 1]];
+                            if (nm >= 0) __builtin_prefetch(hw + static_cast<int64_t>(nm) * c.D, 0, 1);
+                        } else if (b + 1 < b_end) {
+                            int64_t ns = c.off_ptr[b + 1];
+                            if (ns < c.N) {
+                                int32_t nm = c.map_ptr[c.idx_ptr[ns]];
+                                if (nm >= 0) __builtin_prefetch(hw + static_cast<int64_t>(nm) * c.D, 0, 1);
+                            }
+                        }
+                        if (__builtin_expect(m >= 0, 1)) {
+#if HAS_AVX512
+                            if (c.D == 16) {
+                                accum_fp32_d16(out_row, hw + static_cast<int64_t>(m) * c.D);
+                            } else
+#endif
+                            {
+                                const float* emb = hw + static_cast<int64_t>(m) * c.D;
+                                for (int64_t d = 0; d < c.D; d++)
+                                    out_row[d] += emb[d];
+                            }
+                        } else if (m != INVALID) {
+                            local_cold++;
+                        }
+                    }
+                }
+            }
+            if (local_cold > 0) {
+                cold_counts[t].fetch_add(local_cold, std::memory_order_relaxed);
+            }
+        }
+    });
+
+    // Build results
+    std::vector<torch::Tensor> results;
+    results.reserve(T * 2);
+    for (int64_t t = 0; t < T; t++) {
+        results.push_back(outputs[t]);
+        results.push_back(torch::tensor(cold_counts[t].load(), torch::dtype(torch::kLong)));
+    }
+    return results;
+}
+
+
+// All-tables forward: process ALL 26 tables in one C++ call.
+// Uses ATen's torch::embedding_bag for standard tables (highly optimized)
+// and our custom merged-mapping loop with at::parallel_for for compressed tables.
+//
+// Returns: [out_0, ..., out_T-1, cold_0, ..., cold_T-1]
+std::vector<torch::Tensor> all_tables_forward(
+    const std::vector<torch::Tensor>& indices_list,
+    const std::vector<torch::Tensor>& offsets_list,
+    const std::vector<torch::Tensor>& weights_list,
+    const std::vector<torch::Tensor>& mappings_list,
+    const std::vector<bool>& is_compressed,
+    const std::vector<bool>& is_q8,
+    const std::vector<double>& scales,
+    const std::vector<int64_t>& zero_points
+) {
+    const int64_t T = static_cast<int64_t>(indices_list.size());
+    constexpr int32_t INVALID = std::numeric_limits<int32_t>::min();
+
+    std::vector<torch::Tensor> outputs(T);
+    std::vector<int64_t> cold_counts(T, 0);
+
+    for (int64_t t = 0; t < T; t++) {
+        const auto& indices = indices_list[t];
+        const auto& offsets = offsets_list[t];
+
+        if (!is_compressed[t]) {
+            // Standard table: use ATen's optimized embedding_bag
+            auto result = torch::embedding_bag(
+                weights_list[t], indices, offsets,
+                /*scale_grad_by_freq=*/false, /*mode=*/0, /*sparse=*/false,
+                /*per_sample_weights=*/torch::Tensor(), /*include_last_offset=*/false);
+            outputs[t] = std::get<0>(result);
+            cold_counts[t] = 0;
+        } else {
+            // Compressed table: our merged-mapping with at::parallel_for
+            const int64_t N = indices.size(0);
+            const int64_t B = offsets.size(0);
+            const int64_t D = weights_list[t].size(1);
+            const int32_t* map_ptr = mappings_list[t].data_ptr<int32_t>();
+            const int64_t* idx_ptr = indices.data_ptr<int64_t>();
+            const int64_t* off_ptr = offsets.data_ptr<int64_t>();
+
+            auto output = torch::zeros({B, D}, torch::dtype(torch::kFloat32));
+            float* out_ptr = output.data_ptr<float>();
+
+            std::atomic<int64_t> cold_count{0};
+
+            if (is_q8[t]) {
+                const uint8_t* hw_ptr = weights_list[t].data_ptr<uint8_t>();
+                const float s = static_cast<float>(scales[t]);
+                const float zp = static_cast<float>(zero_points[t]);
+
+                at::parallel_for(0, B, 64, [&](int64_t b_begin, int64_t b_end) {
+                    int64_t local_cold = 0;
+                    for (int64_t b = b_begin; b < b_end; b++) {
+                        int64_t start = off_ptr[b];
+                        int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+                        float* out_row = out_ptr + b * D;
+                        for (int64_t i = start; i < end; i++) {
+                            int32_t m = map_ptr[idx_ptr[i]];
+                            if (__builtin_expect(m >= 0, 1)) {
+#if HAS_AVX512
+                                if (D == 16) {
+                                    accum_q8_d16(out_row, hw_ptr + static_cast<int64_t>(m) * D, s, zp);
+                                } else
+#endif
+                                {
+                                    const uint8_t* emb = hw_ptr + static_cast<int64_t>(m) * D;
+                                    for (int64_t d = 0; d < D; d++)
+                                        out_row[d] += (static_cast<float>(emb[d]) - zp) * s;
+                                }
+                            } else if (m != INVALID) {
+                                local_cold++;
+                            }
+                        }
+                    }
+                    if (local_cold > 0) cold_count.fetch_add(local_cold, std::memory_order_relaxed);
+                });
+            } else {
+                const float* hw_ptr = weights_list[t].data_ptr<float>();
+
+                at::parallel_for(0, B, 64, [&](int64_t b_begin, int64_t b_end) {
+                    int64_t local_cold = 0;
+                    for (int64_t b = b_begin; b < b_end; b++) {
+                        int64_t start = off_ptr[b];
+                        int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+                        float* out_row = out_ptr + b * D;
+                        for (int64_t i = start; i < end; i++) {
+                            int32_t m = map_ptr[idx_ptr[i]];
+                            if (__builtin_expect(m >= 0, 1)) {
+#if HAS_AVX512
+                                if (D == 16) {
+                                    accum_fp32_d16(out_row, hw_ptr + static_cast<int64_t>(m) * D);
+                                } else
+#endif
+                                {
+                                    const float* emb = hw_ptr + static_cast<int64_t>(m) * D;
+                                    for (int64_t d = 0; d < D; d++)
+                                        out_row[d] += emb[d];
+                                }
+                            } else if (m != INVALID) {
+                                local_cold++;
+                            }
+                        }
+                    }
+                    if (local_cold > 0) cold_count.fetch_add(local_cold, std::memory_order_relaxed);
+                });
+            }
+            outputs[t] = output;
+            cold_counts[t] = cold_count.load();
+        }
+    }
+
+    // Pack results: [outputs..., cold_counts_as_tensors...]
+    std::vector<torch::Tensor> results;
+    results.reserve(T * 2);
+    for (int64_t t = 0; t < T; t++) {
+        results.push_back(outputs[t]);
+    }
+    for (int64_t t = 0; t < T; t++) {
+        results.push_back(torch::tensor(cold_counts[t], torch::dtype(torch::kLong)));
+    }
+    return results;
+}
+
+
+// ============================================================
+// Pre-registered fast_forward: store all table data in C++ static storage,
+// then process all 26 tables with a single pybind11 call per batch.
+// This eliminates the Python for-loop entirely.
+// ============================================================
+
+namespace {
+
+// Table types
+enum class TableKind { STANDARD, COMPRESSED_FP32, COMPRESSED_Q8 };
+
+struct RegisteredTable {
+    TableKind kind;
+    // For STANDARD: fp32 weight tensor
+    // For COMPRESSED_FP32: fp32 hot_weight tensor
+    // For COMPRESSED_Q8: uint8 hot_weight tensor
+    torch::Tensor weight;        // hot_weight (fp32 or q8) or standard weight
+    torch::Tensor mapping;       // merged int32 mapping (compressed only)
+    float hot_scale = 0.0f;      // q8 scale (q8 only)
+    float hot_zp = 0.0f;         // q8 zero point (q8 only)
+    int64_t D = 16;              // embedding dimension
+};
+
+// Static storage for registered tables
+static std::vector<RegisteredTable> g_tables;
+static bool g_registered = false;
+
+} // namespace
+
+// register_tables: called once during setup.
+// table_kinds: vector of int (0=standard, 1=compressed_fp32, 2=compressed_q8)
+// weights: vector of tensors (standard weight or hot_weight)
+// mappings: vector of tensors (merged mapping for compressed, empty for standard)
+// scales: vector of double (q8 scale, 0 for others)
+// zero_points: vector of int64 (q8 zero point, 0 for others)
+void register_tables(
+    std::vector<int64_t> table_kinds,
+    std::vector<torch::Tensor> weights,
+    std::vector<torch::Tensor> mappings,
+    std::vector<double> scales,
+    std::vector<int64_t> zero_points
+) {
+    int64_t T = table_kinds.size();
+    TORCH_CHECK(T == (int64_t)weights.size(), "weights size mismatch");
+    TORCH_CHECK(T == (int64_t)mappings.size(), "mappings size mismatch");
+    TORCH_CHECK(T == (int64_t)scales.size(), "scales size mismatch");
+    TORCH_CHECK(T == (int64_t)zero_points.size(), "zero_points size mismatch");
+
+    g_tables.resize(T);
+    for (int64_t t = 0; t < T; t++) {
+        auto& tab = g_tables[t];
+        switch (table_kinds[t]) {
+            case 0: tab.kind = TableKind::STANDARD; break;
+            case 1: tab.kind = TableKind::COMPRESSED_FP32; break;
+            case 2: tab.kind = TableKind::COMPRESSED_Q8; break;
+            default: TORCH_CHECK(false, "Unknown table kind: ", table_kinds[t]);
+        }
+        tab.weight = weights[t];
+        tab.mapping = mappings[t];
+        tab.hot_scale = static_cast<float>(scales[t]);
+        tab.hot_zp = static_cast<float>(zero_points[t]);
+        tab.D = weights[t].size(1);
+    }
+    g_registered = true;
+}
+
+// fast_forward: process all registered tables with a single call.
+// lS_i: (T, N_per_table) int64 — indices for each table
+// lS_o: (T, B) int64 — offsets for each table
+// Returns: list of T output tensors + list of T cold_mask tensors + list of T cold_count tensors
+std::vector<torch::Tensor> fast_forward(
+    const torch::Tensor& lS_i,  // (T, N) int64
+    const torch::Tensor& lS_o   // (T, B) int64
+) {
+    TORCH_CHECK(g_registered, "Tables not registered. Call register_tables first.");
+    const int64_t T = g_tables.size();
+    TORCH_CHECK(lS_i.size(0) == T, "lS_i table count mismatch: ", lS_i.size(0), " vs ", T);
+    TORCH_CHECK(lS_o.size(0) == T, "lS_o table count mismatch");
+
+    const int64_t N = lS_i.size(1);  // indices per table
+    const int64_t B = lS_o.size(1);  // batch size (bags)
+    const int64_t D = g_tables[0].D; // all tables have same D (=16)
+    constexpr int32_t INVALID = std::numeric_limits<int32_t>::min();
+
+    // Single allocation for ALL output tensors: (T*B, D) then view as T slices
+    auto all_outputs = torch::zeros({T * B, D}, torch::dtype(torch::kFloat32));
+    float* all_out_ptr = all_outputs.data_ptr<float>();
+
+    // Count compressed tables for cold mask allocation
+    int64_t n_compressed = 0;
+    for (int64_t t = 0; t < T; t++) {
+        if (g_tables[t].kind != TableKind::STANDARD) n_compressed++;
+    }
+
+    // Single allocation for all cold masks
+    auto all_cold_masks = torch::zeros({n_compressed * N}, torch::dtype(torch::kBool));
+    bool* all_cm_ptr = all_cold_masks.data_ptr<bool>();
+
+    // Map compressed table indices to cold_mask slices
+    std::vector<int64_t> cm_offset(T, -1);  // -1 = no cold mask (standard table)
+    {
+        int64_t ci = 0;
+        for (int64_t t = 0; t < T; t++) {
+            if (g_tables[t].kind != TableKind::STANDARD) {
+                cm_offset[t] = ci * N;
+                ci++;
+            }
+        }
+    }
+
+    std::vector<int64_t> cold_counts(T, 0);
+
+    // Process all tables in parallel
+    at::parallel_for(0, T, 1, [&](int64_t t_begin, int64_t t_end) {
+        for (int64_t t = t_begin; t < t_end; t++) {
+            const auto& tab = g_tables[t];
+            const int64_t* idx_ptr = lS_i.data_ptr<int64_t>() + t * N;
+            const int64_t* off_ptr = lS_o.data_ptr<int64_t>() + t * B;
+            float* out_ptr = all_out_ptr + t * B * D;
+
+            if (tab.kind == TableKind::STANDARD) {
+                const float* w_ptr = tab.weight.data_ptr<float>();
+                for (int64_t b = 0; b < B; b++) {
+                    int64_t start = off_ptr[b];
+                    int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+                    float* out_row = out_ptr + b * D;
+                    for (int64_t i = start; i < end; i++) {
+                        const float* emb_row = w_ptr + idx_ptr[i] * D;
+#if HAS_AVX512
+                        if (D == 16) {
+                            accum_fp32_d16(out_row, emb_row);
+                        } else
+#endif
+                        {
+                            for (int64_t d = 0; d < D; d++)
+                                out_row[d] += emb_row[d];
+                        }
+                    }
+                }
+
+            } else if (tab.kind == TableKind::COMPRESSED_FP32) {
+                const float* hw_ptr = tab.weight.data_ptr<float>();
+                const int32_t* map_ptr = tab.mapping.data_ptr<int32_t>();
+                bool* cm_ptr = all_cm_ptr + cm_offset[t];
+                int64_t local_cold = 0;
+
+                for (int64_t b = 0; b < B; b++) {
+                    int64_t start = off_ptr[b];
+                    int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+                    float* out_row = out_ptr + b * D;
+                    for (int64_t i = start; i < end; i++) {
+                        int32_t m = map_ptr[idx_ptr[i]];
+                        if (__builtin_expect(m >= 0, 1)) {
+                            const float* emb_row = hw_ptr + static_cast<int64_t>(m) * D;
+#if HAS_AVX512
+                            if (D == 16) {
+                                accum_fp32_d16(out_row, emb_row);
+                            } else
+#endif
+                            {
+                                for (int64_t d = 0; d < D; d++)
+                                    out_row[d] += emb_row[d];
+                            }
+                        } else if (m != INVALID) {
+                            cm_ptr[i] = true;
+                            local_cold++;
+                        }
+                    }
+                }
+                cold_counts[t] = local_cold;
+
+            } else {
+                // COMPRESSED_Q8
+                const uint8_t* hw_ptr = tab.weight.data_ptr<uint8_t>();
+                const int32_t* map_ptr = tab.mapping.data_ptr<int32_t>();
+                const float s = tab.hot_scale;
+                const float zp = tab.hot_zp;
+                bool* cm_ptr = all_cm_ptr + cm_offset[t];
+                int64_t local_cold = 0;
+
+                for (int64_t b = 0; b < B; b++) {
+                    int64_t start = off_ptr[b];
+                    int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+                    float* out_row = out_ptr + b * D;
+                    for (int64_t i = start; i < end; i++) {
+                        int32_t m = map_ptr[idx_ptr[i]];
+                        if (__builtin_expect(m >= 0, 1)) {
+#if HAS_AVX512
+                            if (D == 16) {
+                                accum_q8_d16(out_row, hw_ptr + static_cast<int64_t>(m) * D, s, zp);
+                            } else
+#endif
+                            {
+                                const uint8_t* emb = hw_ptr + static_cast<int64_t>(m) * D;
+                                for (int64_t d = 0; d < D; d++)
+                                    out_row[d] += (static_cast<float>(emb[d]) - zp) * s;
+                            }
+                        } else if (m != INVALID) {
+                            cm_ptr[i] = true;
+                            local_cold++;
+                        }
+                    }
+                }
+                cold_counts[t] = local_cold;
+            }
+        }
+    });
+
+    // Pack results as views into pre-allocated buffers
+    // [output_0, ..., output_{T-1}, cold_mask_0, ..., cold_mask_{T-1}, cc_0, ..., cc_{T-1}]
+    std::vector<torch::Tensor> results;
+    results.reserve(T * 3);
+    // Reshape and slice outputs
+    auto outputs_3d = all_outputs.view({T, B, D});
+    for (int64_t t = 0; t < T; t++)
+        results.push_back(outputs_3d[t]);  // view, no copy
+    // Slice cold masks
+    for (int64_t t = 0; t < T; t++) {
+        if (cm_offset[t] >= 0)
+            results.push_back(all_cold_masks.slice(0, cm_offset[t], cm_offset[t] + N));
+        else
+            results.push_back(torch::Tensor());
+    }
+    // Cold counts as scalar tensors
+    for (int64_t t = 0; t < T; t++)
+        results.push_back(torch::tensor(cold_counts[t], torch::dtype(torch::kLong)));
+    return results;
+}
+
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("compressed_emb_bag_forward", &compressed_emb_bag_forward,
           "Compressed EmbeddingBag forward (hot path in C++, returns cold_mask)");
@@ -620,4 +1236,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           "Compressed EmbeddingBag forward with merged int32 mapping (saves memory)");
     m.def("compressed_emb_bag_forward_q8_merged", &compressed_emb_bag_forward_q8_merged,
           "Compressed EmbeddingBag forward with q8 hot and merged int32 mapping");
+    m.def("multi_table_forward_merged", &multi_table_forward_merged,
+          "Process all compressed tables in one C++ call with merged mapping");
+    m.def("all_tables_forward", &all_tables_forward,
+          "Process ALL tables (compressed + standard) in one C++ call, eliminating Python loop");
+    m.def("register_tables", &register_tables,
+          "Register all table metadata in C++ for fast_forward");
+    m.def("fast_forward", &fast_forward,
+          "Process all registered tables with a single call (zero Python loop overhead)");
 }
