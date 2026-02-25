@@ -1031,6 +1031,15 @@ def main():
     log("INFERENCE BENCHMARKS — True On-Demand Decode")
     log(f"{'='*70}")
 
+    # Pre-cache all test batches to eliminate DataLoader + collate overhead
+    # (collate_fn creates 26 identical offset tensors per batch = ~27ms overhead)
+    log("Pre-caching test batches...")
+    t_precache = time.time()
+    test_batches = []
+    for X, lS_o, lS_i, T in test_ld:
+        test_batches.append((X, lS_o, lS_i, T))
+    log(f"Pre-cached {len(test_batches)} batches in {time.time()-t_precache:.1f}s")
+
     def restore_weights():
         with torch.no_grad():
             for k in emb_keys:
@@ -1043,19 +1052,29 @@ def main():
     gc.collect()
     drop_caches()
     time.sleep(0.5)
-    scores, targets, blats = [], [], []
+    num_test_batches = len(test_batches)
+    max_samples = num_test_batches * TEST_BATCH_SIZE + TEST_BATCH_SIZE
+    all_scores = np.empty(max_samples, dtype=np.float32)
+    all_targets = np.empty(max_samples, dtype=np.float32)
+    sample_idx = 0
+    blats = []
     t0 = time.time()
     with torch.no_grad():
-        for batch_idx, (X, lS_o, lS_i, T) in enumerate(test_ld):
+        for batch_idx in range(num_test_batches):
+            X, lS_o, lS_i, T = test_batches[batch_idx]
             bt0 = time.time()
             Z = dlrm(X, lS_o, lS_i)
             blats.append(time.time() - bt0)
-            scores.extend(Z.detach().cpu().numpy().flatten().tolist())
-            targets.extend(T.detach().cpu().numpy().flatten().tolist())
+            z_np = Z.detach().cpu().numpy().ravel()
+            t_np = T.detach().cpu().numpy().ravel()
+            bs = z_np.shape[0]
+            all_scores[sample_idx:sample_idx+bs] = z_np
+            all_targets[sample_idx:sample_idx+bs] = t_np
+            sample_idx += bs
             if batch_idx % 500 == 0:
                 log(f"    Batch {batch_idx}")
     baseline_time = time.time() - t0
-    baseline_auc = roc_auc_score(targets, scores)
+    baseline_auc = roc_auc_score(all_targets[:sample_idx], all_scores[:sample_idx])
     baseline_rss = get_rss_mb()
     log(f"  AUC={baseline_auc:.6f}, Time={baseline_time:.2f}s, RSS={baseline_rss:.0f}MB")
     log(f"  Batch latency: mean={np.mean(blats)*1000:.2f}ms, "
@@ -1224,9 +1243,8 @@ def main():
         # Warmup Markov
         if predictor_type == 'markov':
             log(f"    Warming up Markov predictor (500 batches)...")
-            for batch_idx, (X, lS_o, lS_i, T) in enumerate(test_ld):
-                if batch_idx >= 500:
-                    break
+            for batch_idx in range(min(500, len(test_batches))):
+                X, lS_o, lS_i, T = test_batches[batch_idx]
                 for t_idx in caches:
                     indices = lS_i[t_idx]
                     cold_mask = ~is_hot[t_idx][indices]
@@ -1372,9 +1390,8 @@ def main():
         if warmup_batches > 0:
             log(f"  Warming up cache ({warmup_batches} batches)...")
             with torch.no_grad():
-                for wb_idx, (X, lS_o, lS_i, T) in enumerate(test_ld):
-                    if wb_idx >= warmup_batches:
-                        break
+                for wb_idx in range(min(warmup_batches, len(test_batches))):
+                    X, lS_o, lS_i, T = test_batches[wb_idx]
                     Z = dlrm(X, lS_o, lS_i)
                     for t_idx in caches:
                         if isinstance(dlrm.emb_l[t_idx], CompressedEmbeddingBag):
@@ -1394,7 +1411,7 @@ def main():
             log(f"  Scanning all batches for cold frame coverage...")
             t_scan0 = time.time()
             needed_frames = {t_idx: set() for t_idx in caches}  # table_idx -> set of frame_ids
-            for _, (X_s, lS_o_s, lS_i_s, T_s) in enumerate(test_ld):
+            for X_s, lS_o_s, lS_i_s, T_s in test_batches:
                 for t_idx in caches:
                     indices = lS_i_s[t_idx]
                     cold_mask = ~is_hot[t_idx][indices]
@@ -1487,11 +1504,18 @@ def main():
             dlrm.apply_emb = _full_cpp_apply_emb
             log(f"  Full C++ apply_emb enabled (zero Python cold overhead)")
 
-        scores, targets, blats, rss_trace = [], [], [], []
+        # Pre-allocate numpy arrays for scores/targets (avoid Python list.extend + .tolist overhead)
+        num_test_batches = len(test_batches)
+        max_samples = num_test_batches * TEST_BATCH_SIZE + TEST_BATCH_SIZE
+        all_scores = np.empty(max_samples, dtype=np.float32)
+        all_targets = np.empty(max_samples, dtype=np.float32)
+        sample_idx = 0
+        blats, rss_trace = [], []
         t0 = time.time()
 
         with torch.no_grad():
-            for batch_idx, (X, lS_o, lS_i, T) in enumerate(test_ld):
+            for batch_idx in range(num_test_batches):
+                X, lS_o, lS_i, T = test_batches[batch_idx]
                 bt0 = time.time()
 
                 Z = dlrm(X, lS_o, lS_i)
@@ -1505,8 +1529,13 @@ def main():
                             frames = dlrm.emb_l[t_idx].last_frames_used
                             caches[t_idx].launch_prefetch(frames)
 
-                scores.extend(Z.detach().cpu().numpy().flatten().tolist())
-                targets.extend(T.detach().cpu().numpy().flatten().tolist())
+                # Fast numpy score collection (no .tolist() or list.extend())
+                z_np = Z.detach().cpu().numpy().ravel()
+                t_np = T.detach().cpu().numpy().ravel()
+                bs = z_np.shape[0]
+                all_scores[sample_idx:sample_idx+bs] = z_np
+                all_targets[sample_idx:sample_idx+bs] = t_np
+                sample_idx += bs
 
                 if batch_idx % 500 == 0:
                     rss = get_rss_mb()
@@ -1514,6 +1543,8 @@ def main():
                     log(f"    Batch {batch_idx}: lat={blats[-1]*1000:.1f}ms, RSS={rss:.0f}MB")
 
         total_time = time.time() - t0
+        scores = all_scores[:sample_idx]
+        targets = all_targets[:sample_idx]
         auc = roc_auc_score(targets, scores)
         rss = get_rss_mb()
 
@@ -1663,9 +1694,9 @@ def main():
         return result
 
     # ---- Run experiments ----
-    # === Full C++ cold lookup (v21): zero Python cold overhead ===
+    # === v22: fast dataloader + numpy score collection ===
     log(f"\n{'='*70}")
-    log("EXPERIMENTS: Full C++ cold lookup (v21)")
+    log("EXPERIMENTS: v22 — fast inference loop (pre-cached batches + numpy scores)")
     log(f"{'='*70}")
 
     # 1080p array + full_cpp: array mapping for both hot and cold
