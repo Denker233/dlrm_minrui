@@ -1546,28 +1546,33 @@ def main():
         return result
 
     # ---- Run experiments ----
-    # === Bitmap-rank mode (best memory + speed balance) ===
+    # === Speed-optimized: fp32 hot + bitmap (avoid dequant overhead) ===
     log(f"\n{'='*70}")
-    log("EXPERIMENTS: Bitmap-rank mode (~2MB mapping)")
+    log("EXPERIMENTS: FP32 hot + bitmap (speed-optimized)")
     log(f"{'='*70}")
 
-    # 4K bitmap (speed + low memory): ~88MB
-    key = '4K_g8_q8hot_bitmap'
-    all_results[key] = run_ondemand_inference(
-        res_name='4K', cache_capacity=8,
-        predictor_type='none', lookahead_depth=1, tag=key,
-        use_global_cache=True, disk_decode=True, quantize_hot=True,
-        use_bitmap=True, warmup_batches=1)
-
-    # 1080p bitmap: ~68MB
-    key = '1080p_g32_q8hot_bitmap'
+    # 1080p fp32hot + bitmap: ~137MB, potentially faster batches
+    key = '1080p_g32_fp32hot_bitmap'
     all_results[key] = run_ondemand_inference(
         res_name='1080p', cache_capacity=32,
         predictor_type='none', lookahead_depth=1, tag=key,
-        use_global_cache=True, disk_decode=True, quantize_hot=True,
+        use_global_cache=True, disk_decode=True, quantize_hot=False,
         use_bitmap=True, warmup_batches=1)
 
-    # 480p bitmap g64: ~43MB (extreme compression)
+    # 4K fp32hot + bitmap: ~157MB
+    key = '4K_g8_fp32hot_bitmap'
+    all_results[key] = run_ondemand_inference(
+        res_name='4K', cache_capacity=8,
+        predictor_type='none', lookahead_depth=1, tag=key,
+        use_global_cache=True, disk_decode=True, quantize_hot=False,
+        use_bitmap=True, warmup_batches=1)
+
+    # === Memory-optimized: q8 hot + bitmap ===
+    log(f"\n{'='*70}")
+    log("EXPERIMENTS: Q8 hot + bitmap (memory-optimized)")
+    log(f"{'='*70}")
+
+    # 480p q8hot bitmap g64: ~47MB (extreme compression)
     key = '480p_g64_q8hot_bitmap'
     all_results[key] = run_ondemand_inference(
         res_name='480p', cache_capacity=64,
@@ -1575,19 +1580,20 @@ def main():
         use_global_cache=True, disk_decode=True, quantize_hot=True,
         use_bitmap=True, warmup_batches=1)
 
-    # === Hash mode for comparison ===
-    log(f"\n{'='*70}")
-    log("EXPERIMENTS: Hash table comparison")
-    log(f"{'='*70}")
-
-    key = '4K_g8_q8hot_hash'
+    # 1080p q8hot bitmap: ~71MB
+    key = '1080p_g32_q8hot_bitmap'
     all_results[key] = run_ondemand_inference(
-        res_name='4K', cache_capacity=8,
+        res_name='1080p', cache_capacity=32,
         predictor_type='none', lookahead_depth=1, tag=key,
         use_global_cache=True, disk_decode=True, quantize_hot=True,
-        use_hash_table=True, warmup_batches=1)
+        use_bitmap=True, warmup_batches=1)
 
-    # === Non-hash speed mode for comparison ===
+    # === Comparison baselines ===
+    log(f"\n{'='*70}")
+    log("EXPERIMENTS: Comparison baselines")
+    log(f"{'='*70}")
+
+    # 1080p array (no hash/bitmap) for speed comparison
     key = '1080p_g32_q8hot'
     all_results[key] = run_ondemand_inference(
         res_name='1080p', cache_capacity=32,
