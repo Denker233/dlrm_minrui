@@ -54,6 +54,7 @@ H265_CRF = 0  # lossless
 
 # Resolution configs: (name, width, height, pixels_per_frame)
 RESOLUTIONS = {
+    '480p':  (640, 480),
     '1080p': (1920, 1080),
     '4K':    (3840, 2160),
 }
@@ -1082,7 +1083,8 @@ def main():
     def run_ondemand_inference(res_name, cache_capacity, predictor_type='markov',
                                lookahead_depth=3, tag="",
                                use_global_cache=False, disk_decode=False,
-                               quantize_hot=False, use_hash_table=False):
+                               quantize_hot=False, use_hash_table=False,
+                               use_bitmap=False, warmup_batches=0):
         width, height = RESOLUTIONS[res_name]
         pixels_per_frame = width * height
         rows_per_frame = pixels_per_frame // EMB_DIM
@@ -1277,18 +1279,17 @@ def main():
                     scales.append(0.0)
                     zero_points.append(0)
 
-            # Use hash table to replace mapping tensors (saves ~113MB at cost of ~1.5ms/batch)
-            use_hash = use_hash_table
+            # Use hash table or bitmap-rank to replace mapping tensors
+            use_hash = use_hash_table and not use_bitmap
             _C.register_tables(table_kinds, weights, mappings, scales, zero_points,
-                               use_hash_table=use_hash)
-            if use_hash:
-                # With hash tables, the C++ side releases mapping tensors.
+                               use_hash_table=use_hash, use_bitmap=use_bitmap)
+            if use_hash or use_bitmap:
+                # C++ side releases mapping tensors.
                 # For cold fixup, we need orig_to_cold_reordered.
                 # Load as numpy memory-mapped arrays (only accessed pages enter RAM).
                 _cold_reordered_mmap = {}
                 for k in _cold_caches:
                     E = dlrm.emb_l[k]
-                    # Convert .pt to .npy for mmap access if not already done
                     mmap_path = os.path.join(REORDER_DIR, f'orig_to_cold_reordered_{k}.npy')
                     if not os.path.exists(mmap_path):
                         pt_path = os.path.join(REORDER_DIR, f'orig_to_cold_reordered_{k}.pt')
@@ -1296,14 +1297,13 @@ def main():
                         np.save(mmap_path, o2c.numpy())
                         del o2c
                     _cold_reordered_mmap[k] = np.load(mmap_path, mmap_mode='r')
-                    # Release the Python-side mapping tensor reference
                     if hasattr(E, 'mapping'):
                         del E.mapping
-                # Free the mapping list and dict
                 del mappings
                 _mappings.clear()
                 gc.collect()
-                log(f"  Hash table mode: mapping tensors released, cold lookup via mmap")
+                mode_name = "Bitmap-rank" if use_bitmap else "Hash table"
+                log(f"  {mode_name} mode: mapping tensors released, cold lookup via mmap")
 
             def _fast_apply_emb(lS_o, lS_i, emb_l, v_W_l):
                 # Ensure lS_i and lS_o are 2D contiguous tensors
@@ -1336,7 +1336,7 @@ def main():
                         off = lS_o_2d[k]
                         cold_positions = torch.where(cold_mask)[0]
                         cold_orig_indices = idx[cold_positions].numpy()
-                        if use_hash and k in _cold_reordered_mmap:
+                        if (use_hash or use_bitmap) and k in _cold_reordered_mmap:
                             # Hash mode: look up cold indices from mmap'd file
                             cold_reordered_np = _cold_reordered_mmap[k][cold_orig_indices]
                             cold_reordered = torch.from_numpy(cold_reordered_np.copy()).long()
@@ -1363,6 +1363,23 @@ def main():
         drop_caches()
         time.sleep(0.5)
         gc.collect()
+
+        # Warmup: run first N batches to populate LRU cache before timing
+        if warmup_batches > 0:
+            log(f"  Warming up cache ({warmup_batches} batches)...")
+            with torch.no_grad():
+                for wb_idx, (X, lS_o, lS_i, T) in enumerate(test_ld):
+                    if wb_idx >= warmup_batches:
+                        break
+                    Z = dlrm(X, lS_o, lS_i)
+                    for t_idx in caches:
+                        if isinstance(dlrm.emb_l[t_idx], CompressedEmbeddingBag):
+                            frames = dlrm.emb_l[t_idx].last_frames_used
+                            caches[t_idx].launch_prefetch(frames)
+            # Reset cache stats after warmup
+            for c in caches.values():
+                c.reset_stats()
+            log(f"  Cache warmed ({len(global_cache) if global_cache else sum(len(c.cache) for c in caches.values())} frames loaded)")
 
         scores, targets, blats, rss_trace = [], [], [], []
         t0 = time.time()
@@ -1421,24 +1438,33 @@ def main():
                 len(c.cache) * c.rows_per_frame * c.emb_dim * 4 / 1024 / 1024
                 for c in caches.values()
             )
-        # When hash tables are used, mapping memory is replaced by hash table memory
-        # Hash table: ~60% load factor, 8 bytes per slot (key + value), capacity = ceil(n_hot / 0.6)
+        # When hash/bitmap tables are used, mapping memory is replaced
         effective_mapping_mb = total_mapping_mb
-        if HAS_CPP_EXT and compressed_table_ids and use_hash:
-            hash_mb = 0
-            for t_idx in caches:
-                E = dlrm.emb_l[t_idx]
-                hw = getattr(E, 'hot_weight_q8', None)
-                if hw is None:
-                    hw = getattr(E, 'hot_weight', None)
-                if hw is None:
-                    continue
-                n_hot = hw.size(0)
-                capacity = 1
-                while capacity < n_hot * 5 // 3:
-                    capacity *= 2
-                hash_mb += capacity * 8 / 1024 / 1024  # 8 bytes per slot
-            effective_mapping_mb = hash_mb
+        if HAS_CPP_EXT and compressed_table_ids and (use_hash or use_bitmap):
+            if use_bitmap:
+                # Bitmap: 12 bytes per 64 rows (8 byte bitmap word + 4 byte rank)
+                bm_mb = 0
+                for t_idx in caches:
+                    n_rows = ln_emb[t_idx]
+                    n_words = (n_rows + 63) // 64
+                    bm_mb += (n_words * 8 + (n_words + 1) * 4) / 1024 / 1024
+                effective_mapping_mb = bm_mb
+            else:
+                # Hash table: ~60% load factor, 8 bytes per slot
+                hash_mb = 0
+                for t_idx in caches:
+                    E = dlrm.emb_l[t_idx]
+                    hw = getattr(E, 'hot_weight_q8', None)
+                    if hw is None:
+                        hw = getattr(E, 'hot_weight', None)
+                    if hw is None:
+                        continue
+                    n_hot = hw.size(0)
+                    capacity = 1
+                    while capacity < n_hot * 5 // 3:
+                        capacity *= 2
+                    hash_mb += capacity * 8 / 1024 / 1024
+                effective_mapping_mb = hash_mb
 
         total_mem_mb = total_hot_mb + compressed_in_mem_mb + lru_mb + effective_mapping_mb
 
@@ -1448,7 +1474,9 @@ def main():
         log(f"  Compression: {orig_cold_mb:.1f}MB fp32 -> {compressed_mb:.1f}MB "
             f"({compression_ratio:.1f}x)")
         log(f"  LRU cache: {lru_frames} frames = {lru_mb:.1f}MB")
-        if HAS_CPP_EXT and compressed_table_ids and use_hash:
+        if HAS_CPP_EXT and compressed_table_ids and use_bitmap:
+            log(f"  Bitmap-rank: {effective_mapping_mb:.1f}MB (vs {total_mapping_mb:.1f}MB mapping)")
+        elif HAS_CPP_EXT and compressed_table_ids and use_hash:
             log(f"  Hot hash table: {effective_mapping_mb:.1f}MB (vs {total_mapping_mb:.1f}MB mapping)")
         else:
             log(f"  Mapping: {total_mapping_mb:.1f}MB (merged int32)")
@@ -1518,66 +1546,54 @@ def main():
         return result
 
     # ---- Run experiments ----
-    res_name = '4K'
+    # === Bitmap-rank mode (best memory + speed balance) ===
     log(f"\n{'='*70}")
-    log(f"EXPERIMENTS: {res_name}")
+    log("EXPERIMENTS: Bitmap-rank mode (~2MB mapping)")
     log(f"{'='*70}")
 
-    # === 4K experiments ===
-    # Exp 1: Global cache=8, disk, fp32-hot (v3 best config)
-    key = f'{res_name}_g8_disk_fp32hot'
+    # 4K bitmap (speed + low memory): ~88MB
+    key = '4K_g8_q8hot_bitmap'
     all_results[key] = run_ondemand_inference(
-        res_name=res_name, cache_capacity=8,
-        predictor_type='none', lookahead_depth=1, tag=key,
-        use_global_cache=True, disk_decode=True, quantize_hot=False)
-
-    # Exp 2: Global cache=8, disk, q8-hot (max memory savings)
-    key = f'{res_name}_g8_disk_q8hot'
-    all_results[key] = run_ondemand_inference(
-        res_name=res_name, cache_capacity=8,
-        predictor_type='none', lookahead_depth=1, tag=key,
-        use_global_cache=True, disk_decode=True, quantize_hot=True)
-
-    # === 1080p experiments ===
-    res_1080 = '1080p'
-    log(f"\n{'='*70}")
-    log(f"EXPERIMENTS: {res_1080}")
-    log(f"{'='*70}")
-
-    # Exp 3: 1080p, cache=32, disk, q8-hot (same LRU budget as 4K cache=8)
-    key = f'{res_1080}_g32_disk_q8hot'
-    all_results[key] = run_ondemand_inference(
-        res_name=res_1080, cache_capacity=32,
-        predictor_type='none', lookahead_depth=1, tag=key,
-        use_global_cache=True, disk_decode=True, quantize_hot=True)
-
-    # Exp 4: 1080p, cache=32, disk, fp32-hot
-    key = f'{res_1080}_g32_disk_fp32hot'
-    all_results[key] = run_ondemand_inference(
-        res_name=res_1080, cache_capacity=32,
-        predictor_type='none', lookahead_depth=1, tag=key,
-        use_global_cache=True, disk_decode=True, quantize_hot=False)
-
-    # === Memory-optimized experiments (hash table mode) ===
-    log(f"\n{'='*70}")
-    log("EXPERIMENTS: Hash Table Mode (memory-optimized)")
-    log(f"{'='*70}")
-
-    # Exp 5: 1080p, cache=32, disk, q8-hot + hash table (max compression)
-    key = f'{res_1080}_g32_disk_q8hot_hash'
-    all_results[key] = run_ondemand_inference(
-        res_name=res_1080, cache_capacity=32,
+        res_name='4K', cache_capacity=8,
         predictor_type='none', lookahead_depth=1, tag=key,
         use_global_cache=True, disk_decode=True, quantize_hot=True,
-        use_hash_table=True)
+        use_bitmap=True, warmup_batches=1)
 
-    # Exp 6: 4K, cache=8, disk, q8-hot + hash table
-    key = f'{res_name}_g8_disk_q8hot_hash'
+    # 1080p bitmap: ~68MB
+    key = '1080p_g32_q8hot_bitmap'
     all_results[key] = run_ondemand_inference(
-        res_name=res_name, cache_capacity=8,
+        res_name='1080p', cache_capacity=32,
         predictor_type='none', lookahead_depth=1, tag=key,
         use_global_cache=True, disk_decode=True, quantize_hot=True,
-        use_hash_table=True)
+        use_bitmap=True, warmup_batches=1)
+
+    # 480p bitmap g64: ~43MB (extreme compression)
+    key = '480p_g64_q8hot_bitmap'
+    all_results[key] = run_ondemand_inference(
+        res_name='480p', cache_capacity=64,
+        predictor_type='none', lookahead_depth=1, tag=key,
+        use_global_cache=True, disk_decode=True, quantize_hot=True,
+        use_bitmap=True, warmup_batches=1)
+
+    # === Hash mode for comparison ===
+    log(f"\n{'='*70}")
+    log("EXPERIMENTS: Hash table comparison")
+    log(f"{'='*70}")
+
+    key = '4K_g8_q8hot_hash'
+    all_results[key] = run_ondemand_inference(
+        res_name='4K', cache_capacity=8,
+        predictor_type='none', lookahead_depth=1, tag=key,
+        use_global_cache=True, disk_decode=True, quantize_hot=True,
+        use_hash_table=True, warmup_batches=1)
+
+    # === Non-hash speed mode for comparison ===
+    key = '1080p_g32_q8hot'
+    all_results[key] = run_ondemand_inference(
+        res_name='1080p', cache_capacity=32,
+        predictor_type='none', lookahead_depth=1, tag=key,
+        use_global_cache=True, disk_decode=True, quantize_hot=True,
+        warmup_batches=1)
 
     # ---- Save results ----
     log(f"\n{'='*70}")
