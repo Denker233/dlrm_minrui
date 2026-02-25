@@ -1,0 +1,89 @@
+/home/cc/expr/dlrm_minrui/dlrm_data_pytorch.py:328: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor. (Triggered internally at /pytorch/torch/csrc/utils/tensor_new.cpp:253.)
+  X_int = torch.log(torch.tensor(transposed_data[0], dtype=torch.float) + 1)
+Unable to import mlperf_logging,  No module named 'mlperf_logging'
+Unable to import onnx.  No module named 'onnx'
+world size: 1, current rank: 0, local rank: 0
+Using CPU...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+time/loss/accuracy (if enabled):
+PyTorch Intra-op threads: 80
+Finished training it 1000/19186 of epoch 0, -1.00 ms/it, loss 0.534200
+Embedding lookup time: 1.68 ms, MLP time: 1.87 ms, interaction time: 2.63 ms 
+Running dlrm: 5.02 ms, backpropagation after dlrm: 12.83 ms, backpass: 8.08 ms
+Finished training it 2000/19186 of epoch 0, -1.00 ms/it, loss 0.518564
+Embedding lookup time: 1.70 ms, MLP time: 1.87 ms, interaction time: 2.57 ms 
+Running dlrm: 5.00 ms, backpropagation after dlrm: 12.80 ms, backpass: 8.10 ms
+Finished training it 3000/19186 of epoch 0, -1.00 ms/it, loss 0.513741
+Embedding lookup time: 1.85 ms, MLP time: 2.05 ms, interaction time: 3.27 ms 
+Running dlrm: 5.66 ms, backpropagation after dlrm: 13.10 ms, backpass: 8.21 ms
+Finished training it 4000/19186 of epoch 0, -1.00 ms/it, loss 0.509251
+Embedding lookup time: 1.83 ms, MLP time: 2.08 ms, interaction time: 3.34 ms 
+Running dlrm: 5.72 ms, backpropagation after dlrm: 13.36 ms, backpass: 8.29 ms
+Finished training it 5000/19186 of epoch 0, -1.00 ms/it, loss 0.506229
+Embedding lookup time: 1.92 ms, MLP time: 2.11 ms, interaction time: 3.30 ms 
+Running dlrm: 5.81 ms, backpropagation after dlrm: 13.18 ms, backpass: 8.16 ms
+Finished training it 6000/19186 of epoch 0, -1.00 ms/it, loss 0.503921
+Embedding lookup time: 1.76 ms, MLP time: 2.04 ms, interaction time: 3.43 ms 
+Running dlrm: 5.62 ms, backpropagation after dlrm: 12.61 ms, backpass: 7.70 ms
+Finished training it 7000/19186 of epoch 0, -1.00 ms/it, loss 0.501778
+Embedding lookup time: 1.74 ms, MLP time: 2.00 ms, interaction time: 3.05 ms 
+Running dlrm: 5.40 ms, backpropagation after dlrm: 13.37 ms, backpass: 8.40 ms
+Finished training it 8000/19186 of epoch 0, -1.00 ms/it, loss 0.499612
+Embedding lookup time: 1.70 ms, MLP time: 2.02 ms, interaction time: 2.85 ms 
+Running dlrm: 5.30 ms, backpropagation after dlrm: 13.83 ms, backpass: 8.92 ms
+Finished training it 9000/19186 of epoch 0, -1.00 ms/it, loss 0.496957
+Embedding lookup time: 1.71 ms, MLP time: 1.94 ms, interaction time: 2.71 ms 
+Running dlrm: 5.15 ms, backpropagation after dlrm: 13.06 ms, backpass: 8.26 ms
+Finished training it 10000/19186 of epoch 0, -1.00 ms/it, loss 0.493766
+Embedding lookup time: 1.63 ms, MLP time: 1.91 ms, interaction time: 2.68 ms 
+Running dlrm: 5.02 ms, backpropagation after dlrm: 12.91 ms, backpass: 8.13 ms
+Testing at - 10000/19186 of epoch 0,
+ accuracy 76.409 %, best 76.409 %
+Saving model to ./models/dlrm_kaggle_1epoch_new.pt
+Finished training it 11000/19186 of epoch 0, -1.00 ms/it, loss 0.492193
+Embedding lookup time: 4.25 ms, MLP time: 4.98 ms, interaction time: 7.70 ms 
+Running dlrm: 5.55 ms, backpropagation after dlrm: 13.90 ms, backpass: 8.63 ms
+Finished training it 12000/19186 of epoch 0, -1.00 ms/it, loss 0.489523
+Embedding lookup time: 1.88 ms, MLP time: 1.98 ms, interaction time: 2.90 ms 
+Running dlrm: 5.45 ms, backpropagation after dlrm: 13.28 ms, backpass: 8.35 ms
+Finished training it 13000/19186 of epoch 0, -1.00 ms/it, loss 0.487917
+Embedding lookup time: 1.69 ms, MLP time: 1.87 ms, interaction time: 2.70 ms 
+Running dlrm: 5.06 ms, backpropagation after dlrm: 12.73 ms, backpass: 8.03 ms
+Finished training it 14000/19186 of epoch 0, -1.00 ms/it, loss 0.485104
+Embedding lookup time: 1.64 ms, MLP time: 1.95 ms, interaction time: 2.83 ms 
+Running dlrm: 5.15 ms, backpropagation after dlrm: 13.28 ms, backpass: 8.29 ms
+Finished training it 15000/19186 of epoch 0, -1.00 ms/it, loss 0.484094
+Embedding lookup time: 1.69 ms, MLP time: 1.87 ms, interaction time: 2.71 ms 
+Running dlrm: 5.07 ms, backpropagation after dlrm: 12.78 ms, backpass: 8.09 ms
+Finished training it 16000/19186 of epoch 0, -1.00 ms/it, loss 0.481456
+Embedding lookup time: 1.60 ms, MLP time: 1.88 ms, interaction time: 2.71 ms 
+Running dlrm: 4.99 ms, backpropagation after dlrm: 12.62 ms, backpass: 8.05 ms
+Finished training it 17000/19186 of epoch 0, -1.00 ms/it, loss 0.480100
+Embedding lookup time: 1.67 ms, MLP time: 1.89 ms, interaction time: 2.74 ms 
+Running dlrm: 5.07 ms, backpropagation after dlrm: 13.02 ms, backpass: 8.32 ms
+Finished training it 18000/19186 of epoch 0, -1.00 ms/it, loss 0.478403
+Embedding lookup time: 1.61 ms, MLP time: 1.87 ms, interaction time: 2.69 ms 
+Running dlrm: 4.97 ms, backpropagation after dlrm: 12.65 ms, backpass: 8.01 ms
+Finished training it 19000/19186 of epoch 0, -1.00 ms/it, loss 0.477289
+Embedding lookup time: 1.65 ms, MLP time: 1.96 ms, interaction time: 3.01 ms 
+Running dlrm: 5.25 ms, backpropagation after dlrm: 12.99 ms, backpass: 8.13 ms
+Finished training it 19186/19186 of epoch 0, -1.00 ms/it, loss 0.474420
+Embedding lookup time: 1.73 ms, MLP time: 2.05 ms, interaction time: 3.35 ms 
+Running dlrm: 5.57 ms, backpropagation after dlrm: 13.03 ms, backpass: 7.98 ms
+Testing at - 19186/19186 of epoch 0,
+ accuracy 76.741 %, best 76.741 %
+Saving model to ./models/dlrm_kaggle_1epoch_new.pt
+The MLP time is 43.45288062095642
+The embedding time is 38.22319960594177
+The interaction time is 65.07788944244385
+The total time is 1005.3801379203796
+Command used to run the program: dlrm_s_pytorch.py --arch-sparse-feature-size=16 --arch-mlp-bot=13-512-256-64-16 --arch-mlp-top=512-256-1 --data-generation=dataset --data-set=kaggle --raw-data-file=/home/cc/input/train.txt --processed-data-file=/home/cc/input/kaggleAdDisplayChallenge_processed.npz --loss-function=bce --round-targets=True --learning-rate=0.01 --mini-batch-size=2048 --nepochs=1 --num-workers=0 --print-freq=1000 --test-freq=10000 --save-model=./models/dlrm_kaggle_1epoch_new.pt
