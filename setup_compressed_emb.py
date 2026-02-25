@@ -7,7 +7,8 @@ setup(
         CppExtension(
             'compressed_emb',
             ['csrc/compressed_emb.cpp'],
-            extra_compile_args=['-O3', '-march=native'],
+            extra_compile_args=['-O3', '-march=native', '-fopenmp'],
+            extra_link_args=['-fopenmp'],
         ),
     ],
     cmdclass={'build_ext': BuildExtension},

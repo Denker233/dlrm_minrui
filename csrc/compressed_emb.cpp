@@ -3,6 +3,8 @@
 
 #include <torch/extension.h>
 #include <vector>
+#include <cstring>
+#include <algorithm>
 
 // Forward pass: hot/cold split embedding lookup with sum pooling.
 //
@@ -150,7 +152,8 @@ torch::Tensor hot_embedding_bag_forward(
     return output;  // cold_mask available via the second return
 }
 
-// Version that returns both output and cold_mask
+// Optimized version: returns both output and cold_mask.
+// Uses at::parallel_for for multi-threaded bag processing.
 std::vector<torch::Tensor> compressed_emb_bag_forward(
     const torch::Tensor& indices,           // (N,) int64
     const torch::Tensor& offsets,           // (B,) int64
@@ -176,32 +179,35 @@ std::vector<torch::Tensor> compressed_emb_bag_forward(
     float* out_ptr = output.data_ptr<float>();
     bool* cold_mask_ptr = cold_mask.data_ptr<bool>();
 
-    for (int64_t b = 0; b < B; b++) {
-        int64_t start = off_ptr[b];
-        int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
-        float* out_row = out_ptr + b * D;
+    // Parallel over bags — each bag is independent
+    at::parallel_for(0, B, /* grain_size= */ 64, [&](int64_t b_begin, int64_t b_end) {
+        for (int64_t b = b_begin; b < b_end; b++) {
+            int64_t start = off_ptr[b];
+            int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+            float* out_row = out_ptr + b * D;
 
-        for (int64_t i = start; i < end; i++) {
-            int64_t orig_idx = idx_ptr[i];
+            for (int64_t i = start; i < end; i++) {
+                int64_t orig_idx = idx_ptr[i];
 
-            if (hot_ptr[orig_idx]) {
-                int64_t hot_idx = o2h_ptr[orig_idx];
-                const float* emb_row = hw_ptr + hot_idx * D;
-                if (has_weights) {
-                    float w = psw_ptr[i];
-                    for (int64_t d = 0; d < D; d++) {
-                        out_row[d] += emb_row[d] * w;
+                if (hot_ptr[orig_idx]) {
+                    int64_t hot_idx = o2h_ptr[orig_idx];
+                    const float* emb_row = hw_ptr + hot_idx * D;
+                    if (has_weights) {
+                        float w = psw_ptr[i];
+                        for (int64_t d = 0; d < D; d++) {
+                            out_row[d] += emb_row[d] * w;
+                        }
+                    } else {
+                        for (int64_t d = 0; d < D; d++) {
+                            out_row[d] += emb_row[d];
+                        }
                     }
                 } else {
-                    for (int64_t d = 0; d < D; d++) {
-                        out_row[d] += emb_row[d];
-                    }
+                    cold_mask_ptr[i] = true;
                 }
-            } else {
-                cold_mask_ptr[i] = true;
             }
         }
-    }
+    });
 
     return {output, cold_mask};
 }
@@ -262,9 +268,111 @@ void cold_fixup(
 }
 
 
+// Quantized hot forward: hot_weight is stored as uint8 with per-table scale/zp.
+// Dequantizes on the fly during accumulation. Saves 4x memory for hot embeddings.
+std::vector<torch::Tensor> compressed_emb_bag_forward_q8(
+    const torch::Tensor& indices,           // (N,) int64
+    const torch::Tensor& offsets,           // (B,) int64
+    const torch::Tensor& hot_weight_q8,    // (n_hot, D) uint8 — quantized hot embeddings
+    const torch::Tensor& is_hot,            // (num_emb,) bool
+    const torch::Tensor& orig_to_hot,       // (num_emb,) int64
+    const torch::Tensor& per_sample_weights,// (N,) float32 or empty
+    double hot_scale,                       // dequant scale for hot weights
+    int64_t hot_zero_point                  // dequant zero point for hot weights
+) {
+    const int64_t N = indices.size(0);
+    const int64_t B = offsets.size(0);
+    const int64_t D = hot_weight_q8.size(1);
+    const bool has_weights = per_sample_weights.numel() > 0;
+
+    auto output = torch::zeros({B, D}, torch::dtype(torch::kFloat32));
+    auto cold_mask = torch::zeros({N}, torch::dtype(torch::kBool));
+
+    const int64_t* idx_ptr = indices.data_ptr<int64_t>();
+    const int64_t* off_ptr = offsets.data_ptr<int64_t>();
+    const bool* hot_ptr = is_hot.data_ptr<bool>();
+    const int64_t* o2h_ptr = orig_to_hot.data_ptr<int64_t>();
+    const uint8_t* hw_ptr = hot_weight_q8.data_ptr<uint8_t>();
+    const float* psw_ptr = has_weights ? per_sample_weights.data_ptr<float>() : nullptr;
+    float* out_ptr = output.data_ptr<float>();
+    bool* cold_mask_ptr = cold_mask.data_ptr<bool>();
+    const float s = static_cast<float>(hot_scale);
+    const float zp = static_cast<float>(hot_zero_point);
+
+    at::parallel_for(0, B, 64, [&](int64_t b_begin, int64_t b_end) {
+        for (int64_t b = b_begin; b < b_end; b++) {
+            int64_t start = off_ptr[b];
+            int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+            float* out_row = out_ptr + b * D;
+
+            for (int64_t i = start; i < end; i++) {
+                int64_t orig_idx = idx_ptr[i];
+
+                if (hot_ptr[orig_idx]) {
+                    int64_t hot_idx = o2h_ptr[orig_idx];
+                    const uint8_t* emb_row = hw_ptr + hot_idx * D;
+                    if (has_weights) {
+                        float w = psw_ptr[i];
+                        for (int64_t d = 0; d < D; d++) {
+                            out_row[d] += (static_cast<float>(emb_row[d]) - zp) * s * w;
+                        }
+                    } else {
+                        for (int64_t d = 0; d < D; d++) {
+                            out_row[d] += (static_cast<float>(emb_row[d]) - zp) * s;
+                        }
+                    }
+                } else {
+                    cold_mask_ptr[i] = true;
+                }
+            }
+        }
+    });
+
+    return {output, cold_mask};
+}
+
+
+// Gather specific rows from a uint8 frame and dequantize to fp32.
+// Much faster than Python numpy indexing + float conversion.
+torch::Tensor gather_dequant_uint8(
+    const torch::Tensor& uint8_frame,    // (rows_in_frame, D) uint8
+    const torch::Tensor& row_offsets,    // (K,) int64 — which rows to gather
+    double scale,                         // dequant scale
+    int64_t zero_point                   // dequant zero point
+) {
+    const int64_t K = row_offsets.size(0);
+    const int64_t D = uint8_frame.size(1);
+    const int64_t max_row = uint8_frame.size(0);
+
+    auto output = torch::zeros({K, D}, torch::dtype(torch::kFloat32));
+
+    const uint8_t* frame_ptr = uint8_frame.data_ptr<uint8_t>();
+    const int64_t* off_ptr = row_offsets.data_ptr<int64_t>();
+    float* out_ptr = output.data_ptr<float>();
+    const float s = static_cast<float>(scale);
+    const float zp = static_cast<float>(zero_point);
+
+    for (int64_t k = 0; k < K; k++) {
+        int64_t row = off_ptr[k];
+        if (row < 0) row = 0;
+        if (row >= max_row) row = max_row - 1;
+        const uint8_t* src = frame_ptr + row * D;
+        float* dst = out_ptr + k * D;
+        for (int64_t d = 0; d < D; d++) {
+            dst[d] = (static_cast<float>(src[d]) - zp) * s;
+        }
+    }
+    return output;
+}
+
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("compressed_emb_bag_forward", &compressed_emb_bag_forward,
           "Compressed EmbeddingBag forward (hot path in C++, returns cold_mask)");
+    m.def("compressed_emb_bag_forward_q8", &compressed_emb_bag_forward_q8,
+          "Compressed EmbeddingBag forward with uint8 hot weights");
     m.def("cold_fixup", &cold_fixup,
           "Add cold embeddings into output in-place");
+    m.def("gather_dequant_uint8", &gather_dequant_uint8,
+          "Gather rows from uint8 frame and dequantize to fp32");
 }
