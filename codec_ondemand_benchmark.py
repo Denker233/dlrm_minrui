@@ -1234,53 +1234,97 @@ def main():
                 caches[t_idx].reset_stats()
                 caches[t_idx].clear_cache()
 
-        # Fast apply_emb: bypass nn.Module.__call__ to eliminate Python overhead
-        # Each nn.Module.__call__ adds ~0.15-0.2ms overhead (hooks, autograd, etc.)
-        # With 26 tables, this saves ~3-4ms per batch
+        # Fast apply_emb: register all tables in C++ then use fast_forward (single call)
+        # This eliminates the Python for-loop entirely — zero Python overhead per batch.
         compressed_table_ids = set(caches.keys())
         _orig_apply_emb = dlrm.apply_emb
-        _use_merged = HAS_CPP_EXT and hasattr(_C, 'compressed_emb_bag_forward_merged')
-        def _fast_apply_emb(lS_o, lS_i, emb_l, v_W_l):
-            ly = []
-            for k in range(len(emb_l)):
-                E = emb_l[k]
-                idx = lS_i[k]
-                off = lS_o[k]
+
+        if HAS_CPP_EXT and compressed_table_ids:
+            num_tabs = len(dlrm.emb_l)
+            # Register tables in C++ for fast_forward
+            table_kinds = []
+            weights = []
+            mappings = []
+            scales = []
+            zero_points = []
+            _cold_caches = {}  # table_idx -> cold_cache (for cold fixup in Python)
+            _mappings = {}     # table_idx -> mapping tensor (for cold fixup)
+            _empty_psw = {}    # table_idx -> empty per_sample_weights
+            _empty_set = set()
+
+            for k in range(num_tabs):
+                E = dlrm.emb_l[k]
                 if k in compressed_table_ids and isinstance(E, CompressedEmbeddingBag):
-                    # Direct C++ call — single pass through indices with hot/cold routing
                     if E.quantize_hot:
-                        output, cold_mask, cold_count = _C.compressed_emb_bag_forward_q8_merged(
-                            idx, off, E.hot_weight_q8, E.mapping,
-                            E._empty_psw, E.hot_scale, E.hot_zp)
+                        table_kinds.append(2)  # COMPRESSED_Q8
+                        weights.append(E.hot_weight_q8)
+                        mappings.append(E.mapping)
+                        scales.append(float(E.hot_scale))
+                        zero_points.append(int(E.hot_zp))
                     else:
-                        output, cold_mask, cold_count = _C.compressed_emb_bag_forward_merged(
-                            idx, off, E.hot_weight, E.mapping, E._empty_psw)
-                    # Cold fixup (very rare: ~0.1% of batches)
-                    if cold_count.item() > 0:
+                        table_kinds.append(1)  # COMPRESSED_FP32
+                        weights.append(E.hot_weight)
+                        mappings.append(E.mapping)
+                        scales.append(0.0)
+                        zero_points.append(0)
+                    _cold_caches[k] = E.cold_cache
+                    _mappings[k] = E.mapping
+                    _empty_psw[k] = E._empty_psw
+                else:
+                    table_kinds.append(0)  # STANDARD
+                    weights.append(E.weight)
+                    mappings.append(torch.empty(0, dtype=torch.int32))  # placeholder
+                    scales.append(0.0)
+                    zero_points.append(0)
+
+            _C.register_tables(table_kinds, weights, mappings, scales, zero_points)
+
+            def _fast_apply_emb(lS_o, lS_i, emb_l, v_W_l):
+                # Ensure lS_i and lS_o are 2D contiguous tensors
+                if isinstance(lS_i, (list, tuple)):
+                    lS_i_2d = torch.stack(lS_i)
+                elif lS_i.dim() == 2:
+                    lS_i_2d = lS_i
+                else:
+                    lS_i_2d = lS_i.view(num_tabs, -1)
+                if isinstance(lS_o, (list, tuple)):
+                    lS_o_2d = torch.stack(lS_o)
+                elif lS_o.dim() == 2:
+                    lS_o_2d = lS_o
+                else:
+                    lS_o_2d = lS_o.view(num_tabs, -1)
+
+                # Single C++ call processes all 26 tables
+                results = _C.fast_forward(lS_i_2d, lS_o_2d)
+                # Unpack: [outputs..., cold_masks..., cold_counts...]
+                outputs = results[:num_tabs]
+                cold_masks = results[num_tabs:2*num_tabs]
+                cold_counts = results[2*num_tabs:]
+
+                # Handle cold fixup for compressed tables (rare: ~0.1% of batches)
+                for k in _cold_caches:
+                    cc = cold_counts[k].item()
+                    if cc > 0:
+                        cold_mask = cold_masks[k]
+                        idx = lS_i_2d[k]
+                        off = lS_o_2d[k]
                         cold_positions = torch.where(cold_mask)[0]
-                        cold_orig = idx[cold_positions]
-                        cold_map_vals = E.mapping[cold_orig]
+                        cold_map_vals = _mappings[k][idx[cold_positions]]
                         cold_reordered = -(cold_map_vals.long() + 1)
                         valid = cold_reordered >= 0
                         if valid.any():
-                            cold_result, frames_used = E.cold_cache.lookup(cold_reordered[valid])
-                            _C.cold_fixup(output, idx, off, cold_mask,
-                                          cold_result, cold_positions[valid], E._empty_psw)
-                            E.last_frames_used = frames_used
+                            cold_result, frames_used = _cold_caches[k].lookup(cold_reordered[valid])
+                            _C.cold_fixup(outputs[k], idx, off, cold_mask,
+                                          cold_result, cold_positions[valid], _empty_psw[k])
+                            emb_l[k].last_frames_used = frames_used
                         else:
-                            E.last_frames_used = set()
+                            emb_l[k].last_frames_used = _empty_set
                     else:
-                        E.last_frames_used = set()
-                    ly.append(output)
-                else:
-                    # Standard EmbeddingBag - use F.embedding_bag directly
-                    psw = v_W_l[k].gather(0, idx) if v_W_l[k] is not None else None
-                    ly.append(F.embedding_bag(idx, E.weight, off,
-                                              per_sample_weights=psw, mode='sum'))
-            return ly
-        if HAS_CPP_EXT and compressed_table_ids:
+                        emb_l[k].last_frames_used = _empty_set
+
+                return list(outputs)
             dlrm.apply_emb = _fast_apply_emb
-            log(f"  Fast apply_emb enabled (bypasses nn.Module.__call__)")
+            log(f"  Fast apply_emb enabled (C++ fast_forward, zero Python loop overhead)")
 
         # Run inference — CompressedEmbeddingBag handles lookups inside dlrm.forward()
         drop_caches()
