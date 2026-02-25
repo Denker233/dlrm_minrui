@@ -1046,7 +1046,7 @@ def main():
                 t_idx = int(k.split('.')[1])
                 dlrm.emb_l[t_idx].weight.data = state_dict[k].clone()
 
-    # --- Baseline ---
+    # --- Baseline --- (run BEFORE torch.compile so timing is accurate)
     log("\n--- Baseline: Full fp32 ---")
     restore_weights()
     gc.collect()
@@ -1466,25 +1466,32 @@ def main():
                 frame_data_tensor = torch.from_numpy(all_data.copy())
                 frame_ids_tensor = torch.tensor(sorted_fids, dtype=torch.long)
 
-                # For bitmap mode: need cold mapping (orig_idx -> cold_reordered_idx)
-                cold_mapping_tensor = torch.empty(0, dtype=torch.long)
                 if use_bitmap:
+                    # Bitmap mode: need cold mapping (orig_idx -> cold_reordered_idx)
+                    cold_mapping_tensor = torch.empty(0, dtype=torch.long)
                     mmap_path = os.path.join(REORDER_DIR, f'orig_to_cold_reordered_{t_idx}.npy')
                     if os.path.exists(mmap_path):
                         cold_mapping_tensor = torch.from_numpy(
-                            np.load(mmap_path).copy()).int()  # int32 to save 50% memory
+                            np.load(mmap_path).copy()).int()
                     else:
                         pt_path = os.path.join(REORDER_DIR, f'orig_to_cold_reordered_{t_idx}.pt')
                         cold_mapping_tensor = torch.load(
                             pt_path, map_location='cpu', weights_only=True).int()
-
-                _C.register_cold_frames_for_table(
-                    t_idx, frame_ids_tensor, frame_data_tensor,
-                    float(cold_quant_scale[t_idx]),
-                    float(cold_quant_zp[t_idx]),
-                    rows_per_frame,
-                    cold_mapping_tensor)
-                total_cold_frame_mb += all_data.nbytes / 1024 / 1024
+                    _C.register_cold_frames_for_table(
+                        t_idx, frame_ids_tensor, frame_data_tensor,
+                        float(cold_quant_scale[t_idx]),
+                        float(cold_quant_zp[t_idx]),
+                        rows_per_frame,
+                        cold_mapping_tensor)
+                    total_cold_frame_mb += all_data.nbytes / 1024 / 1024
+                else:
+                    _C.register_cold_frames_for_table(
+                        t_idx, frame_ids_tensor, frame_data_tensor,
+                        float(cold_quant_scale[t_idx]),
+                        float(cold_quant_zp[t_idx]),
+                        rows_per_frame,
+                        torch.empty(0, dtype=torch.long))  # no cold_mapping needed
+                    total_cold_frame_mb += all_data.nbytes / 1024 / 1024
 
             _full_cpp_active = True
             _cold_frame_mb = total_cold_frame_mb
@@ -1708,7 +1715,7 @@ def main():
     # ---- Run experiments ----
     # === v22: fast dataloader + numpy score collection ===
     log(f"\n{'='*70}")
-    log("EXPERIMENTS: v22 — fast inference loop (pre-cached batches + numpy scores)")
+    log("EXPERIMENTS: v24 — bitmap cold_rank (no cold_mapping) + optimized interact")
     log(f"{'='*70}")
 
     # 1080p array + full_cpp: array mapping for both hot and cold

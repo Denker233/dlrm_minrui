@@ -919,34 +919,40 @@ class DLRM_Net(nn.Module):
         self.quantize_emb = True
         self.quantize_bits = bits
 
+    @staticmethod
+    def _interact_dot_stacked(x, ly, li, lj):
+        """Compilable core: stacked [T, B, D] sparse + [B, D] dense -> [B, D+tril]."""
+        T = torch.cat([x.unsqueeze(1), ly.permute(1, 0, 2)], dim=1)
+        Z = torch.bmm(T, T.transpose(1, 2))
+        Zflat = Z[:, li, lj]
+        return torch.cat([x, Zflat], dim=1)
+
+    @staticmethod
+    def _interact_dot_list(x, ly, li, lj, batch_size, d):
+        """Compilable core: list of [B, D] sparse tensors + [B, D] dense -> [B, D+tril]."""
+        T = torch.cat([x] + ly, dim=1).view((batch_size, -1, d))
+        Z = torch.bmm(T, T.transpose(1, 2))
+        Zflat = Z[:, li, lj]
+        return torch.cat([x, Zflat], dim=1)
+
     def interact_features(self, x, ly):
         start_time = time.time()
         if self.arch_interaction_op == "dot":
-            # concatenate dense and sparse features
             (batch_size, d) = x.shape
-            if isinstance(ly, torch.Tensor) and ly.dim() == 3:
-                # Stacked [T, B, D] tensor from full C++ mode — avoid 26-tensor cat
-                T = torch.cat([x.unsqueeze(0), ly], dim=0)  # [T+1, B, D]
-                T = T.permute(1, 0, 2).contiguous()  # [B, T+1, D]
-            else:
-                T = torch.cat([x] + ly, dim=1).view((batch_size, -1, d))
-            # perform a dot product
-            Z = torch.bmm(T, torch.transpose(T, 1, 2))
-            # append dense feature with the interactions (into a row vector)
-            _, ni, nj = Z.shape
-            # Cache tril indices (computed once, reused every batch)
+            # Ensure tril indices are cached
+            ni = (len(ly) + 1) if isinstance(ly, (list, tuple)) else (ly.shape[0] + 1)
             if not hasattr(self, '_tril_li') or self._tril_ni != ni:
                 offset = 1 if self.arch_interaction_itself else 0
                 li = torch.tensor([i for i in range(ni) for j in range(i + offset)])
-                lj = torch.tensor([j for i in range(nj) for j in range(i + offset)])
+                lj = torch.tensor([j for i in range(ni) for j in range(i + offset)])
                 self._tril_li = li
                 self._tril_lj = lj
                 self._tril_ni = ni
-            Zflat = Z[:, self._tril_li, self._tril_lj]
-            # concatenate dense features and interactions
-            R = torch.cat([x] + [Zflat], dim=1)
+            if isinstance(ly, torch.Tensor) and ly.dim() == 3:
+                R = self._interact_dot_stacked(x, ly, self._tril_li, self._tril_lj)
+            else:
+                R = self._interact_dot_list(x, ly, self._tril_li, self._tril_lj, batch_size, d)
         elif self.arch_interaction_op == "cat":
-            # concatenation features (into a row vector)
             R = torch.cat([x] + ly, dim=1)
         else:
             sys.exit(
@@ -954,13 +960,8 @@ class DLRM_Net(nn.Module):
                 + self.arch_interaction_op
                 + " is not supported"
             )
-        
-        end_time = time.time() 
-
-        # Calculate the elapsed time
-        elapsed_time = end_time - start_time
-        self.time_interact+=elapsed_time
-
+        end_time = time.time()
+        self.time_interact += end_time - start_time
         return R
 
     def forward(self, dense_x, lS_o, lS_i):
@@ -1069,21 +1070,13 @@ class DLRM_Net(nn.Module):
         # print("intermediate")
         # print(x.detach().cpu().numpy())
 
-        start_time = time.time()
         # process sparse features(using embeddings), resulting in a list of row vectors
+        # (timing is inside apply_emb itself — do NOT duplicate here)
         ly = self.apply_emb(lS_o, lS_i, self.emb_l, self.v_W_l)
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        self.time_look_up += elapsed_time
-        # for y in ly:
-        #     print(y.detach().cpu().numpy())
 
         # interact features (dense and sparse)
-        start_time = time.time()
+        # (timing is inside interact_features itself — do NOT duplicate here)
         z = self.interact_features(x, ly)
-        end_time = time.time()
-        elapsed_time = end_time - start_time
-        self.time_interact+=elapsed_time
         # print(z.detach().cpu().numpy())
 
         start_time = time.time()

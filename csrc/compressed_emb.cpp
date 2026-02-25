@@ -1113,6 +1113,17 @@ struct BitmapRank {
         return rank[word] + __builtin_popcountll(w & below_mask);
     }
 
+    // O(1) cold rank: returns the cold position (natural order) for a cold row.
+    // Assumes the caller already knows orig_idx is cold.
+    // cold_pos = orig_idx - count_of_hot_rows_before(orig_idx)
+    inline int64_t cold_rank(int64_t orig_idx) const {
+        int64_t word = orig_idx / 64;
+        int64_t bit = orig_idx % 64;
+        uint64_t below_mask = (1ULL << bit) - 1;  // bits 0..bit-1
+        int32_t hot_before = rank[word] + __builtin_popcountll(bitmap[word] & below_mask);
+        return orig_idx - hot_before;
+    }
+
     int64_t memory_bytes() const {
         return n_words * sizeof(uint64_t) + (n_words + 1) * sizeof(int32_t);
     }
@@ -1144,6 +1155,11 @@ struct RegisteredTable {
     torch::Tensor cold_mapping;
     const int32_t* cold_mapping_ptr = nullptr;
     bool has_cold_mapping = false;
+
+    // Flat cold buffer mode: cold frame data in natural order, indexed by bitmap cold_rank
+    // When cold_flat=true, no cold_mapping is needed — cold_rank gives direct buffer offset
+    bool cold_flat = false;
+    int64_t n_cold_rows = 0;  // total number of cold rows in flat buffer
 };
 
 // Static storage for registered tables
@@ -1291,33 +1307,74 @@ void register_cold_frames_for_table(
             table_idx, num_frames, frame_mb, rows_per_frame, tab.cold_scale, tab.cold_zp);
 }
 
+// register_cold_flat: register a flat natural-order cold buffer for a table.
+// Uses bitmap cold_rank for O(1) cold position lookup — no cold_mapping needed!
+// cold_flat_data: [n_cold_rows, D] uint8 — cold rows in natural order
+void register_cold_flat(
+    int64_t table_idx,
+    const torch::Tensor& cold_flat_data,
+    double cold_scale,
+    double cold_zp,
+    int64_t n_cold_rows
+) {
+    TORCH_CHECK(g_registered, "Tables not registered. Call register_tables first.");
+    TORCH_CHECK(table_idx >= 0 && table_idx < (int64_t)g_tables.size(),
+                "Invalid table index: ", table_idx);
+
+    auto& tab = g_tables[table_idx];
+    tab.has_cold_frames = true;
+    tab.cold_flat = true;
+    tab.n_cold_rows = n_cold_rows;
+    tab.cold_frame_concat = cold_flat_data.contiguous();
+    tab.cold_frame_data_ptr = tab.cold_frame_concat.data_ptr<uint8_t>();
+    tab.cold_scale = static_cast<float>(cold_scale);
+    tab.cold_zp = static_cast<float>(cold_zp);
+
+    int64_t flat_mb = cold_flat_data.numel() / (1024 * 1024);
+    fprintf(stderr, "[C++] Table %ld: registered flat cold buffer (%ld rows, %ld MB uint8), "
+            "scale=%.6f, zp=%.1f\n",
+            table_idx, n_cold_rows, flat_mb, tab.cold_scale, tab.cold_zp);
+}
+
 // Helper: look up a cold row from registered frame cache and accumulate into output.
-// cold_reordered_idx: the row index in the reordered cold table
+// cold_idx: either the reordered cold index (frame mode) or natural cold position (flat mode)
 // Returns true if handled in C++, false if needs Python fallback.
 static inline bool cold_frame_accum(
     float* __restrict__ out_row,
     const RegisteredTable& tab,
-    int64_t cold_reordered_idx,
+    int64_t cold_idx,
     int64_t D
 ) {
-    int64_t fid = cold_reordered_idx / tab.rows_per_frame;
-    if (__builtin_expect(fid < (int64_t)tab.cold_frame_offsets.size() &&
-                         tab.cold_frame_offsets[fid] >= 0, 1)) {
-        int64_t off_in_frame = cold_reordered_idx % tab.rows_per_frame;
-        int64_t buf_row = tab.cold_frame_offsets[fid] + off_in_frame;
-        const uint8_t* emb = tab.cold_frame_data_ptr + buf_row * D;
-#if HAS_AVX512
-        if (D == 16) {
-            accum_q8_d16(out_row, emb, tab.cold_scale, tab.cold_zp);
-        } else
-#endif
-        {
-            for (int64_t d = 0; d < D; d++)
-                out_row[d] += (static_cast<float>(emb[d]) - tab.cold_zp) * tab.cold_scale;
+    int64_t buf_row;
+    if (tab.cold_flat) {
+        // Flat mode: direct indexing by natural cold position
+        if (__builtin_expect(cold_idx >= 0 && cold_idx < tab.n_cold_rows, 1)) {
+            buf_row = cold_idx;
+        } else {
+            return false;
         }
-        return true;
+    } else {
+        // Frame mode: compute frame + offset
+        int64_t fid = cold_idx / tab.rows_per_frame;
+        if (__builtin_expect(fid < (int64_t)tab.cold_frame_offsets.size() &&
+                             tab.cold_frame_offsets[fid] >= 0, 1)) {
+            int64_t off_in_frame = cold_idx % tab.rows_per_frame;
+            buf_row = tab.cold_frame_offsets[fid] + off_in_frame;
+        } else {
+            return false;
+        }
     }
-    return false;
+    const uint8_t* emb = tab.cold_frame_data_ptr + buf_row * D;
+#if HAS_AVX512
+    if (D == 16) {
+        accum_q8_d16(out_row, emb, tab.cold_scale, tab.cold_zp);
+    } else
+#endif
+    {
+        for (int64_t d = 0; d < D; d++)
+            out_row[d] += (static_cast<float>(emb[d]) - tab.cold_zp) * tab.cold_scale;
+    }
+    return true;
 }
 
 // fast_forward: process all registered tables with a single call.
@@ -1409,7 +1466,10 @@ std::vector<torch::Tensor> fast_forward(
                     } else { cm_ptr[i] = true; local_cold++; } \
                 } while(0)
                 #define COLD_FROM_BITMAP() do { \
-                    if (tab.has_cold_frames && tab.has_cold_mapping) { \
+                    if (tab.has_cold_frames && tab.cold_flat) { \
+                        int64_t ci = br.cold_rank(idx_ptr[i]); \
+                        cold_frame_accum(out_row, tab, ci, D); \
+                    } else if (tab.has_cold_frames && tab.has_cold_mapping) { \
                         int32_t ci = tab.cold_mapping_ptr[idx_ptr[i]]; \
                         if (ci >= 0) cold_frame_accum(out_row, tab, static_cast<int64_t>(ci), D); \
                     } else { cm_ptr[i] = true; local_cold++; } \
@@ -1515,7 +1575,10 @@ std::vector<torch::Tensor> fast_forward(
                     } else { cm_ptr[i] = true; local_cold++; } \
                 } while(0)
                 #define COLD_Q8_FROM_BITMAP() do { \
-                    if (tab.has_cold_frames && tab.has_cold_mapping) { \
+                    if (tab.has_cold_frames && tab.cold_flat) { \
+                        int64_t ci = br.cold_rank(idx_ptr[i]); \
+                        cold_frame_accum(out_row, tab, ci, D); \
+                    } else if (tab.has_cold_frames && tab.has_cold_mapping) { \
                         int32_t ci = tab.cold_mapping_ptr[idx_ptr[i]]; \
                         if (ci >= 0) cold_frame_accum(out_row, tab, static_cast<int64_t>(ci), D); \
                     } else { cm_ptr[i] = true; local_cold++; } \
@@ -1670,4 +1733,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           py::arg("table_idx"), py::arg("frame_ids"), py::arg("frame_data"),
           py::arg("cold_scale"), py::arg("cold_zp"), py::arg("rows_per_frame"),
           py::arg("cold_mapping") = torch::Tensor());
+    m.def("register_cold_flat", &register_cold_flat,
+          "Register flat natural-order cold buffer (no cold_mapping needed, uses bitmap cold_rank)",
+          py::arg("table_idx"), py::arg("cold_flat_data"),
+          py::arg("cold_scale"), py::arg("cold_zp"), py::arg("n_cold_rows"));
 }
