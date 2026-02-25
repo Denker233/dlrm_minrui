@@ -374,16 +374,74 @@ class MarkovPredictor:
 
 
 # ============================================================
+# GLOBAL LRU FRAME CACHE (shared across all tables)
+# ============================================================
+class GlobalFrameCache:
+    """
+    Shared LRU frame cache across all embedding tables.
+    Key: (table_id, frame_id) -> decoded frame data (uint8 or fp32).
+    Total capacity: N frames regardless of which table they belong to.
+    """
+    def __init__(self, capacity, store_uint8=True):
+        self.capacity = capacity
+        self.store_uint8 = store_uint8
+        self.cache = OrderedDict()  # (table_id, frame_id) -> frame_data
+        self.lock = threading.Lock()
+        self.stats = {'hits': 0, 'misses': 0, 'evictions': 0}
+
+    def get(self, table_id, frame_id):
+        key = (table_id, frame_id)
+        with self.lock:
+            if key in self.cache:
+                self.cache.move_to_end(key)
+                self.stats['hits'] += 1
+                return self.cache[key]
+            self.stats['misses'] += 1
+            return None
+
+    def put(self, table_id, frame_id, data):
+        key = (table_id, frame_id)
+        with self.lock:
+            if key in self.cache:
+                self.cache.move_to_end(key)
+                self.cache[key] = data
+                return
+            while len(self.cache) >= self.capacity:
+                self.cache.popitem(last=False)  # evict LRU
+                self.stats['evictions'] += 1
+            self.cache[key] = data
+
+    def clear(self):
+        with self.lock:
+            self.cache.clear()
+
+    def __len__(self):
+        return len(self.cache)
+
+    def report(self):
+        total = self.stats['hits'] + self.stats['misses']
+        hit_rate = self.stats['hits'] / total if total > 0 else 0
+        log(f"  GlobalCache: {len(self.cache)}/{self.capacity} frames, "
+            f"{hit_rate:.1%} hit rate, {self.stats['evictions']} evictions")
+
+
+# ============================================================
 # TRUE ON-DEMAND PREFETCH FRAME CACHE
 # ============================================================
 class OnDemandPrefetchCache:
     """
     Bounded frame cache with true on-demand H.265 decode.
-    NO pre-decoded frames in memory — each miss reads from disk.
+    Supports two modes:
+    1. Per-table local cache (legacy, global_cache=None)
+    2. Global shared cache (global_cache=GlobalFrameCache instance)
+
+    When using global cache, frames are stored as uint8 to save 4x memory.
+    Dequantization happens during gather (only for needed rows).
     """
     def __init__(self, frame_dir, rows_per_frame, emb_dim, num_cold_rows,
                  width, height, quant_scale, quant_zp,
-                 cache_capacity=100, predictor=None, num_prefetch_workers=2):
+                 cache_capacity=100, predictor=None, num_prefetch_workers=2,
+                 global_cache=None, table_id=-1):
         self.frame_dir = frame_dir
         self.rows_per_frame = rows_per_frame
         self.emb_dim = emb_dim
@@ -393,22 +451,39 @@ class OnDemandPrefetchCache:
         self.quant_zp = quant_zp
         self.width = width
         self.height = height
+        self.table_id = table_id
 
         # On-demand decoder (no pre-decode)
         self._decoder = OnDemandFrameDecoder(
             frame_dir, rows_per_frame, emb_dim, width, height)
 
-        # Bounded LRU cache: frame_id -> fp32 tensor
-        self.cache = {}
-        self.cache_priority = {}
-        self.cache_capacity = cache_capacity
+        # Global vs local cache
+        self.global_cache = global_cache
+        self.use_global = global_cache is not None
+
+        if not self.use_global:
+            # Legacy per-table LRU cache: frame_id -> fp32 tensor
+            self.cache = {}
+            self.cache_priority = {}
+            self.cache_capacity = cache_capacity
+        else:
+            # Global cache handles storage and eviction
+            self.cache = None
+            self.cache_priority = None
+            self.cache_capacity = 0  # managed globally
+
         self.lock = threading.Lock()
 
-        frame_bytes = rows_per_frame * emb_dim * 4  # fp32
-        total_cache_bytes = cache_capacity * frame_bytes
-        log(f"Cache: {cache_capacity} frames x {frame_bytes/1024:.1f}KB = "
-            f"{total_cache_bytes/1024/1024:.1f}MB budget "
-            f"({rows_per_frame} rows/frame, {self.num_frames} total frames)")
+        frame_bytes_fp32 = rows_per_frame * emb_dim * 4
+        frame_bytes_uint8 = rows_per_frame * emb_dim
+        if self.use_global:
+            log(f"  Table {table_id}: using global cache "
+                f"({self.num_frames} frames, {frame_bytes_uint8/1024:.1f}KB/frame uint8)")
+        else:
+            total_cache_bytes = cache_capacity * frame_bytes_fp32
+            log(f"Cache: {cache_capacity} frames x {frame_bytes_fp32/1024:.1f}KB = "
+                f"{total_cache_bytes/1024/1024:.1f}MB budget "
+                f"({rows_per_frame} rows/frame, {self.num_frames} total frames)")
 
         # Prefetch workers
         self.executor = ThreadPoolExecutor(max_workers=num_prefetch_workers)
@@ -425,30 +500,51 @@ class OnDemandPrefetchCache:
             'batch_demand_decomps': [], 'batch_hit_rates': [],
         }
 
-    def _decode_and_dequant(self, frame_id):
-        """True on-demand: read H.265 file from disk, decode, dequantize to fp32."""
+    def _decode_raw(self, frame_id):
+        """Decode H.265 frame, return uint8 ndarray (actual_rows, emb_dim)."""
         q_uint8 = self._decoder.decode_frame(frame_id)
         row_start = frame_id * self.rows_per_frame
         row_end = min(row_start + self.rows_per_frame, self.num_cold_rows)
         actual_rows = row_end - row_start
-        q_slice = q_uint8[:actual_rows]
+        return q_uint8[:actual_rows]
+
+    def _decode_and_dequant(self, frame_id):
+        """True on-demand: read H.265 file from disk, decode, dequantize to fp32."""
+        q_slice = self._decode_raw(frame_id)
         fp32 = (q_slice.astype(np.float32) - self.quant_zp) * self.quant_scale
+        return torch.from_numpy(fp32)
+
+    def _dequant_rows(self, uint8_data, row_offsets):
+        """Dequantize specific rows from uint8 frame data to fp32 tensor.
+        Uses C++ extension when available for ~2x speedup."""
+        if HAS_CPP_EXT and isinstance(uint8_data, np.ndarray):
+            uint8_t = torch.from_numpy(uint8_data)
+            offsets_t = torch.from_numpy(row_offsets).long() if isinstance(row_offsets, np.ndarray) else row_offsets.long()
+            return _C.gather_dequant_uint8(uint8_t, offsets_t, self.quant_scale, self.quant_zp)
+        selected = uint8_data[row_offsets]
+        fp32 = (selected.astype(np.float32) - self.quant_zp) * self.quant_scale
         return torch.from_numpy(fp32)
 
     def _prefetch_worker(self, frame_id, priority):
         t0 = time.time()
-        frame_data = self._decode_and_dequant(frame_id)
+        if self.use_global:
+            frame_data = self._decode_raw(frame_id)
+            self.global_cache.put(self.table_id, frame_id, frame_data)
+        else:
+            frame_data = self._decode_and_dequant(frame_id)
+            with self.lock:
+                if frame_id not in self.cache:
+                    self.cache[frame_id] = frame_data
+                    self.cache_priority[frame_id] = priority
+                    self._evict_if_needed()
         elapsed = (time.time() - t0) * 1000
-        with self.lock:
-            if frame_id not in self.cache:
-                self.cache[frame_id] = frame_data
-                self.cache_priority[frame_id] = priority
-                self._evict_if_needed()
-            self.stats['total_prefetch_ms'] += elapsed
+        self.stats['total_prefetch_ms'] += elapsed
         with self.prefetch_lock:
             self.pending.discard(frame_id)
 
     def _evict_if_needed(self):
+        if self.use_global:
+            return  # global cache handles eviction
         while len(self.cache) > self.cache_capacity:
             evict_id = min(self.cache_priority, key=self.cache_priority.get)
             del self.cache[evict_id]
@@ -458,17 +554,25 @@ class OnDemandPrefetchCache:
     def launch_prefetch(self, current_batch_frames):
         if self.predictor is None:
             return
+        cap = self.global_cache.capacity if self.use_global else self.cache_capacity
         predictions = self.predictor.predict(
-            current_batch_frames, budget_frames=self.cache_capacity)
-        with self.lock:
-            cached = set(self.cache.keys())
-            cur_size = len(self.cache)
+            current_batch_frames, budget_frames=cap)
+        if self.use_global:
+            cached_set = set()
+            for key in list(self.global_cache.cache.keys()):
+                if key[0] == self.table_id:
+                    cached_set.add(key[1])
+            cur_size = len(self.global_cache)
+        else:
+            with self.lock:
+                cached_set = set(self.cache.keys())
+                cur_size = len(self.cache)
         with self.prefetch_lock:
             in_flight = self.pending.copy()
         candidates = {fid: pri for fid, pri in predictions.items()
-                      if fid not in cached and fid not in in_flight}
+                      if fid not in cached_set and fid not in in_flight}
         sorted_cands = sorted(candidates.items(), key=lambda x: -x[1])
-        budget = max(0, int(self.cache_capacity * 0.7) - cur_size - len(in_flight))
+        budget = max(0, int(cap * 0.7) - cur_size - len(in_flight))
         submitted = 0
         for fid, pri in sorted_cands:
             if submitted >= budget:
@@ -492,57 +596,95 @@ class OnDemandPrefetchCache:
         batch_hits = 0
         batch_misses = 0
 
+        # Ensure all needed frames are in cache (global or local)
         for fid in unique_frames:
-            with self.lock:
-                if fid in self.cache:
-                    self.cache_priority[fid] = 2.0
+            if self.use_global:
+                cached = self.global_cache.get(self.table_id, fid)
+                if cached is not None:
                     self.stats['cache_hits'] += 1
                     batch_hits += 1
                     continue
+            else:
+                with self.lock:
+                    if fid in self.cache:
+                        self.cache_priority[fid] = 2.0
+                        self.stats['cache_hits'] += 1
+                        batch_hits += 1
+                        continue
+
             # Wait for in-flight prefetch
             for _ in range(10):
                 with self.prefetch_lock:
                     if fid not in self.pending:
                         break
                 time.sleep(0.0005)
-            with self.lock:
-                if fid in self.cache:
+
+            if self.use_global:
+                cached = self.global_cache.get(self.table_id, fid)
+                if cached is not None:
                     self.stats['prefetch_hits'] += 1
-                    self.cache_priority[fid] = 2.0
                     batch_hits += 1
                     continue
-            # DEMAND DECODE (true on-demand: disk read + H.265 decode + dequant)
+            else:
+                with self.lock:
+                    if fid in self.cache:
+                        self.stats['prefetch_hits'] += 1
+                        self.cache_priority[fid] = 2.0
+                        batch_hits += 1
+                        continue
+
+            # DEMAND DECODE
             t0 = time.time()
-            frame_data = self._decode_and_dequant(fid)
+            if self.use_global:
+                frame_data = self._decode_raw(fid)  # uint8
+                self.global_cache.put(self.table_id, fid, frame_data)
+            else:
+                frame_data = self._decode_and_dequant(fid)  # fp32
+                with self.lock:
+                    self.cache[fid] = frame_data
+                    self.cache_priority[fid] = 2.0
+                    self._evict_if_needed()
             elapsed = (time.time() - t0) * 1000
-            with self.lock:
-                self.cache[fid] = frame_data
-                self.cache_priority[fid] = 2.0
-                self._evict_if_needed()
-                self.stats['demand_decomps'] += 1
-                self.stats['total_demand_ms'] += elapsed
+            self.stats['demand_decomps'] += 1
+            self.stats['total_demand_ms'] += elapsed
             self.stats['cache_misses'] += 1
             batch_misses += 1
 
-        # Vectorized gather
-        frame_data_copies = {}
-        with self.lock:
+        # Gather embeddings from cached frames
+        if self.use_global:
+            # uint8 path: gather from uint8 frames, dequantize only needed rows
+            results = torch.zeros(len(sorted_indices), self.emb_dim)
             for fid in unique_frames:
-                if fid in self.cache:
-                    frame_data_copies[fid] = self.cache[fid]
-        for fid in unique_frames:
-            if fid not in frame_data_copies:
-                frame_data_copies[fid] = self._decode_and_dequant(fid)
-                self.stats['demand_decomps'] += 1
+                mask = (frame_ids == fid)
+                offsets_in_frame = (sorted_indices[mask] % self.rows_per_frame).numpy()
+                frame_data = self.global_cache.get(self.table_id, fid)
+                if frame_data is None:
+                    # Fallback: decode again (shouldn't happen normally)
+                    frame_data = self._decode_raw(fid)
+                    self.stats['demand_decomps'] += 1
+                actual_rows = frame_data.shape[0]
+                safe_offsets = np.clip(offsets_in_frame, 0, actual_rows - 1)
+                results[mask] = self._dequant_rows(frame_data, safe_offsets)
+        else:
+            # fp32 path: gather from pre-dequantized frames
+            frame_data_copies = {}
+            with self.lock:
+                for fid in unique_frames:
+                    if fid in self.cache:
+                        frame_data_copies[fid] = self.cache[fid]
+            for fid in unique_frames:
+                if fid not in frame_data_copies:
+                    frame_data_copies[fid] = self._decode_and_dequant(fid)
+                    self.stats['demand_decomps'] += 1
 
-        results = torch.zeros(len(sorted_indices), self.emb_dim)
-        for fid in unique_frames:
-            mask = (frame_ids == fid)
-            offsets = (sorted_indices[mask] % self.rows_per_frame).long()
-            frame_data = frame_data_copies[fid]
-            actual_rows = frame_data.shape[0]
-            safe_offsets = torch.clamp(offsets, max=actual_rows - 1)
-            results[mask] = frame_data[safe_offsets]
+            results = torch.zeros(len(sorted_indices), self.emb_dim)
+            for fid in unique_frames:
+                mask = (frame_ids == fid)
+                offsets_in_frame = (sorted_indices[mask] % self.rows_per_frame).long()
+                frame_data = frame_data_copies[fid]
+                actual_rows = frame_data.shape[0]
+                safe_offsets = torch.clamp(offsets_in_frame, max=actual_rows - 1)
+                results[mask] = frame_data[safe_offsets]
 
         final = torch.zeros_like(results)
         final[sorted_order] = results
@@ -555,9 +697,16 @@ class OnDemandPrefetchCache:
         return final, set(unique_frames)
 
     def clear_cache(self):
-        with self.lock:
-            self.cache.clear()
-            self.cache_priority.clear()
+        if self.use_global:
+            # Only clear this table's entries from global cache
+            keys_to_remove = [k for k in self.global_cache.cache
+                              if k[0] == self.table_id]
+            for k in keys_to_remove:
+                del self.global_cache.cache[k]
+        else:
+            with self.lock:
+                self.cache.clear()
+                self.cache_priority.clear()
 
     def reset_stats(self):
         self.stats = {
@@ -573,10 +722,12 @@ class OnDemandPrefetchCache:
         hit_rate = self.stats['cache_hits'] / total if total else 0
         avg_demand = (np.mean(self.stats['batch_demand_decomps'])
                       if self.stats['batch_demand_decomps'] else 0)
-        log(f"  Cache: {hit_rate:.1%} hit | demand={self.stats['demand_decomps']} "
-            f"({avg_demand:.1f}/batch) | prefetch_hits={self.stats['prefetch_hits']} "
-            f"| demand_time={self.stats['total_demand_ms']:.0f}ms "
-            f"| size={len(self.cache)}/{self.cache_capacity}")
+        cache_size = len(self.global_cache) if self.use_global else len(self.cache)
+        cache_cap = self.global_cache.capacity if self.use_global else self.cache_capacity
+        log(f"  Table {self.table_id} Cache: {hit_rate:.1%} hit | "
+            f"demand={self.stats['demand_decomps']} ({avg_demand:.1f}/batch) | "
+            f"prefetch_hits={self.stats['prefetch_hits']} | "
+            f"demand_time={self.stats['total_demand_ms']:.0f}ms")
         return {
             'hit_rate': hit_rate,
             'demand_decomps': self.stats['demand_decomps'],
@@ -596,21 +747,40 @@ class OnDemandPrefetchCache:
 class CompressedEmbeddingBag(nn.Module):
     """
     Drop-in replacement for nn.EmbeddingBag that stores:
-    - Hot rows: uncompressed fp32 in a compact tensor
+    - Hot rows: uncompressed fp32 OR quantized uint8 in a compact tensor
     - Cold rows: H.265 compressed in memory, decoded on demand
     """
     def __init__(self, hot_weight, is_hot, orig_to_hot, orig_to_cold_reordered,
-                 cold_cache, num_embeddings, embedding_dim):
+                 cold_cache, num_embeddings, embedding_dim,
+                 quantize_hot=False):
         super().__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
-        self.hot_weight = hot_weight          # (n_hot, emb_dim) fp32
         self.is_hot = is_hot                  # (num_embeddings,) bool
         self.orig_to_hot = orig_to_hot        # (num_embeddings,) long, -1 for cold
         self.o2c = orig_to_cold_reordered     # (num_embeddings,) long, -1 for hot/invalid
         self.cold_cache = cold_cache          # OnDemandPrefetchCache (in-memory decoder)
         self.last_frames_used = set()
         self.mode = 'sum'
+        self.quantize_hot = quantize_hot
+
+        if quantize_hot:
+            # Quantize hot weights to uint8 — saves 4x memory
+            mn = hot_weight.min().item()
+            mx = hot_weight.max().item()
+            s = (mx - mn) / 255.0
+            if s == 0:
+                s = 1.0
+            zp = round(-mn / s)
+            self.hot_weight_q8 = ((hot_weight / s).round() + zp).clamp(0, 255).to(torch.uint8)
+            self.hot_scale = s
+            self.hot_zp = zp
+            self.hot_weight = None  # don't keep fp32 copy
+        else:
+            self.hot_weight = hot_weight      # (n_hot, emb_dim) fp32
+            self.hot_weight_q8 = None
+            self.hot_scale = 0.0
+            self.hot_zp = 0
 
     def forward(self, indices, offsets, per_sample_weights=None):
         if HAS_CPP_EXT:
@@ -620,10 +790,16 @@ class CompressedEmbeddingBag(nn.Module):
     def _forward_cpp(self, indices, offsets, per_sample_weights=None):
         psw = per_sample_weights if per_sample_weights is not None else torch.empty(0)
 
-        # C++ handles hot lookups + sum pooling, returns cold_mask for rare cold hits
-        output, cold_mask = _C.compressed_emb_bag_forward(
-            indices, offsets, self.hot_weight, self.is_hot,
-            self.orig_to_hot, psw)
+        if self.quantize_hot:
+            # Use uint8 hot forward with on-the-fly dequant
+            output, cold_mask = _C.compressed_emb_bag_forward_q8(
+                indices, offsets, self.hot_weight_q8, self.is_hot,
+                self.orig_to_hot, psw, self.hot_scale, self.hot_zp)
+        else:
+            # C++ handles hot lookups + sum pooling, returns cold_mask for rare cold hits
+            output, cold_mask = _C.compressed_emb_bag_forward(
+                indices, offsets, self.hot_weight, self.is_hot,
+                self.orig_to_hot, psw)
 
         # Cold fixup (rare: ~0.1% of batches have any cold indices)
         if cold_mask.any():
@@ -652,7 +828,11 @@ class CompressedEmbeddingBag(nn.Module):
         # Hot lookups from compact tensor
         if hot_mask.any():
             hot_compact_idx = self.orig_to_hot[indices[hot_mask]]
-            all_embeds[hot_mask] = self.hot_weight[hot_compact_idx]
+            if self.quantize_hot:
+                q = self.hot_weight_q8[hot_compact_idx]
+                all_embeds[hot_mask] = (q.float() - self.hot_zp) * self.hot_scale
+            else:
+                all_embeds[hot_mask] = self.hot_weight[hot_compact_idx]
 
         # Cold lookups via on-demand H.265 decode
         if (~hot_mask).any():
@@ -864,17 +1044,28 @@ def main():
     o2c_map = orig_to_cold_reordered
 
     def run_ondemand_inference(res_name, cache_capacity, predictor_type='markov',
-                               lookahead_depth=3, tag=""):
+                               lookahead_depth=3, tag="",
+                               use_global_cache=False, disk_decode=False,
+                               quantize_hot=False):
         width, height = RESOLUTIONS[res_name]
         pixels_per_frame = width * height
         rows_per_frame = pixels_per_frame // EMB_DIM
         res_dir = os.path.join(ONDEMAND_DIR, res_name)
 
-        log(f"\n--- {tag}: {res_name}, cache={cache_capacity}, "
-            f"predictor={predictor_type}, depth={lookahead_depth} ---")
+        mode_str = "GLOBAL" if use_global_cache else "per-table"
+        decode_str = "disk" if disk_decode else "in-memory"
+        log(f"\n--- {tag}: {res_name}, cache={cache_capacity} ({mode_str}), "
+            f"decode={decode_str}, predictor={predictor_type} ---")
 
         # Restore original EmbeddingBag modules for small tables
         restore_weights()
+
+        # Create global cache if requested
+        global_cache = None
+        if use_global_cache:
+            global_cache = GlobalFrameCache(capacity=cache_capacity, store_uint8=True)
+            log(f"  Global cache: {cache_capacity} frames total across all tables "
+                f"(uint8, ~{cache_capacity * rows_per_frame * EMB_DIM / 1024 / 1024:.1f}MB)")
 
         # Build CompressedEmbeddingBag for each large table
         caches = {}
@@ -890,22 +1081,29 @@ def main():
                 log(f"  WARNING: No frame dir for table {t_idx}")
                 continue
 
-            # Load compressed frame files into memory
             frame_files = sorted([f for f in os.listdir(frame_dir)
                                   if f.startswith('frame_') and f.endswith('.h265')])
-            frame_data_list = []
-            for ff in frame_files:
-                with open(os.path.join(frame_dir, ff), 'rb') as f:
-                    frame_data_list.append(f.read())
 
-            comp_bytes = sum(len(d) for d in frame_data_list)
-            total_compressed_bytes += comp_bytes
+            if disk_decode:
+                # Disk-based: don't load compressed bytes into memory
+                # Just count sizes for reporting
+                comp_bytes = sum(os.path.getsize(os.path.join(frame_dir, ff))
+                                 for ff in frame_files)
+                total_compressed_bytes += comp_bytes
+                # Use disk-based decoder (already the default in OnDemandPrefetchCache)
+                decoder = None  # will use the default OnDemandFrameDecoder
+            else:
+                # In-memory: load all compressed frame files into memory
+                frame_data_list = []
+                for ff in frame_files:
+                    with open(os.path.join(frame_dir, ff), 'rb') as f:
+                        frame_data_list.append(f.read())
+                comp_bytes = sum(len(d) for d in frame_data_list)
+                total_compressed_bytes += comp_bytes
+                decoder = InMemoryFrameDecoder(
+                    frame_data_list, rows_per_frame, EMB_DIM, width, height)
 
-            # In-memory decoder (replaces disk-based decoder)
-            decoder = InMemoryFrameDecoder(
-                frame_data_list, rows_per_frame, EMB_DIM, width, height)
-
-            num_frames_t = len(frame_data_list)
+            num_frames_t = len(frame_files)
             pred = None
             if predictor_type == 'markov':
                 pred = MarkovPredictor(num_frames_t, lookahead_depth=lookahead_depth)
@@ -921,16 +1119,22 @@ def main():
                 cache_capacity=cache_capacity,
                 predictor=pred,
                 num_prefetch_workers=2,
+                global_cache=global_cache,
+                table_id=t_idx,
             )
-            # Replace disk decoder with in-memory decoder
-            cache._decoder = decoder
+            # Replace decoder if using in-memory mode
+            if decoder is not None:
+                cache._decoder = decoder
             caches[t_idx] = cache
 
             # Build compact hot embedding
             w = state_dict[emb_keys[t_idx]]
             h_idx = hot_indices[t_idx]
             hot_weight = w[h_idx].clone()
-            total_hot_mb += hot_weight.numel() * 4 / 1024 / 1024
+            if quantize_hot:
+                total_hot_mb += hot_weight.numel() / 1024 / 1024  # uint8 = 1 byte
+            else:
+                total_hot_mb += hot_weight.numel() * 4 / 1024 / 1024  # fp32 = 4 bytes
 
             # Build orig-to-hot mapping
             orig_to_hot = torch.full((ln_emb[t_idx],), -1, dtype=torch.long)
@@ -945,6 +1149,7 @@ def main():
                 cold_cache=cache,
                 num_embeddings=ln_emb[t_idx],
                 embedding_dim=EMB_DIM,
+                quantize_hot=quantize_hot,
             )
             dlrm.emb_l[t_idx] = comp_emb
 
@@ -963,9 +1168,11 @@ def main():
         gc.collect()
 
         total_compressed_mb = total_compressed_bytes / 1024 / 1024
+        compressed_in_mem_mb = 0.0 if disk_decode else total_compressed_mb
         rss_after_setup = get_rss_mb()
-        log(f"  Memory: hot={total_hot_mb:.1f}MB + compressed_cold={total_compressed_mb:.1f}MB "
-            f"= {total_hot_mb + total_compressed_mb:.1f}MB "
+        log(f"  Memory: hot={total_hot_mb:.1f}MB + compressed_cold="
+            f"{'0 (on disk)' if disk_decode else f'{total_compressed_mb:.1f}MB'} "
+            f"= {total_hot_mb + compressed_in_mem_mb:.1f}MB "
             f"(vs {total_emb_mb:.1f}MB full fp32)")
         log(f"  RSS after setup: {rss_after_setup:.0f}MB")
 
@@ -1039,13 +1246,18 @@ def main():
                            for t in caches) / 1024 / 1024
         compression_ratio = orig_cold_mb / compressed_mb if compressed_mb > 0 else 0
 
-        # LRU cache actual memory: count decoded fp32 frames actually held
-        lru_frames = sum(len(c.cache) for c in caches.values())
-        lru_mb = sum(
-            len(c.cache) * c.rows_per_frame * c.emb_dim * 4 / 1024 / 1024
-            for c in caches.values()
-        )
-        total_mem_mb = total_hot_mb + total_compressed_mb + lru_mb
+        # LRU cache actual memory: count decoded frames actually held
+        if use_global_cache and global_cache is not None:
+            lru_frames = len(global_cache)
+            # uint8 frames in global cache
+            lru_mb = lru_frames * rows_per_frame * EMB_DIM / 1024 / 1024
+        else:
+            lru_frames = sum(len(c.cache) for c in caches.values())
+            lru_mb = sum(
+                len(c.cache) * c.rows_per_frame * c.emb_dim * 4 / 1024 / 1024
+                for c in caches.values()
+            )
+        total_mem_mb = total_hot_mb + compressed_in_mem_mb + lru_mb
 
         log(f"  AUC={auc:.6f}, Time={total_time:.2f}s, RSS={rss:.0f}MB")
         log(f"  Hit rate={hit_rate:.1%}, Demand={total_demand} ({avg_demand:.1f}/batch), "
@@ -1053,13 +1265,15 @@ def main():
         log(f"  Compression: {orig_cold_mb:.1f}MB fp32 -> {compressed_mb:.1f}MB "
             f"({compression_ratio:.1f}x)")
         log(f"  LRU cache: {lru_frames} frames = {lru_mb:.1f}MB")
-        log(f"  Total memory: hot={total_hot_mb:.1f} + cold={total_compressed_mb:.1f} "
+        log(f"  Total memory: hot={total_hot_mb:.1f} + cold={compressed_in_mem_mb:.1f} "
             f"+ lru={lru_mb:.1f} = {total_mem_mb:.1f}MB "
             f"(vs {total_emb_mb:.1f}MB baseline, {total_emb_mb/total_mem_mb:.1f}x)")
         log(f"  Batch latency: mean={np.mean(blats)*1000:.2f}ms")
 
         for t_idx in caches:
             caches[t_idx].report_stats()
+        if use_global_cache and global_cache is not None:
+            global_cache.report()
 
         result = {
             'auc': auc, 'total_time': total_time,
@@ -1070,7 +1284,9 @@ def main():
             'rss_mb': rss,
             'rss_after_setup_mb': rss_after_setup,
             'hot_mb': total_hot_mb,
-            'compressed_cold_mb': total_compressed_mb,
+            'compressed_cold_mb': compressed_in_mem_mb,
+            'compressed_on_disk_mb': total_compressed_mb,
+            'disk_decode': disk_decode,
             'lru_mb': lru_mb,
             'total_mem_mb': total_mem_mb,
             'hit_rate': hit_rate,
@@ -1109,19 +1325,47 @@ def main():
         gc.collect()
         return result
 
-    # ---- Run experiments: Small cache sweep, 4K no-predictor ----
-    for res_name in ['4K']:
-        log(f"\n{'='*70}")
-        log(f"EXPERIMENTS: {res_name} — No predictor, small cache sweep")
-        log(f"{'='*70}")
-        for cache_sz in [1, 3, 5, 7, 10]:
-            key = f'{res_name}_nopred_cache{cache_sz}'
-            all_results[key] = run_ondemand_inference(
-                res_name=res_name,
-                cache_capacity=cache_sz,
-                predictor_type='none',
-                lookahead_depth=1,
-                tag=key)
+    # ---- Run experiments ----
+    res_name = '4K'
+    log(f"\n{'='*70}")
+    log(f"EXPERIMENTS: {res_name}")
+    log(f"{'='*70}")
+
+    # Exp 1: Global cache=8, disk, uint8, fp32-hot (our best from prev run)
+    key = f'{res_name}_g8_disk_fp32hot'
+    all_results[key] = run_ondemand_inference(
+        res_name=res_name, cache_capacity=8,
+        predictor_type='none', lookahead_depth=1, tag=key,
+        use_global_cache=True, disk_decode=True, quantize_hot=False)
+
+    # Exp 2: Global cache=8, disk, uint8, int8-hot (quantize hot for max memory savings)
+    key = f'{res_name}_g8_disk_q8hot'
+    all_results[key] = run_ondemand_inference(
+        res_name=res_name, cache_capacity=8,
+        predictor_type='none', lookahead_depth=1, tag=key,
+        use_global_cache=True, disk_decode=True, quantize_hot=True)
+
+    # Exp 3: Global cache=8, in-memory, uint8, fp32-hot
+    key = f'{res_name}_g8_inmem_fp32hot'
+    all_results[key] = run_ondemand_inference(
+        res_name=res_name, cache_capacity=8,
+        predictor_type='none', lookahead_depth=1, tag=key,
+        use_global_cache=True, disk_decode=False, quantize_hot=False)
+
+    # Exp 4-6: Global cache sweep (disk decode, user-requested sizes)
+    for cache_sz in [5, 7, 10]:
+        key = f'{res_name}_g{cache_sz}_disk_fp32hot'
+        all_results[key] = run_ondemand_inference(
+            res_name=res_name, cache_capacity=cache_sz,
+            predictor_type='none', lookahead_depth=1, tag=key,
+            use_global_cache=True, disk_decode=True, quantize_hot=False)
+
+    # Exp 7: Per-table cache=1, in-memory (legacy for comparison)
+    key = f'{res_name}_pertable1_inmem'
+    all_results[key] = run_ondemand_inference(
+        res_name=res_name, cache_capacity=1,
+        predictor_type='none', lookahead_depth=1, tag=key,
+        use_global_cache=False, disk_decode=False, quantize_hot=False)
 
     # ---- Save results ----
     log(f"\n{'='*70}")
