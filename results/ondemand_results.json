@@ -1,27 +1,36 @@
 {
-  "A_baseline": {
-    "auc": 0.7686130644508489,
-    "total_time": 7.987073183059692,
+  "A_baseline_t80": {
+    "auc": 0.8024972457390324,
+    "total_time": 8.779404878616333,
     "num_batches": 1599,
-    "rss_mb": 43036.5234375,
-    "mean_lat_ms": 4.95814337739354,
-    "p50_lat_ms": 4.84776496887207,
-    "p99_lat_ms": 6.814742088317869,
+    "rss_mb": 42984.40234375,
+    "mean_lat_ms": 5.456723594307676,
+    "p50_lat_ms": 5.250453948974609,
+    "p99_lat_ms": 7.861304283142089,
     "emb_memory_mb": 2060.7041625976562
   },
-  "1080p_g32_q8hot_fullcpp": {
-    "auc": 0.7686186910463152,
-    "total_time": 4.271327972412109,
+  "A_baseline_t32": {
+    "auc": 0.8024972457416896,
+    "total_time": 8.341532468795776,
     "num_batches": 1599,
-    "mean_lat_ms": 2.635554271313904,
-    "p50_lat_ms": 2.580404281616211,
-    "p99_lat_ms": 4.937257766723629,
-    "rss_mb": 41276.640625,
-    "rss_after_setup_mb": 41154.125,
+    "mean_lat_ms": 5.1833166786847515,
+    "p50_lat_ms": 5.0907135009765625,
+    "p99_lat_ms": 6.51785373687744,
+    "emb_memory_mb": 2060.7041625976562
+  },
+  "1080p_fullcpp": {
+    "auc": 0.8024890763970475,
+    "total_time": 4.046922206878662,
+    "num_batches": 1599,
+    "mean_lat_ms": 2.4993222828877575,
+    "p50_lat_ms": 2.4237632751464844,
+    "p99_lat_ms": 3.9204788208007795,
+    "rss_mb": 41275.15234375,
+    "rss_after_setup_mb": 41174.3671875,
     "hot_mb": 21.858612060546875,
     "mapping_mb": 128.61320114135742,
     "compressed_cold_mb": 0.0,
-    "compressed_on_disk_mb": 195.92793560028076,
+    "compressed_on_disk_mb": 50.35036563873291,
     "disk_decode": true,
     "lru_mb": 43.505859375,
     "total_mem_mb": 193.9776725769043,
@@ -30,9 +39,9 @@
     "avg_demand_per_batch": 0,
     "prefetch_hits": 0,
     "demand_time_ms": 0.0,
-    "compressed_mb": 195.92793560028076,
+    "compressed_mb": 50.35036563873291,
     "orig_cold_mb": 1970.3767700195312,
-    "compression_ratio": 10.056640284514424,
+    "compression_ratio": 39.13331601516284,
     "cache_capacity": 32,
     "predictor": "none",
     "lookahead_depth": 1,
@@ -41,35 +50,35 @@
     "rss_trace": [
       [
         0,
-        41201.53515625
+        41205.2109375
       ],
       [
         500,
-        41220.92578125
+        41225.19140625
       ],
       [
         1000,
-        41224.92578125
+        41229.20703125
       ],
       [
         1500,
-        41231.69140625
+        41235.63671875
       ]
     ]
   },
-  "1080p_g32_q8hot_bitmap_fullcpp": {
-    "auc": 0.7686186910463152,
-    "total_time": 4.276431083679199,
+  "1080p_bitmap_fullcpp": {
+    "auc": 0.8024890763970475,
+    "total_time": 3.816018581390381,
     "num_batches": 1599,
-    "mean_lat_ms": 2.6433715378962286,
-    "p50_lat_ms": 2.5899410247802734,
-    "p99_lat_ms": 4.935774803161618,
-    "rss_mb": 41427.78515625,
-    "rss_after_setup_mb": 41546.27734375,
+    "mean_lat_ms": 2.3616274272448723,
+    "p50_lat_ms": 2.349376678466797,
+    "p99_lat_ms": 4.443511962890624,
+    "rss_mb": 41455.04296875,
+    "rss_after_setup_mb": 41507.2265625,
     "hot_mb": 21.858612060546875,
     "mapping_mb": 134.6420135498047,
     "compressed_cold_mb": 0.0,
-    "compressed_on_disk_mb": 195.92793560028076,
+    "compressed_on_disk_mb": 50.35036563873291,
     "disk_decode": true,
     "lru_mb": 43.505859375,
     "total_mem_mb": 200.00648498535156,
@@ -78,9 +87,9 @@
     "avg_demand_per_batch": 0,
     "prefetch_hits": 0,
     "demand_time_ms": 0.0,
-    "compressed_mb": 195.92793560028076,
+    "compressed_mb": 50.35036563873291,
     "orig_cold_mb": 1970.3767700195312,
-    "compression_ratio": 10.056640284514424,
+    "compression_ratio": 39.13331601516284,
     "cache_capacity": 32,
     "predictor": "none",
     "lookahead_depth": 1,
@@ -89,83 +98,35 @@
     "rss_trace": [
       [
         0,
-        41483.515625
+        41408.34375
       ],
       [
         500,
-        41483.515625
+        41408.34375
       ],
       [
         1000,
-        41483.515625
+        41408.51171875
       ],
       [
         1500,
-        41483.515625
+        41408.51171875
       ]
     ]
   },
-  "4K_g8_q8hot_fullcpp": {
-    "auc": 0.7686186910463152,
-    "total_time": 4.392556667327881,
+  "480p_bitmap_fullcpp": {
+    "auc": 0.8024890763970475,
+    "total_time": 4.0756676197052,
     "num_batches": 1599,
-    "mean_lat_ms": 2.707646592398447,
-    "p50_lat_ms": 2.642393112182617,
-    "p99_lat_ms": 4.777379035949706,
-    "rss_mb": 41640.78515625,
-    "rss_after_setup_mb": 41605.75390625,
-    "hot_mb": 21.858612060546875,
-    "mapping_mb": 128.61320114135742,
-    "compressed_cold_mb": 0.0,
-    "compressed_on_disk_mb": 193.51897430419922,
-    "disk_decode": true,
-    "lru_mb": 63.28125,
-    "total_mem_mb": 213.7530632019043,
-    "hit_rate": 0,
-    "demand_decomps": 0,
-    "avg_demand_per_batch": 0,
-    "prefetch_hits": 0,
-    "demand_time_ms": 0.0,
-    "compressed_mb": 193.51897430419922,
-    "orig_cold_mb": 1970.3767700195312,
-    "compression_ratio": 10.181827270964279,
-    "cache_capacity": 8,
-    "predictor": "none",
-    "lookahead_depth": 1,
-    "resolution": "4K",
-    "rows_per_frame": 518400,
-    "rss_trace": [
-      [
-        0,
-        41617.22265625
-      ],
-      [
-        500,
-        41617.64453125
-      ],
-      [
-        1000,
-        41617.64453125
-      ],
-      [
-        1500,
-        41617.64453125
-      ]
-    ]
-  },
-  "480p_g64_q8hot_bitmap_fullcpp": {
-    "auc": 0.7686186910463152,
-    "total_time": 4.101011753082275,
-    "num_batches": 1599,
-    "mean_lat_ms": 2.538554291191364,
-    "p50_lat_ms": 2.4945735931396484,
-    "p99_lat_ms": 4.668765068054198,
-    "rss_mb": 41642.79296875,
-    "rss_after_setup_mb": 41639.79296875,
+    "mean_lat_ms": 2.5155088020310394,
+    "p50_lat_ms": 2.476215362548828,
+    "p99_lat_ms": 4.417347908020017,
+    "rss_mb": 41533.58203125,
+    "rss_after_setup_mb": 41447.83203125,
     "hot_mb": 21.858612060546875,
     "mapping_mb": 134.6420135498047,
     "compressed_cold_mb": 0.0,
-    "compressed_on_disk_mb": 202.29011726379395,
+    "compressed_on_disk_mb": 57.75892639160156,
     "disk_decode": true,
     "lru_mb": 33.69140625,
     "total_mem_mb": 190.19203186035156,
@@ -174,9 +135,9 @@
     "avg_demand_per_batch": 0,
     "prefetch_hits": 0,
     "demand_time_ms": 0.0,
-    "compressed_mb": 202.29011726379395,
+    "compressed_mb": 57.75892639160156,
     "orig_cold_mb": 1970.3767700195312,
-    "compression_ratio": 9.74035111883437,
+    "compression_ratio": 34.11380531314782,
     "cache_capacity": 64,
     "predictor": "none",
     "lookahead_depth": 1,
@@ -185,115 +146,67 @@
     "rss_trace": [
       [
         0,
-        41639.3515625
+        41487.17578125
       ],
       [
         500,
-        41639.3515625
+        41487.17578125
       ],
       [
         1000,
-        41641.14453125
+        41487.17578125
       ],
       [
         1500,
-        41642.7890625
+        41487.17578125
       ]
     ]
   },
-  "1080p_g32_q8hot_bitmap": {
-    "auc": 0.7686186910463152,
-    "total_time": 11.01758861541748,
+  "4K_fullcpp": {
+    "auc": 0.8024890763970475,
+    "total_time": 3.9122543334960938,
     "num_batches": 1599,
-    "mean_lat_ms": 6.80805311268609,
-    "p50_lat_ms": 6.00743293762207,
-    "p99_lat_ms": 22.098360061645504,
-    "rss_mb": 41958.58984375,
-    "rss_after_setup_mb": 41721.67578125,
-    "hot_mb": 21.858612060546875,
-    "mapping_mb": 6.028812408447266,
-    "compressed_cold_mb": 0.0,
-    "compressed_on_disk_mb": 195.92793560028076,
-    "disk_decode": true,
-    "lru_mb": 43.505859375,
-    "total_mem_mb": 71.39328384399414,
-    "hit_rate": 0.9989863886475528,
-    "demand_decomps": 14,
-    "avg_demand_per_batch": 0.0010944340212632896,
-    "prefetch_hits": 0,
-    "demand_time_ms": 216.39180183410645,
-    "compressed_mb": 195.92793560028076,
-    "orig_cold_mb": 1970.3767700195312,
-    "compression_ratio": 10.056640284514424,
-    "cache_capacity": 32,
-    "predictor": "none",
-    "lookahead_depth": 1,
-    "resolution": "1080p",
-    "rows_per_frame": 129600,
-    "rss_trace": [
-      [
-        0,
-        41768.64453125
-      ],
-      [
-        500,
-        41953.97265625
-      ],
-      [
-        1000,
-        41955.9765625
-      ],
-      [
-        1500,
-        41957.625
-      ]
-    ]
-  },
-  "1080p_g32_q8hot": {
-    "auc": 0.7686186910463152,
-    "total_time": 10.119328022003174,
-    "num_batches": 1599,
-    "mean_lat_ms": 6.252625198793679,
-    "p50_lat_ms": 6.069183349609375,
-    "p99_lat_ms": 9.428615570068356,
-    "rss_mb": 41731.32421875,
-    "rss_after_setup_mb": 41722.859375,
+    "mean_lat_ms": 2.418408325271654,
+    "p50_lat_ms": 2.3851394653320312,
+    "p99_lat_ms": 3.458003997802734,
+    "rss_mb": 41554.19140625,
+    "rss_after_setup_mb": 41547.234375,
     "hot_mb": 21.858612060546875,
     "mapping_mb": 128.61320114135742,
     "compressed_cold_mb": 0.0,
-    "compressed_on_disk_mb": 195.92793560028076,
+    "compressed_on_disk_mb": 48.973782539367676,
     "disk_decode": true,
-    "lru_mb": 43.505859375,
-    "total_mem_mb": 193.9776725769043,
-    "hit_rate": 0.9989863886475528,
-    "demand_decomps": 14,
-    "avg_demand_per_batch": 0.0010944340212632896,
+    "lru_mb": 63.28125,
+    "total_mem_mb": 213.7530632019043,
+    "hit_rate": 0,
+    "demand_decomps": 0,
+    "avg_demand_per_batch": 0,
     "prefetch_hits": 0,
-    "demand_time_ms": 219.51556205749512,
-    "compressed_mb": 195.92793560028076,
+    "demand_time_ms": 0.0,
+    "compressed_mb": 48.973782539367676,
     "orig_cold_mb": 1970.3767700195312,
-    "compression_ratio": 10.056640284514424,
-    "cache_capacity": 32,
+    "compression_ratio": 40.23329765136356,
+    "cache_capacity": 8,
     "predictor": "none",
     "lookahead_depth": 1,
-    "resolution": "1080p",
-    "rows_per_frame": 129600,
+    "resolution": "4K",
+    "rows_per_frame": 518400,
     "rss_trace": [
       [
         0,
-        41725.5
+        41549.578125
       ],
       [
         500,
-        41731.32421875
+        41549.578125
       ],
       [
         1000,
-        41731.32421875
+        41549.75390625
       ],
       [
         1500,
-        41731.32421875
+        41551.984375
       ]
     ]
   }
