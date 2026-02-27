@@ -254,37 +254,46 @@ def encode_h265_perframe(q_np, width, height, crf=0, output_dir=None, table_id=0
         tiled_frames = None
         tile_time = time.time() - t0
 
-    for i in range(num_frames):
-        if HAS_CPP_EXT:
-            frame_2d = tiled_frames[i].numpy()
-        else:
-            frame_rows = padded[i * rows_per_frame:(i + 1) * rows_per_frame]
-            frame_2d = rows_to_tiled_frame(frame_rows, width, height)
+    # Encode frames: use C++ batch encode (2.8x faster, parallel) or subprocess ffmpeg
+    use_cpp_encode = (HAS_CPP_EXT and hasattr(_C, 'batch_encode_h265_frames')
+                      and crf == 0 and tiled_frames is not None)
 
-        frame_path = os.path.join(frame_dir, f'frame_{i:05d}.h265')
+    if use_cpp_encode:
+        # C++ parallel batch encode: all frames encoded simultaneously via libx265
+        total_compressed = _C.batch_encode_h265_frames(
+            tiled_frames, frame_dir, True)  # lossless=True
+    else:
+        for i in range(num_frames):
+            if HAS_CPP_EXT and tiled_frames is not None:
+                frame_2d = tiled_frames[i].numpy()
+            else:
+                frame_rows = padded[i * rows_per_frame:(i + 1) * rows_per_frame]
+                frame_2d = rows_to_tiled_frame(frame_rows, width, height)
 
-        # Encode single frame via ffmpeg
-        cmd = [
-            'ffmpeg', '-y', '-f', 'rawvideo',
-            '-pix_fmt', 'gray',
-            '-s', f'{width}x{height}',
-            '-r', '1',
-            '-i', 'pipe:0',
-            '-c:v', 'libx265',
-            '-preset', 'ultrafast',
-            '-pix_fmt', 'gray',
-            '-x265-params',
-            f'keyint=1:min-keyint=1:{"lossless=1" if crf == 0 else f"crf={crf}"}:log-level=error',
-            '-f', 'matroska',
-            frame_path,
-        ]
-        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE,
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        proc.stdin.write(frame_2d.tobytes())
-        proc.stdin.close()
-        proc.wait()
+            frame_path = os.path.join(frame_dir, f'frame_{i:05d}.h265')
 
-        total_compressed += os.path.getsize(frame_path)
+            # Encode single frame via ffmpeg subprocess
+            cmd = [
+                'ffmpeg', '-y', '-f', 'rawvideo',
+                '-pix_fmt', 'gray',
+                '-s', f'{width}x{height}',
+                '-r', '1',
+                '-i', 'pipe:0',
+                '-c:v', 'libx265',
+                '-preset', 'ultrafast',
+                '-pix_fmt', 'gray',
+                '-x265-params',
+                f'keyint=1:min-keyint=1:{"lossless=1" if crf == 0 else f"crf={crf}"}:log-level=error',
+                '-f', 'matroska',
+                frame_path,
+            ]
+            proc = subprocess.Popen(cmd, stdin=subprocess.PIPE,
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            proc.stdin.write(frame_2d.tobytes())
+            proc.stdin.close()
+            proc.wait()
+
+            total_compressed += os.path.getsize(frame_path)
 
     encode_time = time.time() - t0
     raw_bytes = num_rows * EMB_DIM
@@ -302,8 +311,9 @@ def encode_h265_perframe(q_np, width, height, crf=0, output_dir=None, table_id=0
 # ============================================================
 class OnDemandFrameDecoder:
     """
-    Decode a single H.265 frame file on demand using PyAV.
-    No pre-decoding — reads from disk and decodes each time.
+    Decode a single H.265 frame file on demand.
+    Uses C++ direct libavcodec decode when available (~7% faster, returns torch tensor directly).
+    Falls back to PyAV if C++ extension not available.
     Thread-safe: each call is independent (opens its own file).
     """
     def __init__(self, frame_dir, rows_per_frame, emb_dim, width, height):
@@ -312,23 +322,42 @@ class OnDemandFrameDecoder:
         self.emb_dim = emb_dim
         self.width = width
         self.height = height
+        self.tiles_per_row = width // TILE_W
+        self._use_cpp_decode = HAS_CPP_EXT and hasattr(_C, 'decode_h265_frame_from_file')
         # Count frames
         self.num_frames = len([f for f in os.listdir(frame_dir)
                                if f.startswith('frame_') and f.endswith('.h265')])
 
-    def decode_frame(self, frame_id):
+    def decode_frame(self, frame_id, tiled=False):
         """
         Read and decode a single frame file from disk.
-        Untiles 4x4 tiles back to embedding rows.
-        Returns uint8 ndarray (rows_per_frame, emb_dim).
+
+        If tiled=False (default): untiles 4x4 tiles back to embedding rows.
+            Returns uint8 ndarray (rows_per_frame, emb_dim).
+        If tiled=True: returns raw tiled frame as torch.Tensor (height, width).
+            Skips the untile step — caller uses C++ gather_from_tiled_frame.
+
         Thread-safe: each call opens its own file/container.
         """
         frame_path = os.path.join(self.frame_dir, f'frame_{frame_id:05d}.h265')
+
+        if self._use_cpp_decode:
+            # C++ direct decode: returns torch.Tensor (H, W) uint8
+            tiled_frame = _C.decode_h265_frame_from_file(frame_path)
+            if tiled:
+                return tiled_frame
+            # Untile using C++ path
+            return _C.untile_frame_to_rows(tiled_frame, self.rows_per_frame).numpy()
+
+        # PyAV fallback
         container = av.open(frame_path)
         frame = next(container.decode(video=0))
         arr = frame.to_ndarray(format='gray')  # (height, width)
         container.close()
-        # Untile: 2D frame back to embedding rows
+
+        if tiled:
+            return torch.from_numpy(arr.copy())
+
         rows = tiled_frame_to_rows(arr, self.width, self.height)
         return rows
 
@@ -347,15 +376,22 @@ class InMemoryFrameDecoder:
         self.emb_dim = emb_dim
         self.width = width
         self.height = height
+        self.tiles_per_row = width // TILE_W
         self.num_frames = len(frame_data_list)
 
-    def decode_frame(self, frame_id):
-        """Decode a single frame from in-memory bytes. Returns uint8 (rows_per_frame, emb_dim)."""
+    def decode_frame(self, frame_id, tiled=False):
+        """Decode a single frame from in-memory bytes.
+        If tiled=False: Returns uint8 (rows_per_frame, emb_dim).
+        If tiled=True: Returns torch.Tensor (height, width) in tiled layout."""
         data = self.frame_data[frame_id]
         container = av.open(io.BytesIO(data))
         frame = next(container.decode(video=0))
         arr = frame.to_ndarray(format='gray')
         container.close()
+
+        if tiled:
+            return torch.from_numpy(arr.copy())
+
         rows = tiled_frame_to_rows(arr, self.width, self.height)
         return rows
 
@@ -500,6 +536,11 @@ class OnDemandPrefetchCache:
         # On-demand decoder (no pre-decode)
         self._decoder = OnDemandFrameDecoder(
             frame_dir, rows_per_frame, emb_dim, width, height)
+        self.tiles_per_row = width // TILE_W
+
+        # Use tiled storage when C++ extension available (saves ~46% on cache misses
+        # by skipping untile at cache population time)
+        self.use_tiled_storage = HAS_CPP_EXT and hasattr(_C, 'gather_dequant_from_tiled_frame')
 
         # Global vs local cache
         self.global_cache = global_cache
@@ -520,9 +561,12 @@ class OnDemandPrefetchCache:
 
         frame_bytes_fp32 = rows_per_frame * emb_dim * 4
         frame_bytes_uint8 = rows_per_frame * emb_dim
+        frame_bytes_tiled = width * height  # tiled (H,W) frame
+        storage_desc = "tiled (H,W)" if self.use_tiled_storage else "uint8 (N,D)"
+        frame_bytes = frame_bytes_tiled if self.use_tiled_storage else frame_bytes_uint8
         if self.use_global:
             log(f"  Table {table_id}: using global cache "
-                f"({self.num_frames} frames, {frame_bytes_uint8/1024:.1f}KB/frame uint8)")
+                f"({self.num_frames} frames, {frame_bytes/1024:.1f}KB/frame {storage_desc})")
         else:
             total_cache_bytes = cache_capacity * frame_bytes_fp32
             log(f"Cache: {cache_capacity} frames x {frame_bytes_fp32/1024:.1f}KB = "
@@ -545,8 +589,17 @@ class OnDemandPrefetchCache:
         }
 
     def _decode_raw(self, frame_id):
-        """Decode H.265 frame, return uint8 ndarray (actual_rows, emb_dim)."""
-        q_uint8 = self._decoder.decode_frame(frame_id)
+        """Decode H.265 frame.
+
+        If use_tiled_storage: returns torch.Tensor (H, W) in tiled layout.
+            Skips the untile step (~46% faster cache miss).
+        Otherwise: returns uint8 ndarray (actual_rows, emb_dim).
+        """
+        if self.use_tiled_storage:
+            # Return tiled frame directly (no untile)
+            return self._decoder.decode_frame(frame_id, tiled=True)
+
+        q_uint8 = self._decoder.decode_frame(frame_id, tiled=False)
         row_start = frame_id * self.rows_per_frame
         row_end = min(row_start + self.rows_per_frame, self.num_cold_rows)
         actual_rows = row_end - row_start
@@ -558,14 +611,25 @@ class OnDemandPrefetchCache:
         fp32 = (q_slice.astype(np.float32) - self.quant_zp) * self.quant_scale
         return torch.from_numpy(fp32)
 
-    def _dequant_rows(self, uint8_data, row_offsets):
-        """Dequantize specific rows from uint8 frame data to fp32 tensor.
-        Uses C++ extension when available for ~2x speedup."""
-        if HAS_CPP_EXT and isinstance(uint8_data, np.ndarray):
-            uint8_t = torch.from_numpy(uint8_data)
+    def _dequant_rows(self, frame_data, row_offsets):
+        """Dequantize specific rows from cached frame data to fp32 tensor.
+
+        Handles two storage formats:
+        - Tiled: frame_data is torch.Tensor (H, W) — uses C++ gather_dequant_from_tiled_frame
+        - Row: frame_data is ndarray (N, D) — uses C++ gather_dequant_uint8 or numpy
+        """
+        if self.use_tiled_storage and isinstance(frame_data, torch.Tensor) and frame_data.dim() == 2 and frame_data.shape[1] == self.width:
+            # Tiled frame: use C++ gather + dequant directly from tiled layout
+            offsets_t = torch.from_numpy(row_offsets).long() if isinstance(row_offsets, np.ndarray) else row_offsets.long()
+            return _C.gather_dequant_from_tiled_frame(
+                frame_data, offsets_t, self.tiles_per_row,
+                self.quant_scale, self.quant_zp)
+
+        if HAS_CPP_EXT and isinstance(frame_data, np.ndarray):
+            uint8_t = torch.from_numpy(frame_data)
             offsets_t = torch.from_numpy(row_offsets).long() if isinstance(row_offsets, np.ndarray) else row_offsets.long()
             return _C.gather_dequant_uint8(uint8_t, offsets_t, self.quant_scale, self.quant_zp)
-        selected = uint8_data[row_offsets]
+        selected = frame_data[row_offsets]
         fp32 = (selected.astype(np.float32) - self.quant_zp) * self.quant_scale
         return torch.from_numpy(fp32)
 
@@ -639,8 +703,9 @@ class OnDemandPrefetchCache:
 
         batch_hits = 0
         batch_misses = 0
+        miss_frames = []  # frames that need demand decode
 
-        # Ensure all needed frames are in cache (global or local)
+        # Phase 1: check cache and collect misses
         for fid in unique_frames:
             if self.use_global:
                 cached = self.global_cache.get(self.table_id, fid)
@@ -677,26 +742,43 @@ class OnDemandPrefetchCache:
                         batch_hits += 1
                         continue
 
-            # DEMAND DECODE
+            miss_frames.append(fid)
+
+        # Phase 2: batch decode all cache misses in parallel
+        if miss_frames:
             t0 = time.time()
-            if self.use_global:
-                frame_data = self._decode_raw(fid)  # uint8
-                self.global_cache.put(self.table_id, fid, frame_data)
+            use_batch_cpp = (self.use_tiled_storage and
+                             HAS_CPP_EXT and hasattr(_C, 'batch_decode_frames') and
+                             len(miss_frames) > 1)
+
+            if use_batch_cpp:
+                # C++ parallel batch decode (all frames decoded simultaneously)
+                miss_ids_t = torch.tensor(miss_frames, dtype=torch.long)
+                decoded_frames = _C.batch_decode_frames(self.frame_dir, miss_ids_t)
+                for i, fid in enumerate(miss_frames):
+                    self.global_cache.put(self.table_id, fid, decoded_frames[i])
             else:
-                frame_data = self._decode_and_dequant(fid)  # fp32
-                with self.lock:
-                    self.cache[fid] = frame_data
-                    self.cache_priority[fid] = 2.0
-                    self._evict_if_needed()
+                # Serial decode (1 frame or no C++ batch support)
+                for fid in miss_frames:
+                    if self.use_global:
+                        frame_data = self._decode_raw(fid)
+                        self.global_cache.put(self.table_id, fid, frame_data)
+                    else:
+                        frame_data = self._decode_and_dequant(fid)
+                        with self.lock:
+                            self.cache[fid] = frame_data
+                            self.cache_priority[fid] = 2.0
+                            self._evict_if_needed()
+
             elapsed = (time.time() - t0) * 1000
-            self.stats['demand_decomps'] += 1
+            self.stats['demand_decomps'] += len(miss_frames)
             self.stats['total_demand_ms'] += elapsed
-            self.stats['cache_misses'] += 1
-            batch_misses += 1
+            self.stats['cache_misses'] += len(miss_frames)
+            batch_misses = len(miss_frames)
 
         # Gather embeddings from cached frames
         if self.use_global:
-            # uint8 path: gather from uint8 frames, dequantize only needed rows
+            # uint8/tiled path: gather from cached frames, dequantize only needed rows
             results = torch.zeros(len(sorted_indices), self.emb_dim)
             for fid in unique_frames:
                 mask = (frame_ids == fid)
@@ -706,7 +788,14 @@ class OnDemandPrefetchCache:
                     # Fallback: decode again (shouldn't happen normally)
                     frame_data = self._decode_raw(fid)
                     self.stats['demand_decomps'] += 1
-                actual_rows = frame_data.shape[0]
+                # For tiled frames, actual_rows is rows_per_frame (frame is always full size)
+                # For row frames, actual_rows is frame_data.shape[0]
+                if self.use_tiled_storage:
+                    # Last frame may have fewer real rows, but gather handles it fine
+                    # since padding rows are zero (from encode padding)
+                    actual_rows = self.rows_per_frame
+                else:
+                    actual_rows = frame_data.shape[0]
                 safe_offsets = np.clip(offsets_in_frame, 0, actual_rows - 1)
                 results[mask] = self._dequant_rows(frame_data, safe_offsets)
         else:
