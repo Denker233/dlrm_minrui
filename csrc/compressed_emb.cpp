@@ -1702,6 +1702,662 @@ std::vector<torch::Tensor> fast_forward(
 }
 
 
+// ============================================================
+// Frame packing/unpacking optimizations
+// Reduce copy overhead when converting between row layout and tiled video frames.
+// ============================================================
+
+// Tile embedding rows into a video frame in a single C++ pass.
+// Replaces Python: reshape(tc,tr,4,4).transpose(0,2,1,3).reshape(H,W)
+// which forces a copy due to non-contiguous transpose.
+//
+// Input: emb_uint8 (N, 16) uint8 — quantized embedding rows (contiguous)
+// Output: frame (height, width) uint8 — tiled frame ready for H.265 encode
+//
+// Layout: each 16-byte embedding becomes a 4x4 tile.
+// Row r → tile grid (r / tiles_per_row, r % tiles_per_row)
+// 4 bytes per tile-row written contiguously in the frame.
+torch::Tensor tile_rows_to_frame(
+    const torch::Tensor& emb_uint8,  // (N, 16) uint8
+    int64_t width,
+    int64_t height
+) {
+    TORCH_CHECK(emb_uint8.scalar_type() == torch::kUInt8, "Expected uint8 input");
+    TORCH_CHECK(emb_uint8.is_contiguous(), "Input must be contiguous");
+    const int64_t N = emb_uint8.size(0);
+    const int64_t D = emb_uint8.size(1);
+    TORCH_CHECK(D == 16, "Expected D=16, got ", D);
+    TORCH_CHECK(width % 4 == 0 && height % 4 == 0, "Width and height must be multiples of 4");
+
+    const int64_t tiles_per_row = width / 4;
+    const int64_t rows_per_frame = tiles_per_row * (height / 4);
+    TORCH_CHECK(N <= rows_per_frame, "Too many rows (", N, ") for frame ", width, "x", height,
+                " (max ", rows_per_frame, ")");
+
+    auto frame = torch::zeros({height, width}, torch::dtype(torch::kUInt8));
+    const uint8_t* src = emb_uint8.data_ptr<uint8_t>();
+    uint8_t* dst = frame.data_ptr<uint8_t>();
+
+    at::parallel_for(0, N, 512, [&](int64_t begin, int64_t end) {
+        for (int64_t r = begin; r < end; r++) {
+            const int64_t ty = r / tiles_per_row;
+            const int64_t tx = r % tiles_per_row;
+            const uint8_t* row = src + r * 16;
+            // Write 4 tile-rows of 4 bytes each
+            for (int ly = 0; ly < 4; ly++) {
+                std::memcpy(dst + (ty * 4 + ly) * width + tx * 4, row + ly * 4, 4);
+            }
+        }
+    });
+
+    return frame;
+}
+
+// Untile a video frame back to embedding rows in a single C++ pass.
+// Replaces Python: reshape(tc,4,tr,4).transpose(0,2,1,3).reshape(N,16)
+// which forces a copy due to non-contiguous transpose.
+//
+// Input: frame (height, width) uint8 — tiled frame from H.265 decode
+// Output: emb (num_rows, 16) uint8 — embedding rows
+torch::Tensor untile_frame_to_rows(
+    const torch::Tensor& frame,  // (height, width) uint8
+    int64_t num_rows             // actual valid rows (<= rows_per_frame)
+) {
+    TORCH_CHECK(frame.scalar_type() == torch::kUInt8, "Expected uint8 frame");
+    const int64_t height = frame.size(0);
+    const int64_t width = frame.size(1);
+    TORCH_CHECK(width % 4 == 0 && height % 4 == 0);
+
+    const int64_t tiles_per_row = width / 4;
+    const int64_t rows_per_frame = tiles_per_row * (height / 4);
+    if (num_rows <= 0) num_rows = rows_per_frame;
+    TORCH_CHECK(num_rows <= rows_per_frame);
+
+    const uint8_t* src = frame.contiguous().data_ptr<uint8_t>();
+    auto output = torch::empty({num_rows, 16}, torch::dtype(torch::kUInt8));
+    uint8_t* dst = output.data_ptr<uint8_t>();
+
+    at::parallel_for(0, num_rows, 512, [&](int64_t begin, int64_t end) {
+        for (int64_t r = begin; r < end; r++) {
+            const int64_t ty = r / tiles_per_row;
+            const int64_t tx = r % tiles_per_row;
+            uint8_t* row = dst + r * 16;
+            for (int ly = 0; ly < 4; ly++) {
+                std::memcpy(row + ly * 4, src + (ty * 4 + ly) * width + tx * 4, 4);
+            }
+        }
+    });
+
+    return output;
+}
+
+// Gather specific rows from a tiled frame WITHOUT untiling the whole frame.
+// For a cache miss that only needs K << rows_per_frame rows, this avoids
+// copying the entire frame just to index a few rows.
+//
+// Input: frame (height, width) uint8, row_indices (K,) int64
+// Output: gathered (K, 16) uint8
+torch::Tensor gather_from_tiled_frame(
+    const torch::Tensor& frame,        // (height, width) uint8
+    const torch::Tensor& row_indices,  // (K,) int64
+    int64_t tiles_per_row              // width / 4
+) {
+    const int64_t K = row_indices.size(0);
+    const int64_t width = frame.size(1);
+
+    auto output = torch::empty({K, 16}, torch::dtype(torch::kUInt8));
+    const uint8_t* src = frame.contiguous().data_ptr<uint8_t>();
+    const int64_t* idx = row_indices.data_ptr<int64_t>();
+    uint8_t* dst = output.data_ptr<uint8_t>();
+
+    at::parallel_for(0, K, 128, [&](int64_t begin, int64_t end) {
+        for (int64_t k = begin; k < end; k++) {
+            const int64_t r = idx[k];
+            const int64_t ty = r / tiles_per_row;
+            const int64_t tx = r % tiles_per_row;
+            uint8_t* row = dst + k * 16;
+            for (int ly = 0; ly < 4; ly++) {
+                std::memcpy(row + ly * 4, src + (ty * 4 + ly) * width + tx * 4, 4);
+            }
+        }
+    });
+
+    return output;
+}
+
+// Gather from tiled frame AND dequantize to fp32 in one pass.
+// Eliminates the intermediate uint8 buffer entirely.
+// Particularly useful for on-demand cold lookups where we decode a frame
+// and only need a few specific rows.
+//
+// Input: frame (height, width) uint8, row_indices (K,) int64
+// Output: gathered_fp32 (K, 16) float32
+torch::Tensor gather_dequant_from_tiled_frame(
+    const torch::Tensor& frame,
+    const torch::Tensor& row_indices,
+    int64_t tiles_per_row,
+    double scale,
+    int64_t zero_point
+) {
+    const int64_t K = row_indices.size(0);
+    const int64_t width = frame.size(1);
+    const float s = static_cast<float>(scale);
+    const float zp = static_cast<float>(zero_point);
+
+    auto output = torch::empty({K, 16}, torch::dtype(torch::kFloat32));
+    const uint8_t* src = frame.contiguous().data_ptr<uint8_t>();
+    const int64_t* idx = row_indices.data_ptr<int64_t>();
+    float* dst = output.data_ptr<float>();
+
+    at::parallel_for(0, K, 128, [&](int64_t begin, int64_t end) {
+        for (int64_t k = begin; k < end; k++) {
+            const int64_t r = idx[k];
+            const int64_t ty = r / tiles_per_row;
+            const int64_t tx = r % tiles_per_row;
+            float* out_row = dst + k * 16;
+
+            for (int ly = 0; ly < 4; ly++) {
+                const uint8_t* tile_row = src + (ty * 4 + ly) * width + tx * 4;
+                float* out_seg = out_row + ly * 4;
+                for (int lx = 0; lx < 4; lx++) {
+                    out_seg[lx] = (static_cast<float>(tile_row[lx]) - zp) * s;
+                }
+            }
+        }
+    });
+
+    return output;
+}
+
+// Fused: take fp32 embedding weights + cold index list → produce tiled uint8 frame
+// in one pass. Combines: gather scattered rows + quantize + tile.
+// Eliminates 3 intermediate buffers that the Python path creates.
+//
+// Returns: [frame (H,W) uint8, scale_tensor, zp_tensor]
+std::vector<torch::Tensor> fused_gather_quantize_tile(
+    const torch::Tensor& weight,        // (total_rows, 16) fp32 — full embedding table
+    const torch::Tensor& cold_indices,  // (N_cold,) int64 — which rows are cold
+    int64_t width,
+    int64_t height
+) {
+    TORCH_CHECK(weight.scalar_type() == torch::kFloat32);
+    const int64_t N = cold_indices.size(0);
+    const int64_t D = weight.size(1);
+    TORCH_CHECK(D == 16);
+    TORCH_CHECK(width % 4 == 0 && height % 4 == 0);
+
+    const int64_t tiles_per_row = width / 4;
+    const int64_t rows_per_frame = tiles_per_row * (height / 4);
+    TORCH_CHECK(N <= rows_per_frame, "Need multiple frames for ", N, " rows");
+
+    const float* w_ptr = weight.data_ptr<float>();
+    const int64_t* idx_ptr = cold_indices.data_ptr<int64_t>();
+
+    // Pass 1: parallel min/max for quantization parameters
+    int num_threads = at::get_num_threads();
+    std::vector<float> thr_min(num_threads, std::numeric_limits<float>::max());
+    std::vector<float> thr_max(num_threads, std::numeric_limits<float>::lowest());
+
+    at::parallel_for(0, N, 512, [&](int64_t begin, int64_t end) {
+        int tid = at::get_thread_num();
+        float lmin = thr_min[tid], lmax = thr_max[tid];
+        for (int64_t i = begin; i < end; i++) {
+            const float* row = w_ptr + idx_ptr[i] * D;
+#if HAS_AVX512
+            __m512 v = _mm512_loadu_ps(row);
+            float row_min = _mm512_reduce_min_ps(v);
+            float row_max = _mm512_reduce_max_ps(v);
+            if (row_min < lmin) lmin = row_min;
+            if (row_max > lmax) lmax = row_max;
+#else
+            for (int64_t d = 0; d < D; d++) {
+                if (row[d] < lmin) lmin = row[d];
+                if (row[d] > lmax) lmax = row[d];
+            }
+#endif
+        }
+        thr_min[tid] = lmin;
+        thr_max[tid] = lmax;
+    });
+
+    float gmin = thr_min[0], gmax = thr_max[0];
+    for (int i = 1; i < num_threads; i++) {
+        if (thr_min[i] < gmin) gmin = thr_min[i];
+        if (thr_max[i] > gmax) gmax = thr_max[i];
+    }
+
+    float scale = (gmax - gmin) / 255.0f;
+    if (scale == 0.0f) scale = 1.0f;
+    float inv_scale = 1.0f / scale;
+    int32_t zero_point = static_cast<int32_t>(std::round(-gmin * inv_scale));
+
+    // Pass 2: gather + quantize + tile in one pass (no intermediate buffers)
+    auto frame = torch::zeros({height, width}, torch::dtype(torch::kUInt8));
+    uint8_t* frame_ptr = frame.data_ptr<uint8_t>();
+
+    at::parallel_for(0, N, 512, [&](int64_t begin, int64_t end) {
+        for (int64_t i = begin; i < end; i++) {
+            const float* row = w_ptr + idx_ptr[i] * D;
+            const int64_t ty = i / tiles_per_row;
+            const int64_t tx = i % tiles_per_row;
+
+#if HAS_AVX512
+            // Load 16 fp32, quantize to int32, clamp to [0,255]
+            __m512 v = _mm512_loadu_ps(row);
+            __m512 scaled = _mm512_mul_ps(v, _mm512_set1_ps(inv_scale));
+            __m512i rounded = _mm512_cvtps_epi32(scaled);  // rounds to nearest
+            __m512i with_zp = _mm512_add_epi32(rounded, _mm512_set1_epi32(zero_point));
+            __m512i clamped = _mm512_max_epi32(_mm512_setzero_si512(),
+                              _mm512_min_epi32(with_zp, _mm512_set1_epi32(255)));
+            // Extract to temp array, write 4 bytes per tile-row
+            alignas(64) int32_t vals[16];
+            _mm512_store_epi32(vals, clamped);
+            for (int ly = 0; ly < 4; ly++) {
+                uint8_t* dst = frame_ptr + (ty * 4 + ly) * width + tx * 4;
+                for (int lx = 0; lx < 4; lx++) {
+                    dst[lx] = static_cast<uint8_t>(vals[ly * 4 + lx]);
+                }
+            }
+#else
+            for (int d = 0; d < 16; d++) {
+                int32_t q = static_cast<int32_t>(std::round(row[d] * inv_scale)) + zero_point;
+                if (q < 0) q = 0;
+                if (q > 255) q = 255;
+                int ly = d / 4, lx = d % 4;
+                frame_ptr[(ty * 4 + ly) * width + tx * 4 + lx] = static_cast<uint8_t>(q);
+            }
+#endif
+        }
+    });
+
+    return {frame,
+            torch::tensor(static_cast<double>(scale)),
+            torch::tensor(static_cast<int64_t>(zero_point))};
+}
+
+// Fused quantize + tile: already-gathered uint8 rows → tiled frame.
+// Similar to tile_rows_to_frame but also handles fp32 input with quantization.
+// This version takes fp32 rows (already gathered/contiguous) and produces a tiled frame.
+//
+// Returns: [frame (H,W) uint8, scale_tensor, zp_tensor]
+std::vector<torch::Tensor> fused_quantize_tile(
+    const torch::Tensor& rows_fp32,  // (N, 16) fp32 — contiguous cold rows
+    int64_t width,
+    int64_t height
+) {
+    TORCH_CHECK(rows_fp32.scalar_type() == torch::kFloat32);
+    TORCH_CHECK(rows_fp32.is_contiguous());
+    const int64_t N = rows_fp32.size(0);
+    const int64_t D = rows_fp32.size(1);
+    TORCH_CHECK(D == 16);
+
+    const int64_t tiles_per_row = width / 4;
+    const int64_t rows_per_frame = tiles_per_row * (height / 4);
+    TORCH_CHECK(N <= rows_per_frame);
+
+    const float* src = rows_fp32.data_ptr<float>();
+
+    // Pass 1: min/max
+    int num_threads = at::get_num_threads();
+    std::vector<float> thr_min(num_threads, std::numeric_limits<float>::max());
+    std::vector<float> thr_max(num_threads, std::numeric_limits<float>::lowest());
+
+    at::parallel_for(0, N, 512, [&](int64_t begin, int64_t end) {
+        int tid = at::get_thread_num();
+        float lmin = thr_min[tid], lmax = thr_max[tid];
+        for (int64_t i = begin; i < end; i++) {
+            const float* row = src + i * D;
+#if HAS_AVX512
+            __m512 v = _mm512_loadu_ps(row);
+            float rmin = _mm512_reduce_min_ps(v);
+            float rmax = _mm512_reduce_max_ps(v);
+            if (rmin < lmin) lmin = rmin;
+            if (rmax > lmax) lmax = rmax;
+#else
+            for (int64_t d = 0; d < D; d++) {
+                if (row[d] < lmin) lmin = row[d];
+                if (row[d] > lmax) lmax = row[d];
+            }
+#endif
+        }
+        thr_min[tid] = lmin;
+        thr_max[tid] = lmax;
+    });
+
+    float gmin = thr_min[0], gmax = thr_max[0];
+    for (int i = 1; i < num_threads; i++) {
+        if (thr_min[i] < gmin) gmin = thr_min[i];
+        if (thr_max[i] > gmax) gmax = thr_max[i];
+    }
+
+    float scale = (gmax - gmin) / 255.0f;
+    if (scale == 0.0f) scale = 1.0f;
+    float inv_scale = 1.0f / scale;
+    int32_t zero_point = static_cast<int32_t>(std::round(-gmin * inv_scale));
+
+    // Pass 2: quantize + tile
+    auto frame = torch::zeros({height, width}, torch::dtype(torch::kUInt8));
+    uint8_t* frame_ptr = frame.data_ptr<uint8_t>();
+
+    at::parallel_for(0, N, 512, [&](int64_t begin, int64_t end) {
+        for (int64_t i = begin; i < end; i++) {
+            const float* row = src + i * D;
+            const int64_t ty = i / tiles_per_row;
+            const int64_t tx = i % tiles_per_row;
+
+#if HAS_AVX512
+            __m512 v = _mm512_loadu_ps(row);
+            __m512 scaled = _mm512_mul_ps(v, _mm512_set1_ps(inv_scale));
+            __m512i rounded = _mm512_cvtps_epi32(scaled);
+            __m512i with_zp = _mm512_add_epi32(rounded, _mm512_set1_epi32(zero_point));
+            __m512i clamped = _mm512_max_epi32(_mm512_setzero_si512(),
+                              _mm512_min_epi32(with_zp, _mm512_set1_epi32(255)));
+            alignas(64) int32_t vals[16];
+            _mm512_store_epi32(vals, clamped);
+            for (int ly = 0; ly < 4; ly++) {
+                uint8_t* dst = frame_ptr + (ty * 4 + ly) * width + tx * 4;
+                for (int lx = 0; lx < 4; lx++) {
+                    dst[lx] = static_cast<uint8_t>(vals[ly * 4 + lx]);
+                }
+            }
+#else
+            for (int d = 0; d < 16; d++) {
+                int32_t q = static_cast<int32_t>(std::round(row[d] * inv_scale)) + zero_point;
+                if (q < 0) q = 0;
+                if (q > 255) q = 255;
+                int ly = d / 4, lx = d % 4;
+                frame_ptr[(ty * 4 + ly) * width + tx * 4 + lx] = static_cast<uint8_t>(q);
+            }
+#endif
+        }
+    });
+
+    return {frame,
+            torch::tensor(static_cast<double>(scale)),
+            torch::tensor(static_cast<int64_t>(zero_point))};
+}
+
+// Multi-frame version: tile N rows across multiple frames.
+// Returns list of frame tensors + scale + zp.
+// Useful for large tables that need multiple frames.
+std::vector<torch::Tensor> fused_quantize_tile_multiframe(
+    const torch::Tensor& rows_uint8,  // (N, 16) uint8 — already quantized
+    int64_t width,
+    int64_t height
+) {
+    TORCH_CHECK(rows_uint8.scalar_type() == torch::kUInt8);
+    TORCH_CHECK(rows_uint8.is_contiguous());
+    const int64_t N = rows_uint8.size(0);
+
+    const int64_t tiles_per_row = width / 4;
+    const int64_t rows_per_frame = tiles_per_row * (height / 4);
+    const int64_t num_frames = (N + rows_per_frame - 1) / rows_per_frame;
+
+    const uint8_t* src = rows_uint8.data_ptr<uint8_t>();
+
+    // Pre-allocate all frames
+    std::vector<torch::Tensor> frames(num_frames);
+    std::vector<uint8_t*> frame_ptrs(num_frames);
+    for (int64_t f = 0; f < num_frames; f++) {
+        frames[f] = torch::zeros({height, width}, torch::dtype(torch::kUInt8));
+        frame_ptrs[f] = frames[f].data_ptr<uint8_t>();
+    }
+
+    // Parallelize across ALL rows from ALL frames
+    at::parallel_for(0, N, 512, [&](int64_t begin, int64_t end) {
+        for (int64_t r = begin; r < end; r++) {
+            const int64_t f = r / rows_per_frame;
+            const int64_t local_r = r - f * rows_per_frame;
+            const int64_t ty = local_r / tiles_per_row;
+            const int64_t tx = local_r % tiles_per_row;
+            const uint8_t* row = src + r * 16;
+            uint8_t* frame_ptr = frame_ptrs[f];
+            for (int ly = 0; ly < 4; ly++) {
+                std::memcpy(frame_ptr + (ty * 4 + ly) * width + tx * 4, row + ly * 4, 4);
+            }
+        }
+    });
+
+    return frames;
+}
+
+// Multi-frame fused: fp32 cold rows → quantize → tile across multiple frames.
+// Single call replaces the entire Python encode prep pipeline for large tables.
+// Returns: [frame_0, frame_1, ..., frame_N-1, scale_tensor, zp_tensor]
+std::vector<torch::Tensor> fused_quantize_tile_multiframe_fp32(
+    const torch::Tensor& rows_fp32,  // (N, 16) fp32 — contiguous cold rows
+    int64_t width,
+    int64_t height
+) {
+    TORCH_CHECK(rows_fp32.scalar_type() == torch::kFloat32);
+    TORCH_CHECK(rows_fp32.is_contiguous());
+    const int64_t N = rows_fp32.size(0);
+    const int64_t D = rows_fp32.size(1);
+    TORCH_CHECK(D == 16);
+
+    const int64_t tiles_per_row = width / 4;
+    const int64_t rows_per_frame = tiles_per_row * (height / 4);
+    const int64_t num_frames = (N + rows_per_frame - 1) / rows_per_frame;
+
+    const float* src = rows_fp32.data_ptr<float>();
+
+    // Pass 1: min/max for quantization
+    int nthreads = at::get_num_threads();
+    std::vector<float> thr_min(nthreads, std::numeric_limits<float>::max());
+    std::vector<float> thr_max(nthreads, std::numeric_limits<float>::lowest());
+
+    at::parallel_for(0, N, 512, [&](int64_t begin, int64_t end) {
+        int tid = at::get_thread_num();
+        float lmin = thr_min[tid], lmax = thr_max[tid];
+        for (int64_t i = begin; i < end; i++) {
+            const float* row = src + i * D;
+#if HAS_AVX512
+            __m512 v = _mm512_loadu_ps(row);
+            float rmin = _mm512_reduce_min_ps(v);
+            float rmax = _mm512_reduce_max_ps(v);
+            if (rmin < lmin) lmin = rmin;
+            if (rmax > lmax) lmax = rmax;
+#else
+            for (int64_t d = 0; d < D; d++) {
+                if (row[d] < lmin) lmin = row[d];
+                if (row[d] > lmax) lmax = row[d];
+            }
+#endif
+        }
+        thr_min[tid] = lmin;
+        thr_max[tid] = lmax;
+    });
+
+    float gmin = thr_min[0], gmax = thr_max[0];
+    for (int i = 1; i < nthreads; i++) {
+        if (thr_min[i] < gmin) gmin = thr_min[i];
+        if (thr_max[i] > gmax) gmax = thr_max[i];
+    }
+
+    float scale = (gmax - gmin) / 255.0f;
+    if (scale == 0.0f) scale = 1.0f;
+    float inv_scale = 1.0f / scale;
+    int32_t zero_point = static_cast<int32_t>(std::round(-gmin * inv_scale));
+
+    // Pre-allocate all frames
+    std::vector<torch::Tensor> frames(num_frames);
+    std::vector<uint8_t*> frame_ptrs(num_frames);
+    for (int64_t f = 0; f < num_frames; f++) {
+        frames[f] = torch::zeros({height, width}, torch::dtype(torch::kUInt8));
+        frame_ptrs[f] = frames[f].data_ptr<uint8_t>();
+    }
+
+    // Pass 2: quantize + tile across all frames in parallel
+    at::parallel_for(0, N, 512, [&](int64_t begin, int64_t end) {
+        for (int64_t i = begin; i < end; i++) {
+            const float* row = src + i * D;
+            const int64_t f = i / rows_per_frame;
+            const int64_t local_r = i - f * rows_per_frame;
+            const int64_t ty = local_r / tiles_per_row;
+            const int64_t tx = local_r % tiles_per_row;
+            uint8_t* frame_ptr = frame_ptrs[f];
+
+#if HAS_AVX512
+            __m512 v = _mm512_loadu_ps(row);
+            __m512 scaled = _mm512_mul_ps(v, _mm512_set1_ps(inv_scale));
+            __m512i rounded = _mm512_cvtps_epi32(scaled);
+            __m512i with_zp = _mm512_add_epi32(rounded, _mm512_set1_epi32(zero_point));
+            __m512i clamped = _mm512_max_epi32(_mm512_setzero_si512(),
+                              _mm512_min_epi32(with_zp, _mm512_set1_epi32(255)));
+            alignas(64) int32_t vals[16];
+            _mm512_store_epi32(vals, clamped);
+            for (int ly = 0; ly < 4; ly++) {
+                uint8_t* dst = frame_ptr + (ty * 4 + ly) * width + tx * 4;
+                for (int lx = 0; lx < 4; lx++) {
+                    dst[lx] = static_cast<uint8_t>(vals[ly * 4 + lx]);
+                }
+            }
+#else
+            for (int d = 0; d < 16; d++) {
+                int32_t q = static_cast<int32_t>(std::round(row[d] * inv_scale)) + zero_point;
+                if (q < 0) q = 0;
+                if (q > 255) q = 255;
+                int ly = d / 4, lx = d % 4;
+                frame_ptr[(ty * 4 + ly) * width + tx * 4 + lx] = static_cast<uint8_t>(q);
+            }
+#endif
+        }
+    });
+
+    // Pack results: [frame_0, ..., frame_{N-1}, scale, zp]
+    std::vector<torch::Tensor> results;
+    results.reserve(num_frames + 2);
+    for (int64_t f = 0; f < num_frames; f++) {
+        results.push_back(frames[f]);
+    }
+    results.push_back(torch::tensor(static_cast<double>(scale)));
+    results.push_back(torch::tensor(static_cast<int64_t>(zero_point)));
+    return results;
+}
+
+// Multi-frame fused gather from scattered fp32 + quantize + tile.
+// Like fused_gather_quantize_tile but handles tables larger than one frame.
+// Returns: [frame_0, ..., frame_{N-1}, scale, zp]
+std::vector<torch::Tensor> fused_gather_quantize_tile_multiframe(
+    const torch::Tensor& weight,        // (total_rows, 16) fp32
+    const torch::Tensor& cold_indices,  // (N_cold,) int64
+    int64_t width,
+    int64_t height
+) {
+    TORCH_CHECK(weight.scalar_type() == torch::kFloat32);
+    const int64_t N = cold_indices.size(0);
+    const int64_t D = weight.size(1);
+    TORCH_CHECK(D == 16);
+
+    const int64_t tiles_per_row = width / 4;
+    const int64_t rows_per_frame = tiles_per_row * (height / 4);
+    const int64_t num_frames = (N + rows_per_frame - 1) / rows_per_frame;
+
+    const float* w_ptr = weight.data_ptr<float>();
+    const int64_t* idx_ptr = cold_indices.data_ptr<int64_t>();
+
+    // Pass 1: min/max
+    int nthreads = at::get_num_threads();
+    std::vector<float> thr_min(nthreads, std::numeric_limits<float>::max());
+    std::vector<float> thr_max(nthreads, std::numeric_limits<float>::lowest());
+
+    at::parallel_for(0, N, 512, [&](int64_t begin, int64_t end) {
+        int tid = at::get_thread_num();
+        float lmin = thr_min[tid], lmax = thr_max[tid];
+        for (int64_t i = begin; i < end; i++) {
+            const float* row = w_ptr + idx_ptr[i] * D;
+#if HAS_AVX512
+            __m512 v = _mm512_loadu_ps(row);
+            float rmin = _mm512_reduce_min_ps(v);
+            float rmax = _mm512_reduce_max_ps(v);
+            if (rmin < lmin) lmin = rmin;
+            if (rmax > lmax) lmax = rmax;
+#else
+            for (int64_t d = 0; d < D; d++) {
+                if (row[d] < lmin) lmin = row[d];
+                if (row[d] > lmax) lmax = row[d];
+            }
+#endif
+        }
+        thr_min[tid] = lmin;
+        thr_max[tid] = lmax;
+    });
+
+    float gmin = thr_min[0], gmax = thr_max[0];
+    for (int i = 1; i < nthreads; i++) {
+        if (thr_min[i] < gmin) gmin = thr_min[i];
+        if (thr_max[i] > gmax) gmax = thr_max[i];
+    }
+
+    float scale = (gmax - gmin) / 255.0f;
+    if (scale == 0.0f) scale = 1.0f;
+    float inv_scale = 1.0f / scale;
+    int32_t zero_point = static_cast<int32_t>(std::round(-gmin * inv_scale));
+
+    // Pre-allocate frames
+    std::vector<torch::Tensor> frames(num_frames);
+    std::vector<uint8_t*> frame_ptrs(num_frames);
+    for (int64_t f = 0; f < num_frames; f++) {
+        frames[f] = torch::zeros({height, width}, torch::dtype(torch::kUInt8));
+        frame_ptrs[f] = frames[f].data_ptr<uint8_t>();
+    }
+
+    // Pass 2: gather + quantize + tile
+    at::parallel_for(0, N, 512, [&](int64_t begin, int64_t end) {
+        for (int64_t i = begin; i < end; i++) {
+            const float* row = w_ptr + idx_ptr[i] * D;
+            const int64_t f = i / rows_per_frame;
+            const int64_t local_r = i - f * rows_per_frame;
+            const int64_t ty = local_r / tiles_per_row;
+            const int64_t tx = local_r % tiles_per_row;
+            uint8_t* frame_ptr = frame_ptrs[f];
+
+#if HAS_AVX512
+            __m512 v = _mm512_loadu_ps(row);
+            __m512 scaled = _mm512_mul_ps(v, _mm512_set1_ps(inv_scale));
+            __m512i rounded = _mm512_cvtps_epi32(scaled);
+            __m512i with_zp = _mm512_add_epi32(rounded, _mm512_set1_epi32(zero_point));
+            __m512i clamped = _mm512_max_epi32(_mm512_setzero_si512(),
+                              _mm512_min_epi32(with_zp, _mm512_set1_epi32(255)));
+            alignas(64) int32_t vals[16];
+            _mm512_store_epi32(vals, clamped);
+            for (int ly = 0; ly < 4; ly++) {
+                uint8_t* dst = frame_ptr + (ty * 4 + ly) * width + tx * 4;
+                for (int lx = 0; lx < 4; lx++) {
+                    dst[lx] = static_cast<uint8_t>(vals[ly * 4 + lx]);
+                }
+            }
+#else
+            for (int d = 0; d < 16; d++) {
+                int32_t q = static_cast<int32_t>(std::round(row[d] * inv_scale)) + zero_point;
+                if (q < 0) q = 0;
+                if (q > 255) q = 255;
+                int ly = d / 4, lx = d % 4;
+                frame_ptr[(ty * 4 + ly) * width + tx * 4 + lx] = static_cast<uint8_t>(q);
+            }
+#endif
+        }
+    });
+
+    std::vector<torch::Tensor> results;
+    results.reserve(num_frames + 2);
+    for (int64_t f = 0; f < num_frames; f++) {
+        results.push_back(frames[f]);
+    }
+    results.push_back(torch::tensor(static_cast<double>(scale)));
+    results.push_back(torch::tensor(static_cast<int64_t>(zero_point)));
+    return results;
+}
+
+// Get frame bytes ready for pipe to ffmpeg. Returns raw bytes as a uint8 1D tensor.
+// This avoids Python .tobytes() overhead by giving direct access to frame memory.
+torch::Tensor frame_to_bytes(const torch::Tensor& frame) {
+    TORCH_CHECK(frame.scalar_type() == torch::kUInt8);
+    auto contiguous = frame.contiguous();
+    return contiguous.view({-1});
+}
+
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("compressed_emb_bag_forward", &compressed_emb_bag_forward,
           "Compressed EmbeddingBag forward (hot path in C++, returns cold_mask)");
@@ -1737,4 +2393,25 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           "Register flat natural-order cold buffer (no cold_mapping needed, uses bitmap cold_rank)",
           py::arg("table_idx"), py::arg("cold_flat_data"),
           py::arg("cold_scale"), py::arg("cold_zp"), py::arg("n_cold_rows"));
+    // Frame packing/unpacking optimizations
+    m.def("tile_rows_to_frame", &tile_rows_to_frame,
+          "Tile uint8 embedding rows (N,16) into a 2D frame (H,W) for H.265 encoding");
+    m.def("untile_frame_to_rows", &untile_frame_to_rows,
+          "Untile a 2D frame (H,W) back to embedding rows (N,16)");
+    m.def("gather_from_tiled_frame", &gather_from_tiled_frame,
+          "Gather specific rows from a tiled frame without untiling the whole frame");
+    m.def("gather_dequant_from_tiled_frame", &gather_dequant_from_tiled_frame,
+          "Gather rows from tiled frame and dequantize to fp32 in one pass");
+    m.def("fused_gather_quantize_tile", &fused_gather_quantize_tile,
+          "Fused: gather scattered fp32 rows + quantize + tile into frame");
+    m.def("fused_quantize_tile", &fused_quantize_tile,
+          "Fused: quantize contiguous fp32 rows + tile into frame");
+    m.def("fused_quantize_tile_multiframe", &fused_quantize_tile_multiframe,
+          "Tile pre-quantized uint8 rows across multiple frames");
+    m.def("fused_quantize_tile_multiframe_fp32", &fused_quantize_tile_multiframe_fp32,
+          "Fused quantize + tile fp32 rows across multiple frames");
+    m.def("fused_gather_quantize_tile_multiframe", &fused_gather_quantize_tile_multiframe,
+          "Fused gather scattered fp32 + quantize + tile across multiple frames");
+    m.def("frame_to_bytes", &frame_to_bytes,
+          "Get frame as contiguous 1D bytes (avoids Python .tobytes())");
 }
