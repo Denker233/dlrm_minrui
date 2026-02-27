@@ -211,14 +211,16 @@ def tiled_frame_to_rows(frame, width, height):
 # ============================================================
 # NEW H.265 ENCODING: Proper video resolution frames with 4x4 tiling
 # ============================================================
-def encode_h265_perframe(q_np, width, height, crf=0, output_dir=None, table_id=0):
+def encode_h265_perframe(q_np, width, height, crf=0, output_dir=None, table_id=0,
+                         codec='h265'):
     """
-    Encode uint8 cold embeddings as individual H.265 compressed frame files.
+    Encode uint8 cold embeddings as individual compressed frame files.
 
     Each embedding (dim=16) is reshaped into a 4x4 spatial tile.
     Tiles are arranged in a grid to fill video-resolution frames (e.g., 1920x1080).
-    Each frame is encoded as a separate ALL-INTRA .h265 file.
+    Each frame is encoded as a separate ALL-INTRA compressed file.
 
+    Supports codecs: 'h265' (default), 'h264' (2x faster decode), 'ffv1' (lossless, fast).
     Uses C++ fused tiling when available (35-100x faster, 86% less memory).
 
     Returns: (num_frames, frame_dir, total_compressed_bytes, encode_time, rows_per_frame)
@@ -254,14 +256,20 @@ def encode_h265_perframe(q_np, width, height, crf=0, output_dir=None, table_id=0
         tiled_frames = None
         tile_time = time.time() - t0
 
-    # Encode frames: use C++ batch encode (2.8x faster, parallel) or subprocess ffmpeg
-    use_cpp_encode = (HAS_CPP_EXT and hasattr(_C, 'batch_encode_h265_frames')
-                      and crf == 0 and tiled_frames is not None)
+    # Encode frames: use C++ batch encode (parallel) or subprocess ffmpeg
+    use_cpp_multi = (HAS_CPP_EXT and hasattr(_C, 'batch_encode_frames_codec')
+                     and crf == 0 and tiled_frames is not None)
+    use_cpp_h265 = (HAS_CPP_EXT and hasattr(_C, 'batch_encode_h265_frames')
+                    and crf == 0 and tiled_frames is not None and codec == 'h265')
 
-    if use_cpp_encode:
-        # C++ parallel batch encode: all frames encoded simultaneously via libx265
+    if use_cpp_multi:
+        # C++ parallel batch encode with specified codec
+        total_compressed = _C.batch_encode_frames_codec(
+            tiled_frames, frame_dir, codec, True)  # lossless=True
+    elif use_cpp_h265:
+        # C++ parallel batch encode: H.265 only (legacy path)
         total_compressed = _C.batch_encode_h265_frames(
-            tiled_frames, frame_dir, True)  # lossless=True
+            tiled_frames, frame_dir, True)
     else:
         for i in range(num_frames):
             if HAS_CPP_EXT and tiled_frames is not None:
@@ -299,7 +307,7 @@ def encode_h265_perframe(q_np, width, height, crf=0, output_dir=None, table_id=0
     raw_bytes = num_rows * EMB_DIM
     ratio = raw_bytes / total_compressed if total_compressed > 0 else 0
 
-    log(f"  H.265 encode ({width}x{height}, 4x4 tiles): {num_frames} frames, "
+    log(f"  {codec.upper()} encode ({width}x{height}, 4x4 tiles): {num_frames} frames, "
         f"{raw_bytes/1024/1024:.1f}MB -> {total_compressed/1024/1024:.1f}MB "
         f"({ratio:.2f}x uint8 ratio), {encode_time:.1f}s (tile: {tile_time:.3f}s)")
 
@@ -311,7 +319,8 @@ def encode_h265_perframe(q_np, width, height, crf=0, output_dir=None, table_id=0
 # ============================================================
 class OnDemandFrameDecoder:
     """
-    Decode a single H.265 frame file on demand.
+    Decode a single compressed frame file on demand.
+    Supports H.265, H.264, FFV1, and any codec detectable by libavformat.
     Uses C++ direct libavcodec decode when available (~7% faster, returns torch tensor directly).
     Falls back to PyAV if C++ extension not available.
     Thread-safe: each call is independent (opens its own file).
@@ -324,9 +333,15 @@ class OnDemandFrameDecoder:
         self.height = height
         self.tiles_per_row = width // TILE_W
         self._use_cpp_decode = HAS_CPP_EXT and hasattr(_C, 'decode_h265_frame_from_file')
+        # Auto-detect frame file extension (supports .h265, .h264, .mkv)
+        self._frame_ext = '.h265'
+        for ext in ['.h265', '.h264', '.mkv']:
+            if os.path.exists(os.path.join(frame_dir, f'frame_00000{ext}')):
+                self._frame_ext = ext
+                break
         # Count frames
         self.num_frames = len([f for f in os.listdir(frame_dir)
-                               if f.startswith('frame_') and f.endswith('.h265')])
+                               if f.startswith('frame_') and f.endswith(self._frame_ext)])
 
     def decode_frame(self, frame_id, tiled=False):
         """
@@ -339,7 +354,7 @@ class OnDemandFrameDecoder:
 
         Thread-safe: each call opens its own file/container.
         """
-        frame_path = os.path.join(self.frame_dir, f'frame_{frame_id:05d}.h265')
+        frame_path = os.path.join(self.frame_dir, f'frame_{frame_id:05d}{self._frame_ext}')
 
         if self._use_cpp_decode:
             # C++ direct decode: returns torch.Tensor (H, W) uint8
@@ -1323,7 +1338,8 @@ def main():
                 continue
 
             frame_files = sorted([f for f in os.listdir(frame_dir)
-                                  if f.startswith('frame_') and f.endswith('.h265')])
+                                  if f.startswith('frame_') and
+                                  (f.endswith('.h265') or f.endswith('.h264') or f.endswith('.mkv'))])
 
             if disk_decode:
                 # Disk-based: don't load compressed bytes into memory

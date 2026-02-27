@@ -2382,6 +2382,14 @@ torch::Tensor frame_to_bytes(const torch::Tensor& frame) {
  * 2. No tobytes() copy (~0.1ms for 1080p)
  * 3. Direct frame buffer access (no pipe I/O)
  * 4. Can be called from C++ threads for parallel multi-frame encode
+ */
+
+// File-scope struct for memory I/O in encode functions (avoids incomplete-type warnings)
+struct EncOutputBuf {
+    std::vector<uint8_t>* data;
+};
+
+/*
  *
  * Args:
  *   frame: (H, W) uint8 tensor (raw grayscale frame)
@@ -2466,10 +2474,7 @@ torch::Tensor encode_h265_frame(
 
     if (to_memory) {
         // Memory output using a growing buffer
-        struct EncOutputBuffer {
-            std::vector<uint8_t>* data;
-        };
-        auto* ob = new EncOutputBuffer{&output_bytes};
+        auto* ob = new EncOutputBuf{&output_bytes};
         ob_ptr = ob;
 
         avio_buffer = static_cast<uint8_t*>(av_malloc(32768));
@@ -2477,13 +2482,13 @@ torch::Tensor encode_h265_frame(
             nullptr,
             // write callback
             [](void* opaque, uint8_t* buf, int buf_size) -> int {
-                auto* b = static_cast<EncOutputBuffer*>(opaque);
+                auto* b = static_cast<EncOutputBuf*>(opaque);
                 b->data->insert(b->data->end(), buf, buf + buf_size);
                 return buf_size;
             },
             // seek callback
             [](void* opaque, int64_t offset, int whence) -> int64_t {
-                auto* b = static_cast<EncOutputBuffer*>(opaque);
+                auto* b = static_cast<EncOutputBuf*>(opaque);
                 if (whence == AVSEEK_SIZE) return b->data->size();
                 if (whence == SEEK_SET) {
                     if (offset > static_cast<int64_t>(b->data->size()))
@@ -2560,8 +2565,7 @@ torch::Tensor encode_h265_frame(
             avio_flush(fmt_ctx->pb);
             // Free the output buffer struct
             if (ob_ptr) {
-                struct EncOutputBuffer { std::vector<uint8_t>* data; };
-                delete static_cast<EncOutputBuffer*>(ob_ptr);
+                delete static_cast<EncOutputBuf*>(ob_ptr);
             }
             av_freep(&avio_ctx->buffer);
             avio_context_free(&avio_ctx);
@@ -2632,6 +2636,292 @@ int64_t batch_encode_h265_frames(
     for (int64_t i = 0; i < num_frames; i++) {
         TORCH_CHECK(errors[i].empty(),
                     "Failed to encode frame ", i, ": ", errors[i]);
+    }
+
+    int64_t total = 0;
+    for (auto s : sizes) total += s;
+    return total;
+}
+
+
+// ============================================================
+// MULTI-CODEC ENCODE/DECODE (H.264, H.265, FFV1)
+// ============================================================
+
+/**
+ * encode_frame_codec - Encode a single grayscale frame using a specified codec.
+ *
+ * Supports: "h265" (libx265), "h264" (libx264), "ffv1" (FFV1 lossless).
+ * Returns compressed bytes tensor (if output_path is empty) or empty tensor (if writing to file).
+ */
+torch::Tensor encode_frame_codec(
+    const torch::Tensor& frame,
+    const std::string& output_path,
+    const std::string& codec_name,
+    bool lossless,
+    int crf)
+{
+    TORCH_CHECK(frame.scalar_type() == torch::kUInt8, "Frame must be uint8");
+    TORCH_CHECK(frame.dim() == 2, "Frame must be 2D (H, W)");
+
+    // Suppress FFmpeg log noise
+    av_log_set_level(AV_LOG_ERROR);
+
+    auto frame_c = frame.contiguous();
+    int width = frame_c.size(1);
+    int height = frame_c.size(0);
+    const uint8_t* src = frame_c.data_ptr<uint8_t>();
+
+    // Find the requested encoder
+    const AVCodec* codec = nullptr;
+    AVPixelFormat pix_fmt = AV_PIX_FMT_GRAY8;
+    std::string container_fmt;
+    std::string file_ext;
+
+    if (codec_name == "h265" || codec_name == "hevc") {
+        codec = avcodec_find_encoder_by_name("libx265");
+        if (!codec) codec = avcodec_find_encoder(AV_CODEC_ID_HEVC);
+        container_fmt = "matroska";
+        file_ext = ".h265";
+    } else if (codec_name == "h264" || codec_name == "avc") {
+        codec = avcodec_find_encoder_by_name("libx264");
+        if (!codec) codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+        container_fmt = "matroska";
+        file_ext = ".h264";
+        // libx264 doesn't support gray8 directly, use yuv420p and convert
+        pix_fmt = AV_PIX_FMT_YUV420P;
+    } else if (codec_name == "ffv1") {
+        codec = avcodec_find_encoder(AV_CODEC_ID_FFV1);
+        container_fmt = "matroska";
+        file_ext = ".mkv";
+    } else {
+        TORCH_CHECK(false, "Unsupported codec: ", codec_name,
+                     ". Supported: h265, h264, ffv1");
+    }
+    TORCH_CHECK(codec != nullptr, "Encoder not found for codec: ", codec_name);
+
+    // Allocate output context
+    AVFormatContext* fmt_ctx = nullptr;
+    bool to_memory = output_path.empty();
+
+    if (to_memory) {
+        avformat_alloc_output_context2(&fmt_ctx, nullptr, container_fmt.c_str(), nullptr);
+    } else {
+        // Always force container format to avoid extension-detection issues
+        avformat_alloc_output_context2(&fmt_ctx, nullptr, container_fmt.c_str(), output_path.c_str());
+    }
+    TORCH_CHECK(fmt_ctx != nullptr, "Failed to allocate output context");
+
+    // Create stream
+    AVStream* stream = avformat_new_stream(fmt_ctx, codec);
+    TORCH_CHECK(stream != nullptr, "Failed to create stream");
+
+    // Configure encoder
+    AVCodecContext* enc_ctx = avcodec_alloc_context3(codec);
+    TORCH_CHECK(enc_ctx != nullptr, "Failed to alloc encoder context");
+
+    enc_ctx->width = width;
+    enc_ctx->height = height;
+    enc_ctx->pix_fmt = pix_fmt;
+    enc_ctx->time_base = {1, 1};
+    enc_ctx->framerate = {1, 1};
+    enc_ctx->gop_size = 1;  // ALL-INTRA
+    enc_ctx->thread_count = 1;
+
+    // Codec-specific options
+    if (codec_name == "h265" || codec_name == "hevc") {
+        if (lossless || crf == 0) {
+            av_opt_set(enc_ctx->priv_data, "preset", "ultrafast", 0);
+            av_opt_set(enc_ctx->priv_data, "x265-params",
+                       "lossless=1:log-level=error", 0);
+        } else {
+            av_opt_set(enc_ctx->priv_data, "preset", "ultrafast", 0);
+            char params[128];
+            snprintf(params, sizeof(params), "crf=%d:log-level=error", crf);
+            av_opt_set(enc_ctx->priv_data, "x265-params", params, 0);
+        }
+    } else if (codec_name == "h264" || codec_name == "avc") {
+        av_opt_set(enc_ctx->priv_data, "preset", "ultrafast", 0);
+        if (lossless) {
+            // x264 lossless: qp=0
+            av_opt_set(enc_ctx->priv_data, "qp", "0", 0);
+        } else {
+            char crf_str[16];
+            snprintf(crf_str, sizeof(crf_str), "%d", crf);
+            av_opt_set(enc_ctx->priv_data, "crf", crf_str, 0);
+        }
+        // Suppress log noise
+        av_log_set_level(AV_LOG_ERROR);
+    } else if (codec_name == "ffv1") {
+        // FFV1 is always lossless, no special options needed
+        // Use higher compression level for better ratio
+        enc_ctx->level = 3;  // FFV1 version 3
+    }
+
+    if (fmt_ctx->oformat->flags & AVFMT_GLOBALHEADER)
+        enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+    int ret = avcodec_open2(enc_ctx, codec, nullptr);
+    TORCH_CHECK(ret >= 0, "Failed to open encoder for codec: ", codec_name);
+
+    avcodec_parameters_from_context(stream->codecpar, enc_ctx);
+
+    // Open I/O
+    uint8_t* avio_buffer = nullptr;
+    AVIOContext* avio_ctx = nullptr;
+    std::vector<uint8_t> output_bytes;
+    void* ob_ptr = nullptr;
+
+    if (to_memory) {
+        auto* ob = new EncOutputBuf{&output_bytes};
+        ob_ptr = ob;
+
+        avio_buffer = static_cast<uint8_t*>(av_malloc(32768));
+        avio_ctx = avio_alloc_context(avio_buffer, 32768, 1, ob,
+            nullptr,
+            [](void* opaque, uint8_t* buf, int buf_size) -> int {
+                auto* b = static_cast<EncOutputBuf*>(opaque);
+                b->data->insert(b->data->end(), buf, buf + buf_size);
+                return buf_size;
+            },
+            [](void* opaque, int64_t offset, int whence) -> int64_t {
+                auto* b = static_cast<EncOutputBuf*>(opaque);
+                if (whence == AVSEEK_SIZE) return b->data->size();
+                if (whence == SEEK_SET) {
+                    if (offset > static_cast<int64_t>(b->data->size()))
+                        b->data->resize(offset, 0);
+                    return offset;
+                }
+                return -1;
+            });
+        fmt_ctx->pb = avio_ctx;
+    } else {
+        ret = avio_open(&fmt_ctx->pb, output_path.c_str(), AVIO_FLAG_WRITE);
+        TORCH_CHECK(ret >= 0, "Failed to open output file: ", output_path);
+    }
+
+    // Write header
+    ret = avformat_write_header(fmt_ctx, nullptr);
+    TORCH_CHECK(ret >= 0, "Failed to write header");
+
+    // Allocate frame
+    AVFrame* av_frame = av_frame_alloc();
+    av_frame->format = pix_fmt;
+    av_frame->width = width;
+    av_frame->height = height;
+    ret = av_frame_get_buffer(av_frame, 0);
+    TORCH_CHECK(ret >= 0, "Failed to allocate frame buffer");
+
+    // Copy grayscale data to frame
+    if (pix_fmt == AV_PIX_FMT_GRAY8) {
+        for (int y = 0; y < height; y++) {
+            std::memcpy(av_frame->data[0] + y * av_frame->linesize[0],
+                       src + y * width, width);
+        }
+    } else if (pix_fmt == AV_PIX_FMT_YUV420P) {
+        // Convert gray8 to YUV420P: Y=gray, U=V=128 (neutral chroma)
+        for (int y = 0; y < height; y++) {
+            std::memcpy(av_frame->data[0] + y * av_frame->linesize[0],
+                       src + y * width, width);
+        }
+        // Fill U and V planes with 128 (neutral)
+        int chroma_h = (height + 1) / 2;
+        int chroma_w = (width + 1) / 2;
+        for (int y = 0; y < chroma_h; y++) {
+            std::memset(av_frame->data[1] + y * av_frame->linesize[1], 128, chroma_w);
+            std::memset(av_frame->data[2] + y * av_frame->linesize[2], 128, chroma_w);
+        }
+    }
+
+    av_frame->pts = 0;
+
+    // Encode
+    AVPacket* pkt = av_packet_alloc();
+    ret = avcodec_send_frame(enc_ctx, av_frame);
+    TORCH_CHECK(ret >= 0, "Failed to send frame to encoder");
+
+    // Flush
+    avcodec_send_frame(enc_ctx, nullptr);
+
+    while (true) {
+        ret = avcodec_receive_packet(enc_ctx, pkt);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
+        TORCH_CHECK(ret >= 0, "Failed to receive packet");
+        pkt->stream_index = stream->index;
+        av_interleaved_write_frame(fmt_ctx, pkt);
+        av_packet_unref(pkt);
+    }
+
+    av_write_trailer(fmt_ctx);
+
+    // Cleanup
+    av_packet_free(&pkt);
+    av_frame_free(&av_frame);
+    avcodec_free_context(&enc_ctx);
+
+    if (to_memory) {
+        if (avio_ctx) {
+            av_freep(&avio_ctx->buffer);
+            avio_context_free(&avio_ctx);
+        }
+        if (ob_ptr) delete static_cast<EncOutputBuf*>(ob_ptr);
+        avformat_free_context(fmt_ctx);
+        // Return bytes as tensor
+        auto result = torch::empty({static_cast<int64_t>(output_bytes.size())}, torch::kUInt8);
+        std::memcpy(result.data_ptr<uint8_t>(), output_bytes.data(), output_bytes.size());
+        return result;
+    } else {
+        avio_closep(&fmt_ctx->pb);
+        avformat_free_context(fmt_ctx);
+        return torch::empty({0}, torch::kUInt8);
+    }
+}
+
+/**
+ * batch_encode_frames_codec - Encode multiple frames to files in parallel using specified codec.
+ *
+ * Returns total compressed bytes.
+ */
+int64_t batch_encode_frames_codec(
+    const std::vector<torch::Tensor>& frames,
+    const std::string& output_dir,
+    const std::string& codec_name,
+    bool lossless)
+{
+    const int64_t num_frames = frames.size();
+
+    // Determine file extension
+    std::string ext = ".h265";
+    if (codec_name == "h264" || codec_name == "avc") ext = ".h264";
+    else if (codec_name == "ffv1") ext = ".mkv";
+
+    std::vector<std::thread> threads;
+    std::vector<std::string> errors(num_frames);
+    std::vector<int64_t> sizes(num_frames, 0);
+
+    for (int64_t i = 0; i < num_frames; i++) {
+        threads.emplace_back([&, i]() {
+            try {
+                char fname[64];
+                snprintf(fname, sizeof(fname), "frame_%05ld%s", i, ext.c_str());
+                std::string path = output_dir + "/" + fname;
+                encode_frame_codec(frames[i], path, codec_name, lossless, lossless ? 0 : 28);
+                FILE* f = fopen(path.c_str(), "rb");
+                if (f) {
+                    fseek(f, 0, SEEK_END);
+                    sizes[i] = ftell(f);
+                    fclose(f);
+                }
+            } catch (const std::exception& e) {
+                errors[i] = e.what();
+            }
+        });
+    }
+    for (auto& t : threads) t.join();
+
+    for (int64_t i = 0; i < num_frames; i++) {
+        TORCH_CHECK(errors[i].empty(),
+                    "Failed to encode frame ", i, " with ", codec_name, ": ", errors[i]);
     }
 
     int64_t total = 0;
@@ -2915,8 +3205,11 @@ torch::Tensor decode_h265_gather_dequant(
                                             scale, zero_point);
 }
 
+// Forward declaration for auto-detect (defined near batch_decode_frames)
+static std::string auto_detect_frame_ext(const std::string& frame_dir);
+
 /**
- * batch_decode_gather_dequant - Decode multiple H.265 frames in parallel and gather+dequant.
+ * batch_decode_gather_dequant - Decode multiple frames in parallel and gather+dequant.
  *
  * This is the key optimization for batch inference: when a batch needs rows from
  * N different frames, we decode all N frames in parallel threads and then gather
@@ -2947,11 +3240,12 @@ torch::Tensor batch_decode_gather_dequant(
     const auto fid_ptr = frame_ids.data_ptr<int64_t>();
     const auto idx_ptr = cold_indices.data_ptr<int64_t>();
 
-    // Step 1: Decode all frames in parallel
+    // Step 1: Decode all frames in parallel (auto-detect codec from file extension)
+    std::string ext = auto_detect_frame_ext(frame_dir);
     std::vector<torch::Tensor> decoded_frames(num_frames);
 
     // Use std::thread for parallel decode (at::parallel_for may not work well with
-    // blocking I/O operations like file read + H.265 decode)
+    // blocking I/O operations like file read + codec decode)
     std::vector<std::thread> threads;
     std::vector<std::string> errors(num_frames);
 
@@ -2959,7 +3253,7 @@ torch::Tensor batch_decode_gather_dequant(
         threads.emplace_back([&, i]() {
             try {
                 char fname[64];
-                snprintf(fname, sizeof(fname), "frame_%05ld.h265", fid_ptr[i]);
+                snprintf(fname, sizeof(fname), "frame_%05ld%s", fid_ptr[i], ext.c_str());
                 std::string path = frame_dir + "/" + fname;
                 decoded_frames[i] = decode_h265_frame_from_file(path);
             } catch (const std::exception& e) {
@@ -3039,8 +3333,28 @@ torch::Tensor batch_decode_gather_dequant(
 
 
 /**
- * batch_decode_frames - Decode multiple H.265 frames in parallel, return tiled frames.
+ * auto_detect_frame_ext - Detect frame file extension in a directory.
  *
+ * Checks for frame_00000 with extensions: .h265, .h264, .mkv
+ * Returns the detected extension string, defaults to ".h265".
+ */
+static std::string auto_detect_frame_ext(const std::string& frame_dir) {
+    const char* exts[] = {".h265", ".h264", ".mkv"};
+    for (const char* ext : exts) {
+        std::string path = frame_dir + "/frame_00000" + ext;
+        FILE* f = fopen(path.c_str(), "rb");
+        if (f) {
+            fclose(f);
+            return ext;
+        }
+    }
+    return ".h265";  // default
+}
+
+/**
+ * batch_decode_frames - Decode multiple frames in parallel, return tiled frames.
+ *
+ * Auto-detects codec from file extension (.h265, .h264, .mkv).
  * Useful when caller wants to cache the decoded frames.
  * Returns: vector of torch::Tensor, each (H, W) uint8.
  */
@@ -3051,6 +3365,9 @@ std::vector<torch::Tensor> batch_decode_frames(
     const int64_t num_frames = frame_ids.size(0);
     const auto fid_ptr = frame_ids.data_ptr<int64_t>();
 
+    // Auto-detect file extension
+    std::string ext = auto_detect_frame_ext(frame_dir);
+
     std::vector<torch::Tensor> decoded_frames(num_frames);
     std::vector<std::thread> threads;
     std::vector<std::string> errors(num_frames);
@@ -3059,7 +3376,7 @@ std::vector<torch::Tensor> batch_decode_frames(
         threads.emplace_back([&, i]() {
             try {
                 char fname[64];
-                snprintf(fname, sizeof(fname), "frame_%05ld.h265", fid_ptr[i]);
+                snprintf(fname, sizeof(fname), "frame_%05ld%s", fid_ptr[i], ext.c_str());
                 std::string path = frame_dir + "/" + fname;
                 decoded_frames[i] = decode_h265_frame_from_file(path);
             } catch (const std::exception& e) {
@@ -3155,4 +3472,14 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("batch_encode_h265_frames", &batch_encode_h265_frames,
           "Encode multiple frames to H.265 files in parallel",
           py::arg("frames"), py::arg("output_dir"), py::arg("lossless") = true);
+    // Multi-codec encode
+    m.def("encode_frame_codec", &encode_frame_codec,
+          "Encode single grayscale frame with specified codec (h265/h264/ffv1)",
+          py::arg("frame"), py::arg("output_path") = "",
+          py::arg("codec_name") = "h265",
+          py::arg("lossless") = true, py::arg("crf") = 0);
+    m.def("batch_encode_frames_codec", &batch_encode_frames_codec,
+          "Encode multiple frames in parallel with specified codec",
+          py::arg("frames"), py::arg("output_dir"),
+          py::arg("codec_name") = "h265", py::arg("lossless") = true);
 }
