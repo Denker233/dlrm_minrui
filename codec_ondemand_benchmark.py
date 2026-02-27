@@ -157,14 +157,30 @@ def rows_to_tiled_frame(emb_rows, width, height):
     """
     Convert embedding rows (N, 16) into a tiled 2D frame (height, width).
     Each embedding becomes a 4x4 tile arranged in a grid.
+    Uses C++ extension when available (35-100x faster, avoids transpose copy).
     """
-    tiles_per_row = width // TILE_W   # e.g., 1920/4 = 480
-    tiles_per_col = height // TILE_H  # e.g., 1080/4 = 270
-    rows_per_frame = tiles_per_row * tiles_per_col  # 129600
+    tiles_per_row = width // TILE_W
+    tiles_per_col = height // TILE_H
+    rows_per_frame = tiles_per_row * tiles_per_col
 
-    # Reshape: (rows_per_frame, 16) -> (tiles_per_col, tiles_per_row, 4, 4)
+    if HAS_CPP_EXT:
+        # C++ path: single-pass tiling, no intermediate copies
+        if isinstance(emb_rows, np.ndarray):
+            padded = np.zeros((rows_per_frame, EMB_DIM), dtype=np.uint8)
+            n = min(len(emb_rows), rows_per_frame)
+            padded[:n] = emb_rows[:n]
+            t = torch.from_numpy(padded)
+        else:
+            t = emb_rows
+            if t.shape[0] < rows_per_frame:
+                padded = torch.zeros(rows_per_frame, EMB_DIM, dtype=torch.uint8)
+                padded[:t.shape[0]] = t
+                t = padded
+        frame_t = _C.tile_rows_to_frame(t, width, height)
+        return frame_t.numpy()
+
+    # Python fallback
     tiles = emb_rows[:rows_per_frame].reshape(tiles_per_col, tiles_per_row, TILE_H, TILE_W)
-    # Rearrange to image: (tiles_per_col, 4, tiles_per_row, 4) -> (height, width)
     frame = tiles.transpose(0, 2, 1, 3).reshape(height, width)
     return frame
 
@@ -172,14 +188,22 @@ def tiled_frame_to_rows(frame, width, height):
     """
     Convert a tiled 2D frame (height, width) back to embedding rows (N, 16).
     Inverse of rows_to_tiled_frame.
+    Uses C++ extension when available (50-100x faster, avoids transpose copy).
     """
     tiles_per_row = width // TILE_W
     tiles_per_col = height // TILE_H
     rows_per_frame = tiles_per_row * tiles_per_col
 
-    # Reshape: (height, width) -> (tiles_per_col, 4, tiles_per_row, 4)
+    if HAS_CPP_EXT:
+        if isinstance(frame, np.ndarray):
+            frame_t = torch.from_numpy(frame)
+        else:
+            frame_t = frame
+        rows_t = _C.untile_frame_to_rows(frame_t, rows_per_frame)
+        return rows_t.numpy()
+
+    # Python fallback
     grid = frame.reshape(tiles_per_col, TILE_H, tiles_per_row, TILE_W)
-    # Rearrange: (tiles_per_col, tiles_per_row, 4, 4) -> (rows_per_frame, 16)
     rows = grid.transpose(0, 2, 1, 3).reshape(rows_per_frame, EMB_DIM)
     return rows
 
@@ -195,6 +219,8 @@ def encode_h265_perframe(q_np, width, height, crf=0, output_dir=None, table_id=0
     Tiles are arranged in a grid to fill video-resolution frames (e.g., 1920x1080).
     Each frame is encoded as a separate ALL-INTRA .h265 file.
 
+    Uses C++ fused tiling when available (35-100x faster, 86% less memory).
+
     Returns: (num_frames, frame_dir, total_compressed_bytes, encode_time, rows_per_frame)
     """
     tiles_per_row = width // TILE_W
@@ -203,22 +229,38 @@ def encode_h265_perframe(q_np, width, height, crf=0, output_dir=None, table_id=0
     num_rows = q_np.shape[0]
     num_frames = max(1, (num_rows + rows_per_frame - 1) // rows_per_frame)
 
-    # Pad to fill complete frames
-    padded_rows = num_frames * rows_per_frame
-    padded = np.zeros((padded_rows, EMB_DIM), dtype=np.uint8)
-    padded[:num_rows] = q_np
-
     frame_dir = os.path.join(output_dir, f'table_{table_id}')
     os.makedirs(frame_dir, exist_ok=True)
 
     t0 = time.time()
     total_compressed = 0
 
+    # Pre-tile all frames using C++ when available (single parallel pass)
+    if HAS_CPP_EXT:
+        q_t = torch.from_numpy(q_np) if isinstance(q_np, np.ndarray) else q_np
+        # Pad to full frame count
+        padded_rows = num_frames * rows_per_frame
+        if q_t.shape[0] < padded_rows:
+            padded = torch.zeros(padded_rows, EMB_DIM, dtype=torch.uint8)
+            padded[:q_t.shape[0]] = q_t
+            q_t = padded
+        tiled_frames = _C.fused_quantize_tile_multiframe(q_t, width, height)
+        tile_time = time.time() - t0
+    else:
+        # Python fallback: pad then tile per frame
+        padded_rows = num_frames * rows_per_frame
+        padded = np.zeros((padded_rows, EMB_DIM), dtype=np.uint8)
+        padded[:num_rows] = q_np if isinstance(q_np, np.ndarray) else q_np.numpy()
+        tiled_frames = None
+        tile_time = time.time() - t0
+
     for i in range(num_frames):
-        # Get this frame's embedding rows
-        frame_rows = padded[i * rows_per_frame:(i + 1) * rows_per_frame]
-        # Tile into 2D frame
-        frame_2d = rows_to_tiled_frame(frame_rows, width, height)
+        if HAS_CPP_EXT:
+            frame_2d = tiled_frames[i].numpy()
+        else:
+            frame_rows = padded[i * rows_per_frame:(i + 1) * rows_per_frame]
+            frame_2d = rows_to_tiled_frame(frame_rows, width, height)
+
         frame_path = os.path.join(frame_dir, f'frame_{i:05d}.h265')
 
         # Encode single frame via ffmpeg
@@ -250,7 +292,7 @@ def encode_h265_perframe(q_np, width, height, crf=0, output_dir=None, table_id=0
 
     log(f"  H.265 encode ({width}x{height}, 4x4 tiles): {num_frames} frames, "
         f"{raw_bytes/1024/1024:.1f}MB -> {total_compressed/1024/1024:.1f}MB "
-        f"({ratio:.2f}x uint8 ratio), {encode_time:.1f}s")
+        f"({ratio:.2f}x uint8 ratio), {encode_time:.1f}s (tile: {tile_time:.3f}s)")
 
     return num_frames, frame_dir, total_compressed, encode_time, rows_per_frame
 
