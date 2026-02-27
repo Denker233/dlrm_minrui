@@ -39,7 +39,7 @@ import av
 # ============================================================
 # CONFIGURATION
 # ============================================================
-MODEL_PATH = "./models/dlrm_kaggle_1epoch.pt"
+MODEL_PATH = "./models/dlrm_kaggle_correct.pt"
 DATA_FILE = os.path.expanduser("~/input/train.txt")
 PROCESSED_DATA = os.path.expanduser("~/input/kaggleAdDisplayChallenge_processed.npz")
 
@@ -1086,7 +1086,7 @@ def main():
     dlrm.time_look_up = 0; dlrm.time_interact = 0; dlrm.time_mlp = 0
 
     all_results = {
-        'A_baseline': {
+        'A_baseline_t80': {
             'auc': baseline_auc, 'total_time': baseline_time,
             'num_batches': len(blats), 'rss_mb': baseline_rss,
             'mean_lat_ms': np.mean(blats)*1000,
@@ -1095,6 +1095,49 @@ def main():
             'emb_memory_mb': total_emb_mb,
         }
     }
+
+    # --- Baseline with optimized thread count ---
+    OPTIMIZED_THREADS = 40
+    log(f"\n--- Baseline: Full fp32 (threads={OPTIMIZED_THREADS}) ---")
+    torch.set_num_threads(OPTIMIZED_THREADS)
+    restore_weights()
+    gc.collect()
+    time.sleep(0.5)
+    blats2 = []
+    dlrm.time_look_up = 0; dlrm.time_interact = 0; dlrm.time_mlp = 0
+    t0 = time.time()
+    sample_idx = 0
+    with torch.no_grad():
+        for batch_idx in range(num_test_batches):
+            X, lS_o, lS_i, T = test_batches[batch_idx]
+            bt0 = time.time()
+            Z = dlrm(X, lS_o, lS_i)
+            blats2.append(time.time() - bt0)
+            z_np = Z.detach().cpu().numpy().ravel()
+            t_np = T.detach().cpu().numpy().ravel()
+            bs = z_np.shape[0]
+            all_scores[sample_idx:sample_idx+bs] = z_np
+            all_targets[sample_idx:sample_idx+bs] = t_np
+            sample_idx += bs
+    baseline_time2 = time.time() - t0
+    baseline_auc2 = roc_auc_score(all_targets[:sample_idx], all_scores[:sample_idx])
+    log(f"  AUC={baseline_auc2:.6f}, Time={baseline_time2:.2f}s")
+    log(f"  Batch latency: mean={np.mean(blats2)*1000:.2f}ms, "
+        f"p50={np.percentile(blats2,50)*1000:.2f}ms, p99={np.percentile(blats2,99)*1000:.2f}ms")
+    n_b2 = len(blats2)
+    log(f"  Forward breakdown: emb={dlrm.time_look_up/n_b2*1000:.2f}ms, "
+        f"interact={dlrm.time_interact/n_b2*1000:.2f}ms, "
+        f"mlp={dlrm.time_mlp/n_b2*1000:.2f}ms")
+    dlrm.time_look_up = 0; dlrm.time_interact = 0; dlrm.time_mlp = 0
+    all_results['A_baseline_t32'] = {
+        'auc': baseline_auc2, 'total_time': baseline_time2,
+        'num_batches': len(blats2),
+        'mean_lat_ms': np.mean(blats2)*1000,
+        'p50_lat_ms': np.percentile(blats2,50)*1000,
+        'p99_lat_ms': np.percentile(blats2,99)*1000,
+        'emb_memory_mb': total_emb_mb,
+    }
+    torch.set_num_threads(80)  # restore default for now
 
     # --- Run codec experiments ---
     # Save original EmbeddingBag modules so we can restore between experiments
@@ -1333,6 +1376,7 @@ def main():
                 log(f"  {mode_name} mode: mapping tensors released, cold lookup via mmap")
 
             def _fast_apply_emb(lS_o, lS_i, emb_l, v_W_l):
+                start_time = time.time()
                 # Ensure lS_i and lS_o are 2D contiguous tensors
                 if isinstance(lS_i, (list, tuple)):
                     lS_i_2d = torch.stack(lS_i)
@@ -1382,6 +1426,7 @@ def main():
                     else:
                         emb_l[k].last_frames_used = _empty_set
 
+                dlrm.time_look_up += time.time() - start_time
                 return list(outputs)
             dlrm.apply_emb = _fast_apply_emb
             log(f"  Fast apply_emb enabled (C++ fast_forward, zero Python loop overhead)")
@@ -1499,6 +1544,7 @@ def main():
 
             # Replace _fast_apply_emb with simplified version (no Python cold path)
             def _full_cpp_apply_emb(lS_o, lS_i, emb_l, v_W_l):
+                start_time = time.time()
                 if isinstance(lS_i, (list, tuple)):
                     lS_i_2d = torch.stack(lS_i)
                 elif lS_i.dim() == 2:
@@ -1512,6 +1558,7 @@ def main():
                 else:
                     lS_o_2d = lS_o.view(num_tabs, -1)
                 results = _C.fast_forward(lS_i_2d, lS_o_2d)
+                dlrm.time_look_up += time.time() - start_time
                 # Return stacked [T, B, D] tensor (last element) for fast interact
                 return results[-1]  # [T, B, D] view, no copy
             dlrm.apply_emb = _full_cpp_apply_emb
@@ -1713,63 +1760,53 @@ def main():
         return result
 
     # ---- Run experiments ----
-    # === v22: fast dataloader + numpy score collection ===
+    # === v25: thread count tuning + packed cold_mapping ===
     log(f"\n{'='*70}")
-    log("EXPERIMENTS: v24 — bitmap cold_rank (no cold_mapping) + optimized interact")
+    log("EXPERIMENTS: v25 — packed cold_mapping (24-bit) + thread tuning")
     log(f"{'='*70}")
 
-    # 1080p array + full_cpp: array mapping for both hot and cold
-    key = '1080p_g32_q8hot_fullcpp'
+    default_threads = torch.get_num_threads()
+    log(f"Default thread count: {default_threads}")
+
+    # Set optimized thread count (from v25 thread sweep: 40 was best for compressed)
+    best_threads = 40
+    torch.set_num_threads(best_threads)
+    log(f"Using optimized thread count: {best_threads}")
+
+    # 1080p array + full_cpp
+    key = '1080p_fullcpp'
     all_results[key] = run_ondemand_inference(
         res_name='1080p', cache_capacity=32,
         predictor_type='none', lookahead_depth=1, tag=key,
         use_global_cache=True, disk_decode=True, quantize_hot=True,
         warmup_batches=1, full_cpp=True)
 
-    # 1080p bitmap + full_cpp: bitmap for hot, cold mapping for cold
-    key = '1080p_g32_q8hot_bitmap_fullcpp'
+    # 1080p bitmap + full_cpp (with packed 24-bit cold_mapping)
+    key = '1080p_bitmap_fullcpp'
     all_results[key] = run_ondemand_inference(
         res_name='1080p', cache_capacity=32,
         predictor_type='none', lookahead_depth=1, tag=key,
         use_global_cache=True, disk_decode=True, quantize_hot=True,
         use_bitmap=True, warmup_batches=1, full_cpp=True)
 
-    # 4K array + full_cpp: 100% hit rate, should be fastest
-    key = '4K_g8_q8hot_fullcpp'
-    all_results[key] = run_ondemand_inference(
-        res_name='4K', cache_capacity=8,
-        predictor_type='none', lookahead_depth=1, tag=key,
-        use_global_cache=True, disk_decode=True, quantize_hot=True,
-        warmup_batches=1, full_cpp=True)
-
-    # 480p bitmap + full_cpp: extreme compression with full C++
-    key = '480p_g64_q8hot_bitmap_fullcpp'
+    # 480p bitmap + full_cpp (with packed 24-bit cold_mapping)
+    key = '480p_bitmap_fullcpp'
     all_results[key] = run_ondemand_inference(
         res_name='480p', cache_capacity=64,
         predictor_type='none', lookahead_depth=1, tag=key,
         use_global_cache=True, disk_decode=True, quantize_hot=True,
         use_bitmap=True, warmup_batches=1, full_cpp=True)
 
-    # === Reference: previous best configurations (no full_cpp) ===
-    log(f"\n{'='*70}")
-    log("EXPERIMENTS: Reference baselines")
-    log(f"{'='*70}")
-
-    # 1080p q8hot bitmap (previous best for memory)
-    key = '1080p_g32_q8hot_bitmap'
+    # 4K array + full_cpp
+    key = '4K_fullcpp'
     all_results[key] = run_ondemand_inference(
-        res_name='1080p', cache_capacity=32,
+        res_name='4K', cache_capacity=8,
         predictor_type='none', lookahead_depth=1, tag=key,
         use_global_cache=True, disk_decode=True, quantize_hot=True,
-        use_bitmap=True, warmup_batches=1)
+        warmup_batches=1, full_cpp=True)
 
-    # 1080p array (previous best for speed)
-    key = '1080p_g32_q8hot'
-    all_results[key] = run_ondemand_inference(
-        res_name='1080p', cache_capacity=32,
-        predictor_type='none', lookahead_depth=1, tag=key,
-        use_global_cache=True, disk_decode=True, quantize_hot=True,
-        warmup_batches=1)
+    # Restore default thread count
+    torch.set_num_threads(default_threads)
 
     # ---- Save results ----
     log(f"\n{'='*70}")
