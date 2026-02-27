@@ -129,6 +129,49 @@ All functions use:
 | 15 | 564 MB | 81 MB | 483 MB (86%) |
 | **Total** | **3,468 MB** | **503 MB** | **2,965 MB (86%)** |
 
+### Phase 5: Multi-Codec Support (H.264 2x faster decode)
+Added generalized encode/decode supporting H.265, H.264, and FFV1 codecs.
+Auto-detection of codec from file extension in batch decode functions.
+
+| Function | Description |
+|----------|-------------|
+| `encode_frame_codec` | Encode frame with specified codec (h265/h264/ffv1) |
+| `batch_encode_frames_codec` | Parallel multi-frame encode with any codec |
+| `auto_detect_frame_ext` | Auto-detect codec from frame file extension |
+
+### Multi-Codec Benchmark (Synthetic Data, 1080p)
+| Codec | Encode | Decode | Batch 5-frame | Compression |
+|-------|--------|--------|---------------|-------------|
+| H.265 | 75.7ms | 133.4ms | 151ms (30ms/f) | 1.06x |
+| **H.264** | **38.0ms** | **65.6ms** | **72ms (14ms/f)** | 0.89x |
+| FFV1 | 188.0ms | 70.2ms | 74ms (15ms/f) | 1.14x |
+
+### Multi-Codec Benchmark (Real DLRM Data, All 8 Tables)
+| Table | Cold Rows | Codec | Encode | Decode (1K rows) | Size | Ratio |
+|-------|-----------|-------|--------|-----------------|------|-------|
+| 2 | 9.6M | H.265 | 1,882ms | 60.3ms | 5.3MB | **27.9x** |
+| 2 | 9.6M | **H.264** | **62ms** | **46.4ms** | 6.5MB | 22.5x |
+| 2 | 9.6M | FFV1 | 1,718ms | 77.6ms | 8.1MB | 18.1x |
+| 11 | 8.0M | H.265 | 1,269ms | 66.9ms | 10.1MB | **12.0x** |
+| 11 | 8.0M | **H.264** | **94ms** | **42.4ms** | 11.7MB | 10.4x |
+| 20 | 6.7M | H.265 | 1,072ms | 93.9ms | 18.5MB | **5.6x** |
+| 20 | 6.7M | **H.264** | **72ms** | **52.3ms** | 23.5MB | 4.4x |
+| 15 | 5.3M | H.265 | 794ms | 61.0ms | 7.7MB | **10.5x** |
+| 15 | 5.3M | **H.264** | **53ms** | **36.2ms** | 8.7MB | 9.2x |
+| 3 | 2.2M | H.265 | 376ms | 78.7ms | 5.6MB | **6.0x** |
+| 3 | 2.2M | **H.264** | **33ms** | **42.4ms** | 6.5MB | 5.1x |
+| **Totals** | **32.3M** | H.265 | **5,654ms** | - | **49.2MB** | **10.3x avg** |
+| **Totals** | **32.3M** | **H.264** | **369ms** | - | **59.6MB** | **8.5x avg** |
+
+### I/O vs Decode Analysis
+| Component | Time | Fraction |
+|-----------|------|----------|
+| File read (3.2MB) | 0.275ms | **0.3%** |
+| mmap read | 0.364ms | 0.4% |
+| H.264 decode | 84ms | **99.7%** |
+
+**Conclusion**: File I/O is negligible (843x smaller than decode time). mmap not worth implementing.
+
 ## Key Insights
 
 ### Tiling Bottleneck (Phase 1)
@@ -147,8 +190,20 @@ Untiling decoded frames is wasted work when we only need a few rows.
 Keeping frames in tiled (H,W) layout and using C++ `gather_from_tiled_frame`
 saves the untile step. For K<100 lookups, tiled gather is as fast as row-indexed.
 
-### H.265 Codec Dominates (Phases 3-4)
-H.265 encode (~80ms/frame) and decode (~18ms/frame) dominate the pipeline.
+### H.265 vs H.264 vs FFV1 (Phase 5)
+**H.264 is the optimal choice for on-demand decode scenarios:**
+- **30x faster encode** than H.265 on real data (64ms vs 1,933ms for 9.6M embeddings)
+- **2x faster decode** per frame (65ms vs 133ms)
+- Only **20% less compression** (22.6x vs 27.9x on most-compressible table)
+- Lossless: MAE=0.0000 despite YUV420P color space (chroma planes are neutral)
+
+**FFV1 is competitive for decode but slow to encode:**
+- Decode speed similar to H.264 (70ms vs 66ms per frame)
+- Best compression (1.14x on synthetic, 18.2x on real data)
+- But encode is slowest (188ms/frame synthetic, 1,730ms real)
+
+**File I/O is negligible** (0.3% of total time). The codec decode dominates.
+
 Parallel batch decode is the biggest win: for 5 cache-miss frames, latency
 drops from 92ms (serial) to 19ms (parallel) = **4.7x speedup**.
 The C++ direct encode is 2.8x faster than subprocess ffmpeg per frame,
@@ -158,17 +213,21 @@ and with parallel encoding achieves **5.2x total speedup**.
 - All C++ outputs exactly match Python (verified per-pixel)
 - Quantization MAE identical to Python: ~0.000190
 - Lossless H.265 encode/decode roundtrip verified: MAE = 0.0000
+- Lossless H.264 encode/decode roundtrip verified: MAE = 0.0000
+- FFV1 encode/decode roundtrip verified: MAE = 0.0000
 - Batch decode results match serial decode results
+- Auto-detect codec from file extension (.h265, .h264, .mkv)
 
 ## Files Modified/Created
-- `csrc/compressed_emb.cpp` — C++ extension with 18 new functions
+- `csrc/compressed_emb.cpp` — C++ extension with 20+ functions (encode/decode/tile/gather, multi-codec)
 - `setup_compressed_emb.py` — Updated to link against libavcodec/libavformat/libavutil/libswscale
-- `codec_ondemand_benchmark.py` — Integrated C++ tiling, tiled storage, C++ encode/decode, batch decode
+- `codec_ondemand_benchmark.py` — Integrated C++ tiling, tiled storage, C++ encode/decode, batch decode, multi-codec
 - `benchmark_frame_packing.py` — Microbenchmark for tiling operations
 - `benchmark_real_tables.py` — Full-table benchmark with real DLRM data
 - `benchmark_encode_methods.py` — Encode method comparison (subprocess vs PyAV vs C++)
 - `benchmark_decode_optimizations.py` — Decode-side optimization analysis
 - `benchmark_batch_decode.py` — Batch decode parallelism benchmark
 - `benchmark_full_pipeline.py` — End-to-end pipeline benchmark
+- `benchmark_codec_comparison.py` — Multi-codec comparison (H.265 vs H.264 vs FFV1)
 - `test_integration.py` — 6 integration tests for C++ frame packing
 - `test_tiled_storage.py` — 3 tests for tiled storage pipeline
