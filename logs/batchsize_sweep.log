@@ -1,0 +1,1865 @@
+[04:12:57] Loading model...
+Unable to import mlperf_logging,  No module named 'mlperf_logging'
+Unable to import onnx.  No module named 'onnx'
+[04:12:57] Loading dataset...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+[04:15:03] Loading checkpoint...
+[04:15:04] Model loaded: 26 tables, emb_dim=16
+[04:15:08] Model loaded: 26 tables
+[04:15:09] 
+============================================================
+[04:15:09] BATCH SIZE = 256
+[04:15:09] ============================================================
+[04:15:09] Creating DataLoader (bs=256)...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+[04:17:10]   Running baseline...
+/home/cc/expr/dlrm_minrui/dlrm_data_pytorch.py:328: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor. (Triggered internally at /pytorch/torch/csrc/utils/tensor_new.cpp:253.)
+  X_int = torch.log(torch.tensor(transposed_data[0], dtype=torch.float) + 1)
+[04:18:10]     Run 1: BLat=2.17ms, emb=1.16, int=0.29, mlp=0.66, total=58.2s
+[04:19:08]     Run 2: BLat=2.14ms, emb=1.13, int=0.31, mlp=0.66, total=57.3s
+[04:20:06]     Run 3: BLat=2.16ms, emb=1.14, int=0.32, mlp=0.65, total=57.3s
+[04:20:06]   Running codec cache=16...
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[04:20:52]     Run 1: BLat=1.08ms, emb=0.11, int=0.26, mlp=0.66, scan=0.06, dec=0.03, total=44.2s
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[04:21:37]     Run 2: BLat=1.09ms, emb=0.11, int=0.26, mlp=0.67, scan=0.06, dec=0.02, total=43.9s
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[04:22:23]     Run 3: BLat=1.09ms, emb=0.12, int=0.26, mlp=0.66, scan=0.06, dec=0.02, total=44.0s
+[04:22:23]   Running lookahead g=500...
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[04:23:06]     Run 1: BLat=1.03ms, emb=0.12, int=0.24, mlp=0.62, scan=0.037, dec=0.128, total=41.9s
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[04:23:50]     Run 2: BLat=1.03ms, emb=0.12, int=0.24, mlp=0.63, scan=0.038, dec=0.128, total=42.3s
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[04:24:33]     Run 3: BLat=1.02ms, emb=0.12, int=0.25, mlp=0.62, scan=0.037, dec=0.125, total=41.8s
+[04:24:33] 
+============================================================
+[04:24:33] BATCH SIZE = 512
+[04:24:33] ============================================================
+[04:24:33] Creating DataLoader (bs=512)...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+[04:26:33]   Running baseline...
+[04:27:16]     Run 1: BLat=2.45ms, emb=1.09, int=0.42, mlp=0.89, total=42.2s
+[04:27:58]     Run 2: BLat=2.46ms, emb=1.11, int=0.42, mlp=0.88, total=42.4s
+[04:28:41]     Run 3: BLat=2.44ms, emb=1.08, int=0.42, mlp=0.88, total=42.1s
+[04:28:41]   Running codec cache=16...
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[04:29:18]     Run 1: BLat=1.33ms, emb=0.12, int=0.29, mlp=0.86, scan=0.06, dec=0.04, total=35.6s
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[04:29:54]     Run 2: BLat=1.32ms, emb=0.12, int=0.28, mlp=0.87, scan=0.06, dec=0.03, total=35.6s
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[04:30:31]     Run 3: BLat=1.31ms, emb=0.13, int=0.27, mlp=0.86, scan=0.07, dec=0.04, total=35.5s
+[04:30:31]   Running lookahead g=500...
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[04:31:07]     Run 1: BLat=1.27ms, emb=0.13, int=0.31, mlp=0.79, scan=0.039, dec=0.127, total=34.5s
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[04:31:43]     Run 2: BLat=1.28ms, emb=0.13, int=0.31, mlp=0.80, scan=0.039, dec=0.131, total=34.5s
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[04:32:18]     Run 3: BLat=1.26ms, emb=0.12, int=0.29, mlp=0.80, scan=0.039, dec=0.132, total=34.5s
+[04:32:18] 
+============================================================
+[04:32:18] BATCH SIZE = 1024
+[04:32:18] ============================================================
+[04:32:18] Creating DataLoader (bs=1024)...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+[04:34:19]   Running baseline...
+[04:34:56]     Run 1: BLat=3.04ms, emb=1.14, int=0.64, mlp=1.20, total=35.4s
+[04:35:31]     Run 2: BLat=3.03ms, emb=1.16, int=0.62, mlp=1.19, total=35.5s
+[04:36:07]     Run 3: BLat=3.00ms, emb=1.14, int=0.61, mlp=1.20, total=35.2s
+[04:36:07]   Running codec cache=16...
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[04:36:40]     Run 1: BLat=1.75ms, emb=0.14, int=0.43, mlp=1.12, scan=0.09, dec=0.07, total=32.0s
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[04:37:13]     Run 2: BLat=1.73ms, emb=0.14, int=0.42, mlp=1.12, scan=0.09, dec=0.07, total=31.9s
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[04:37:47]     Run 3: BLat=1.74ms, emb=0.14, int=0.42, mlp=1.12, scan=0.11, dec=0.06, total=31.8s
+[04:37:47]   Running lookahead g=500...
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[04:38:19]     Run 1: BLat=1.71ms, emb=0.15, int=0.38, mlp=1.14, scan=0.040, dec=0.135, total=31.3s
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[04:38:51]     Run 2: BLat=1.66ms, emb=0.15, int=0.38, mlp=1.09, scan=0.040, dec=0.133, total=31.0s
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[04:39:24]     Run 3: BLat=1.67ms, emb=0.14, int=0.37, mlp=1.11, scan=0.041, dec=0.132, total=31.1s
+[04:39:24] 
+============================================================
+[04:39:24] BATCH SIZE = 2048
+[04:39:24] ============================================================
+[04:39:24] Creating DataLoader (bs=2048)...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+[04:41:23]   Running baseline...
+[04:41:57]     Run 1: BLat=4.25ms, emb=1.26, int=1.30, mlp=1.63, total=32.4s
+[04:42:29]     Run 2: BLat=4.27ms, emb=1.26, int=1.30, mlp=1.66, total=32.4s
+[04:43:02]     Run 3: BLat=4.25ms, emb=1.24, int=1.32, mlp=1.63, total=32.3s
+[04:43:02]   Running codec cache=16...
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[04:43:33]     Run 1: BLat=2.40ms, emb=0.21, int=0.58, mlp=1.55, scan=0.11, dec=0.13, total=30.1s
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[04:44:04]     Run 2: BLat=2.35ms, emb=0.20, int=0.56, mlp=1.55, scan=0.10, dec=0.12, total=29.6s
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[04:44:36]     Run 3: BLat=2.42ms, emb=0.21, int=0.60, mlp=1.56, scan=0.13, dec=0.13, total=30.4s
+[04:44:36]   Running lookahead g=500...
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[04:45:06]     Run 1: BLat=2.24ms, emb=0.19, int=0.57, mlp=1.43, scan=0.046, dec=0.139, total=29.3s
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[04:45:37]     Run 2: BLat=2.27ms, emb=0.19, int=0.59, mlp=1.45, scan=0.045, dec=0.136, total=29.4s
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[04:46:08]     Run 3: BLat=2.34ms, emb=0.20, int=0.59, mlp=1.51, scan=0.047, dec=0.138, total=29.5s
+[04:46:08] 
+============================================================
+[04:46:08] BATCH SIZE = 4096
+[04:46:08] ============================================================
+[04:46:08] Creating DataLoader (bs=4096)...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+[04:48:10]   Running baseline...
+[04:48:42]     Run 1: BLat=6.59ms, emb=1.57, int=2.03, mlp=2.92, total=31.3s
+[04:49:14]     Run 2: BLat=6.32ms, emb=1.45, int=2.00, mlp=2.81, total=31.1s
+[04:49:45]     Run 3: BLat=6.39ms, emb=1.44, int=2.02, mlp=2.87, total=31.1s
+[04:49:45]   Running codec cache=16...
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[04:50:16]     Run 1: BLat=4.23ms, emb=0.34, int=1.00, mlp=2.84, scan=0.17, dec=0.25, total=29.8s
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[04:50:47]     Run 2: BLat=4.25ms, emb=0.31, int=1.03, mlp=2.86, scan=0.16, dec=0.23, total=29.6s
+[C++] Table 2: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[04:51:18]     Run 3: BLat=4.29ms, emb=0.32, int=1.02, mlp=2.90, scan=0.16, dec=0.24, total=29.8s
+[04:51:18]   Running lookahead g=500...
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[04:51:48]     Run 1: BLat=3.39ms, emb=0.29, int=0.84, mlp=2.22, scan=0.080, dec=0.166, total=28.8s
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[04:52:18]     Run 2: BLat=3.41ms, emb=0.31, int=0.85, mlp=2.21, scan=0.088, dec=0.164, total=28.7s
+[C++] Table 2: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[C++] Table 2: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.001073, zp=88.0
+[C++] Table 3: registered 3 cold frames (5 MB uint8), rows_per_frame=129600, scale=0.001098, zp=109.0
+[C++] Table 9: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.000608, zp=158.0
+[C++] Table 11: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000862, zp=158.0
+[C++] Table 15: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000984, zp=117.0
+[C++] Table 20: registered 2 cold frames (3 MB uint8), rows_per_frame=129600, scale=0.000497, zp=129.0
+[C++] Table 23: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001519, zp=197.0
+[C++] Table 25: registered 1 cold frames (1 MB uint8), rows_per_frame=129600, scale=0.001327, zp=126.0
+[04:52:48]     Run 3: BLat=3.40ms, emb=0.32, int=0.85, mlp=2.18, scan=0.086, dec=0.154, total=28.7s
+[04:52:48] 
+================================================================================
+[04:52:48] SUMMARY: Batch Size Sweep
+[04:52:48] ================================================================================
+
+## Forward Latency (ms/batch)
+| Batch Size | Baseline | Cache=16 | LA g=500 | Cache Speedup | LA Speedup |
+|------------|----------|----------|----------|---------------|------------|
+| 256 | 2.16 | 1.16 | 1.19 | 1.85x | 1.81x |
+| 512 | 2.45 | 1.42 | 1.44 | 1.73x | 1.70x |
+| 1024 | 3.03 | 1.91 | 1.85 | 1.59x | 1.64x |
+| 2048 | 4.25 | 2.64 | 2.45 | 1.61x | 1.73x |
+| 4096 | 6.39 | 4.65 | 3.64 | 1.37x | 1.76x |
+
+## Wall Clock Total (s)
+| Batch Size | Baseline | Cache=16 | LA g=500 | Cache Speedup | LA Speedup |
+|------------|----------|----------|----------|---------------|------------|
+| 256 | 57.3 | 43.9 | 41.9 | 1.30x | 1.37x |
+| 512 | 42.2 | 35.6 | 34.5 | 1.19x | 1.22x |
+| 1024 | 35.5 | 31.8 | 31.1 | 1.12x | 1.14x |
+| 2048 | 32.4 | 30.1 | 29.4 | 1.08x | 1.10x |
+| 4096 | 31.1 | 29.6 | 28.7 | 1.05x | 1.08x |
+
+## Per-Component (ms/batch)
+| Batch Size | Config | Emb | Interact | MLP | Scan | Decode |
+|------------|--------|-----|----------|-----|------|--------|
+| 256 | Baseline | 1.14 | 0.32 | 0.65 | — | — |
+| 256 | Cache=16 | 0.11 | 0.26 | 0.67 | 0.06 | 0.02 |
+| 256 | LA g=500 | 0.12 | 0.24 | 0.62 | 0.037 | 0.128 |
+| 512 | Baseline | 1.09 | 0.42 | 0.89 | — | — |
+| 512 | Cache=16 | 0.12 | 0.28 | 0.87 | 0.06 | 0.03 |
+| 512 | LA g=500 | 0.13 | 0.31 | 0.79 | 0.039 | 0.127 |
+| 1024 | Baseline | 1.16 | 0.62 | 1.19 | — | — |
+| 1024 | Cache=16 | 0.14 | 0.42 | 1.12 | 0.11 | 0.06 |
+| 1024 | LA g=500 | 0.14 | 0.37 | 1.11 | 0.041 | 0.132 |
+| 2048 | Baseline | 1.26 | 1.30 | 1.63 | — | — |
+| 2048 | Cache=16 | 0.21 | 0.58 | 1.55 | 0.11 | 0.13 |
+| 2048 | LA g=500 | 0.19 | 0.59 | 1.45 | 0.045 | 0.136 |
+| 4096 | Baseline | 1.44 | 2.02 | 2.87 | — | — |
+| 4096 | Cache=16 | 0.31 | 1.03 | 2.86 | 0.16 | 0.23 |
+| 4096 | LA g=500 | 0.32 | 0.85 | 2.18 | 0.086 | 0.154 |
+[04:52:48] 
+DONE

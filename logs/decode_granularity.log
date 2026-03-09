@@ -1,0 +1,165 @@
+Loading cold data and access patterns...
+Unable to import mlperf_logging,  No module named 'mlperf_logging'
+Unable to import onnx.  No module named 'onnx'
+[06:54:09] Loading dataset...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+[06:56:16] Loading checkpoint...
+[06:56:22] Model loaded: 26 tables, emb_dim=16
+Cold data: 9633265 rows, 147.0MB uint8
+Scanning batch access patterns...
+/home/cc/expr/dlrm_minrui/dlrm_data_pytorch.py:328: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor. (Triggered internally at /pytorch/torch/csrc/utils/tensor_new.cpp:253.)
+  X_int = torch.log(torch.tensor(transposed_data[0], dtype=torch.float) + 1)
+Collected 1599 batches, 1599 have cold accesses for table 2
+
+============================================================
+PART 1: Decode time vs frame resolution (table 2, 9633265 cold rows)
+============================================================
+
+--- Resolution 1920x1080 (129600 rows/frame, 75 frames) ---
+  Encoded 5 frames, avg 168.3 KB/frame, ratio 12.0x
+  Decode: avg=31.54ms, p50=31.15ms, p99=37.04ms
+
+--- Resolution 960x544 (32640 rows/frame, 296 frames) ---
+  Encoded 5 frames, avg 36.0 KB/frame, ratio 14.2x
+  Decode: avg=8.15ms, p50=8.15ms, p99=8.23ms
+
+--- Resolution 480x272 (8160 rows/frame, 1181 frames) ---
+  Encoded 5 frames, avg 11.1 KB/frame, ratio 11.5x
+  Decode: avg=3.11ms, p50=3.10ms, p99=3.32ms
+
+--- Resolution 256x256 (4096 rows/frame, 2352 frames) ---
+  Encoded 5 frames, avg 6.9 KB/frame, ratio 9.2x
+  Decode: avg=2.35ms, p50=2.31ms, p99=2.56ms
+
+--- Resolution 128x128 (1024 rows/frame, 9408 frames) ---
+  Encoded 5 frames, avg 3.7 KB/frame, ratio 4.3x
+  Decode: avg=1.14ms, p50=1.14ms, p99=1.20ms
+
+--- Resolution 64x64 (256 rows/frame, 37630 frames) ---
+  Encoded 5 frames, avg 2.9 KB/frame, ratio 1.4x
+  Decode: avg=0.70ms, p50=0.67ms, p99=0.94ms
+
+============================================================
+PART 2: LRU cache simulation (1599 batches)
+============================================================
+
+--- 1920x1080 (129600 rows/frame, decode=31.54ms) ---
+  cache=  2: hit=0.9975, misses=4, avg_decode=0.08ms/batch, cache_mem=4.0MB
+  cache=  4: hit=0.9975, misses=4, avg_decode=0.08ms/batch, cache_mem=7.9MB
+  cache=  8: hit=0.9975, misses=4, avg_decode=0.08ms/batch, cache_mem=15.8MB
+  cache= 16: hit=0.9975, misses=4, avg_decode=0.08ms/batch, cache_mem=31.6MB
+  cache= 32: hit=0.9975, misses=4, avg_decode=0.08ms/batch, cache_mem=63.3MB
+  cache= 64: hit=0.9975, misses=4, avg_decode=0.08ms/batch, cache_mem=126.6MB
+
+--- 960x544 (32640 rows/frame, decode=8.15ms) ---
+  cache=  2: hit=0.9913, misses=14, avg_decode=0.07ms/batch, cache_mem=1.0MB
+  cache=  4: hit=0.9913, misses=14, avg_decode=0.07ms/batch, cache_mem=2.0MB
+  cache=  8: hit=0.9913, misses=14, avg_decode=0.07ms/batch, cache_mem=4.0MB
+  cache= 16: hit=0.9913, misses=14, avg_decode=0.07ms/batch, cache_mem=8.0MB
+  cache= 32: hit=0.9913, misses=14, avg_decode=0.07ms/batch, cache_mem=15.9MB
+  cache= 64: hit=0.9913, misses=14, avg_decode=0.07ms/batch, cache_mem=31.9MB
+
+--- 480x272 (8160 rows/frame, decode=3.11ms) ---
+  cache=  2: hit=0.9667, misses=55, avg_decode=0.11ms/batch, cache_mem=0.2MB
+  cache=  4: hit=0.9667, misses=55, avg_decode=0.11ms/batch, cache_mem=0.5MB
+  cache=  8: hit=0.9667, misses=55, avg_decode=0.11ms/batch, cache_mem=1.0MB
+  cache= 16: hit=0.9667, misses=55, avg_decode=0.11ms/batch, cache_mem=2.0MB
+  cache= 32: hit=0.9667, misses=55, avg_decode=0.11ms/batch, cache_mem=4.0MB
+  cache= 64: hit=0.9667, misses=55, avg_decode=0.11ms/batch, cache_mem=8.0MB
+
+--- 256x256 (4096 rows/frame, decode=2.35ms) ---
+  cache=  2: hit=0.9356, misses=110, avg_decode=0.16ms/batch, cache_mem=0.1MB
+  cache=  4: hit=0.9356, misses=110, avg_decode=0.16ms/batch, cache_mem=0.2MB
+  cache=  8: hit=0.9356, misses=110, avg_decode=0.16ms/batch, cache_mem=0.5MB
+  cache= 16: hit=0.9356, misses=110, avg_decode=0.16ms/batch, cache_mem=1.0MB
+  cache= 32: hit=0.9356, misses=110, avg_decode=0.16ms/batch, cache_mem=2.0MB
+  cache= 64: hit=0.9356, misses=110, avg_decode=0.16ms/batch, cache_mem=4.0MB
+
+--- 128x128 (1024 rows/frame, decode=1.14ms) ---
+  cache=  2: hit=0.7843, misses=439, avg_decode=0.31ms/batch, cache_mem=0.0MB
+  cache=  4: hit=0.7843, misses=439, avg_decode=0.31ms/batch, cache_mem=0.1MB
+  cache=  8: hit=0.7843, misses=439, avg_decode=0.31ms/batch, cache_mem=0.1MB
+  cache= 16: hit=0.7843, misses=439, avg_decode=0.31ms/batch, cache_mem=0.2MB
+  cache= 32: hit=0.7843, misses=439, avg_decode=0.31ms/batch, cache_mem=0.5MB
+  cache= 64: hit=0.7843, misses=439, avg_decode=0.31ms/batch, cache_mem=1.0MB
+
+--- 64x64 (256 rows/frame, decode=0.70ms) ---
+  cache=  2: hit=0.4261, misses=1921, avg_decode=0.84ms/batch, cache_mem=0.0MB
+  cache=  4: hit=0.4762, misses=1753, avg_decode=0.76ms/batch, cache_mem=0.0MB
+  cache=  8: hit=0.4762, misses=1753, avg_decode=0.76ms/batch, cache_mem=0.0MB
+  cache= 16: hit=0.4762, misses=1753, avg_decode=0.76ms/batch, cache_mem=0.1MB
+  cache= 32: hit=0.4762, misses=1753, avg_decode=0.76ms/batch, cache_mem=0.1MB
+  cache= 64: hit=0.4762, misses=1753, avg_decode=0.76ms/batch, cache_mem=0.2MB
+
+============================================================
+PART 3: Optimal configurations
+============================================================
+
+All configs with avg decode < 1.0ms/batch:
+  Resolution |     RPF | Cache |   Hit% |  Dec/batch |  Cache MB |  Disk MB |  Total MB
+------------------------------------------------------------------------------------------
+  960x 544 |   32640 |     2 |  99.1% |     0.07ms |     1.0MB |   10.4MB |    11.4MB
+  960x 544 |   32640 |     4 |  99.1% |     0.07ms |     2.0MB |   10.4MB |    12.4MB
+  480x 272 |    8160 |     2 |  96.7% |     0.11ms |     0.2MB |   12.8MB |    13.1MB
+  480x 272 |    8160 |     4 |  96.7% |     0.11ms |     0.5MB |   12.8MB |    13.3MB
+  480x 272 |    8160 |     8 |  96.7% |     0.11ms |     1.0MB |   12.8MB |    13.8MB
+  960x 544 |   32640 |     8 |  99.1% |     0.07ms |     4.0MB |   10.4MB |    14.4MB
+  480x 272 |    8160 |    16 |  96.7% |     0.11ms |     2.0MB |   12.8MB |    14.8MB
+  256x 256 |    4096 |     2 |  93.6% |     0.16ms |     0.1MB |   16.0MB |    16.1MB
+  256x 256 |    4096 |     4 |  93.6% |     0.16ms |     0.2MB |   16.0MB |    16.2MB
+  1920x1080 |  129600 |     2 |  99.8% |     0.08ms |     4.0MB |   12.3MB |    16.3MB
+  256x 256 |    4096 |     8 |  93.6% |     0.16ms |     0.5MB |   16.0MB |    16.5MB
+  480x 272 |    8160 |    32 |  96.7% |     0.11ms |     4.0MB |   12.8MB |    16.8MB
+  256x 256 |    4096 |    16 |  93.6% |     0.16ms |     1.0MB |   16.0MB |    17.0MB
+  256x 256 |    4096 |    32 |  93.6% |     0.16ms |     2.0MB |   16.0MB |    18.0MB
+  960x 544 |   32640 |    16 |  99.1% |     0.07ms |     8.0MB |   10.4MB |    18.4MB
+  256x 256 |    4096 |    64 |  93.6% |     0.16ms |     4.0MB |   16.0MB |    20.0MB
+  1920x1080 |  129600 |     4 |  99.8% |     0.08ms |     7.9MB |   12.3MB |    20.2MB
+  480x 272 |    8160 |    64 |  96.7% |     0.11ms |     8.0MB |   12.8MB |    20.8MB
+  960x 544 |   32640 |    32 |  99.1% |     0.07ms |    15.9MB |   10.4MB |    26.4MB
+  1920x1080 |  129600 |     8 |  99.8% |     0.08ms |    15.8MB |   12.3MB |    28.2MB
+  128x 128 |    1024 |     2 |  78.4% |     0.31ms |     0.0MB |   33.8MB |    33.9MB
+  128x 128 |    1024 |     4 |  78.4% |     0.31ms |     0.1MB |   33.8MB |    33.9MB
+  128x 128 |    1024 |     8 |  78.4% |     0.31ms |     0.1MB |   33.8MB |    34.0MB
+  128x 128 |    1024 |    16 |  78.4% |     0.31ms |     0.2MB |   33.8MB |    34.1MB
+  128x 128 |    1024 |    32 |  78.4% |     0.31ms |     0.5MB |   33.8MB |    34.3MB
+  128x 128 |    1024 |    64 |  78.4% |     0.31ms |     1.0MB |   33.8MB |    34.8MB
+  960x 544 |   32640 |    64 |  99.1% |     0.07ms |    31.9MB |   10.4MB |    42.3MB
+  1920x1080 |  129600 |    16 |  99.8% |     0.08ms |    31.6MB |   12.3MB |    44.0MB
+  1920x1080 |  129600 |    32 |  99.8% |     0.08ms |    63.3MB |   12.3MB |    75.6MB
+  64x  64 |     256 |     2 |  42.6% |     0.84ms |     0.0MB |  104.9MB |   104.9MB
+  64x  64 |     256 |     4 |  47.6% |     0.76ms |     0.0MB |  104.9MB |   104.9MB
+  64x  64 |     256 |     8 |  47.6% |     0.76ms |     0.0MB |  104.9MB |   104.9MB
+  64x  64 |     256 |    16 |  47.6% |     0.76ms |     0.1MB |  104.9MB |   105.0MB
+  64x  64 |     256 |    32 |  47.6% |     0.76ms |     0.1MB |  104.9MB |   105.0MB
+  64x  64 |     256 |    64 |  47.6% |     0.76ms |     0.2MB |  104.9MB |   105.2MB
+  1920x1080 |  129600 |    64 |  99.8% |     0.08ms |   126.6MB |   12.3MB |   138.9MB
+
+Pareto-optimal (lowest memory for each resolution):
+  960x544: cache=2, hit=99.1%, decode=0.07ms/batch, mem=11.4MB (cache=1.0MB + disk=10.4MB)
+  480x272: cache=2, hit=96.7%, decode=0.11ms/batch, mem=13.1MB (cache=0.2MB + disk=12.8MB)
+  256x256: cache=2, hit=93.6%, decode=0.16ms/batch, mem=16.1MB (cache=0.1MB + disk=16.0MB)
+  1920x1080: cache=2, hit=99.8%, decode=0.08ms/batch, mem=16.3MB (cache=4.0MB + disk=12.3MB)
+  128x128: cache=2, hit=78.4%, decode=0.31ms/batch, mem=33.9MB (cache=0.0MB + disk=33.8MB)
+  64x64: cache=2, hit=42.6%, decode=0.84ms/batch, mem=104.9MB (cache=0.0MB + disk=104.9MB)
+
+============================================================
+SUMMARY: Decode time per frame
+============================================================
+  Resolution | Rows/Frame | #Frames |  Decode ms | Comp Ratio |  Disk MB
+---------------------------------------------------------------------------
+  1920x1080 |     129600 |      75 |    31.54ms |     12.0x |   12.3MB
+  960x 544 |      32640 |     296 |     8.15ms |     14.2x |   10.4MB
+  480x 272 |       8160 |    1181 |     3.11ms |     11.5x |   12.8MB
+  256x 256 |       4096 |    2352 |     2.35ms |      9.2x |   16.0MB
+  128x 128 |       1024 |    9408 |     1.14ms |      4.3x |   33.8MB
+  64x  64 |        256 |   37630 |     0.70ms |      1.4x |  104.9MB
