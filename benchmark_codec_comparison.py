@@ -1,463 +1,651 @@
 #!/usr/bin/env python3
 """
-Multi-Codec Benchmark: Compare H.265 vs H.264 vs FFV1 for embedding compression.
+Benchmark: H.265 vs LZ4 vs Zstd vs Snappy for embedding compression.
 
-Measures encode speed, decode speed, compression ratio, and end-to-end latency
-for each codec. Shows the tradeoff between decode latency and compression ratio,
-which is critical for on-demand embedding access patterns.
+Compares general-purpose compressors against H.265 on the SAME quantized uint8
+embedding data, measuring:
+  1. Compression ratio (vs raw uint8)
+  2. Compress time
+  3. Decompress time (critical path)
+  4. Random-access decode cost (decompress + gather specific rows)
+
+Tests both per-frame granularity (same as H.265) and per-row-group granularity.
 """
 
-import os, sys, time, tempfile
+import os, sys, time, json, gc
 import numpy as np
 import torch
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-
-import compressed_emb as _C
-
-EMB_DIM = 16
-TILE_W, TILE_H = 4, 4
-
-
-def log(msg):
-    print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
-
-
-def bench(fn, warmup=2, iters=5, label=""):
-    for _ in range(warmup):
-        fn()
-    times = []
-    for _ in range(iters):
-        t0 = time.perf_counter()
-        result = fn()
-        t1 = time.perf_counter()
-        times.append((t1 - t0) * 1000)
-    med = np.median(times)
-    mn = np.min(times)
-    print(f"  {label:60s}  med={med:8.2f}ms  min={mn:8.2f}ms")
-    return med, result
-
-
-def benchmark_single_frame_encode(width, height):
-    """Benchmark single-frame encode for each codec."""
-    tiles_per_row = width // TILE_W
-    tiles_per_col = height // TILE_H
-    rows_per_frame = tiles_per_row * tiles_per_col
-
-    print(f"\n{'='*80}")
-    print(f"SINGLE-FRAME ENCODE: {width}x{height} ({rows_per_frame:,} embeddings)")
-    print(f"{'='*80}")
-
-    # Generate structured test data (quantized normal distribution, like real embeddings)
-    fp32_data = torch.randn(rows_per_frame, EMB_DIM)
-    mn, mx = fp32_data.min().item(), fp32_data.max().item()
-    s = (mx - mn) / 255.0
-    zp = round(-mn / s)
-    data = ((fp32_data / s).round() + zp).clamp(0, 255).to(torch.uint8)
-    frame = _C.tile_rows_to_frame(data, width, height)
-    raw_bytes = rows_per_frame * EMB_DIM
-
-    codecs = ["h265", "h264", "ffv1"]
-    ext_map = {"h265": ".h265", "h264": ".mkv", "ffv1": ".mkv"}
-    results = {}
-
-    for codec_name in codecs:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            fpath = os.path.join(tmpdir, f'test_frame{ext_map[codec_name]}')
-
-            def encode_fn(c=codec_name, p=fpath):
-                _C.encode_frame_codec(frame, p, c, True, 0)
-                return os.path.getsize(p)
-
-            t_enc, comp_bytes = bench(encode_fn, warmup=1, iters=5,
-                                       label=f"{codec_name} encode (lossless)")
-            ratio = raw_bytes / comp_bytes if comp_bytes > 0 else 0
-            results[codec_name] = {
-                'encode_ms': t_enc,
-                'compressed_bytes': comp_bytes,
-                'ratio': ratio,
-            }
-            print(f"    → {comp_bytes/1024:.1f}KB, {ratio:.2f}x compression")
-
-    return results
-
-
-def benchmark_single_frame_decode(width, height):
-    """Benchmark single-frame decode for each codec."""
-    tiles_per_row = width // TILE_W
-    tiles_per_col = height // TILE_H
-    rows_per_frame = tiles_per_row * tiles_per_col
-
-    print(f"\n{'='*80}")
-    print(f"SINGLE-FRAME DECODE: {width}x{height} ({rows_per_frame:,} embeddings)")
-    print(f"{'='*80}")
-
-    # Generate structured test data
-    fp32_data = torch.randn(rows_per_frame, EMB_DIM)
-    mn, mx = fp32_data.min().item(), fp32_data.max().item()
-    s = (mx - mn) / 255.0
-    zp = round(-mn / s)
-    data = ((fp32_data / s).round() + zp).clamp(0, 255).to(torch.uint8)
-    frame = _C.tile_rows_to_frame(data, width, height)
-
-    codecs = ["h265", "h264", "ffv1"]
-    ext_map = {"h265": ".h265", "h264": ".mkv", "ffv1": ".mkv"}
-    results = {}
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Encode all codecs (use separate dirs to avoid name collision)
-        paths = {}
-        for codec_name in codecs:
-            codec_dir = os.path.join(tmpdir, codec_name)
-            os.makedirs(codec_dir)
-            fpath = os.path.join(codec_dir, f'test_frame{ext_map[codec_name]}')
-            _C.encode_frame_codec(frame, fpath, codec_name, True, 0)
-            paths[codec_name] = fpath
-
-        # Benchmark decode
-        for codec_name in codecs:
-            fpath = paths[codec_name]
-            fsize = os.path.getsize(fpath)
-
-            def decode_fn(p=fpath):
-                return _C.decode_h265_frame_from_file(p)
-
-            t_dec, decoded = bench(decode_fn, warmup=2, iters=10,
-                                    label=f"{codec_name} decode")
-
-            # Verify correctness
-            if codec_name != "h264":
-                # H.264 uses YUV420P so lossless only for Y plane
-                mae = torch.abs(decoded.float() - frame.float()).mean().item()
-                print(f"    → MAE={mae:.4f}, {fsize/1024:.1f}KB")
-            else:
-                # H.264 YUV420P: just check Y channel (luma) is close
-                mae = torch.abs(decoded.float() - frame.float()).mean().item()
-                print(f"    → MAE={mae:.4f} (YUV420P), {fsize/1024:.1f}KB")
-
-            results[codec_name] = {
-                'decode_ms': t_dec,
-                'file_size': fsize,
-                'mae': mae,
-            }
-
-    return results
-
-
-def benchmark_batch_decode(width, height, num_frames_list=[1, 3, 5, 8]):
-    """Benchmark parallel batch decode for each codec."""
-    tiles_per_row = width // TILE_W
-    tiles_per_col = height // TILE_H
-    rows_per_frame = tiles_per_row * tiles_per_col
-
-    max_frames = max(num_frames_list)
-
-    print(f"\n{'='*80}")
-    print(f"BATCH DECODE: {width}x{height}, up to {max_frames} frames")
-    print(f"{'='*80}")
-
-    # Generate structured test data (quantized normal distribution)
-    frames = []
-    for i in range(max_frames):
-        fp32_data = torch.randn(rows_per_frame, EMB_DIM)
-        mn, mx = fp32_data.min().item(), fp32_data.max().item()
-        s = (mx - mn) / 255.0
-        zp = round(-mn / s)
-        data = ((fp32_data / s).round() + zp).clamp(0, 255).to(torch.uint8)
-        frames.append(_C.tile_rows_to_frame(data, width, height))
-
-    codecs = ["h265", "h264", "ffv1"]
-    ext_map = {"h265": ".h265", "h264": ".mkv", "ffv1": ".mkv"}
-    results = {}
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # Encode all frames for each codec
-        for codec_name in codecs:
-            codec_dir = os.path.join(tmpdir, codec_name)
-            os.makedirs(codec_dir)
-
-            ext = ext_map[codec_name]
-
-            for i, frame in enumerate(frames):
-                fpath = os.path.join(codec_dir, f'frame_{i:05d}{ext}')
-                _C.encode_frame_codec(frame, fpath, codec_name, True, 0)
-
-            # Benchmark serial and parallel decode for different frame counts
-            results[codec_name] = {}
-            for n_frames in num_frames_list:
-                fids = torch.arange(n_frames, dtype=torch.long)
-
-                # Serial decode
-                def serial_fn(n=n_frames, d=codec_dir, e=ext):
-                    decoded = []
-                    for i in range(n):
-                        fpath = os.path.join(d, f'frame_{i:05d}{e}')
-                        decoded.append(_C.decode_h265_frame_from_file(fpath))
-                    return decoded
-
-                # For batch_decode_frames, create .h265-named links
-                batch_h265_dir = os.path.join(tmpdir, f'{codec_name}_h265')
-                os.makedirs(batch_h265_dir, exist_ok=True)
-                for i in range(max_frames):
-                    src = os.path.join(codec_dir, f'frame_{i:05d}{ext}')
-                    dst = os.path.join(batch_h265_dir, f'frame_{i:05d}.h265')
-                    if not os.path.exists(dst):
-                        os.link(src, dst)
-
-                def parallel_fn(n=n_frames, d=batch_h265_dir):
-                    return _C.batch_decode_frames(d, torch.arange(n, dtype=torch.long))
-
-                print(f"\n--- {codec_name}, {n_frames} frames ---")
-                t_serial, _ = bench(serial_fn, warmup=1, iters=5,
-                                     label=f"Serial decode ({n_frames} frames)")
-                t_parallel, _ = bench(parallel_fn, warmup=1, iters=5,
-                                       label=f"Parallel batch decode ({n_frames} frames)")
-
-                speedup = t_serial / t_parallel if t_parallel > 0 else 0
-                per_frame = t_parallel / n_frames
-                print(f"    → Speedup: {speedup:.2f}x, per-frame: {per_frame:.1f}ms")
-
-                results[codec_name][n_frames] = {
-                    'serial_ms': t_serial,
-                    'parallel_ms': t_parallel,
-                    'speedup': speedup,
-                    'per_frame_ms': per_frame,
-                }
-
-    return results
-
-
-def benchmark_gather_pipeline(width, height, K_values=[100, 500, 1000]):
-    """Benchmark full decode+gather+dequant pipeline for each codec."""
-    tiles_per_row = width // TILE_W
-    tiles_per_col = height // TILE_H
-    rows_per_frame = tiles_per_row * tiles_per_col
-    num_frames = 5
-
-    print(f"\n{'='*80}")
-    print(f"DECODE+GATHER+DEQUANT PIPELINE: {width}x{height}, {num_frames} frames")
-    print(f"{'='*80}")
-
-    # Generate structured data
-    SCALE, ZP = 0.01, 128
-    frames = []
-    for i in range(num_frames):
-        fp32_data = torch.randn(rows_per_frame, EMB_DIM)
-        data = ((fp32_data / 0.01).round() + 128).clamp(0, 255).to(torch.uint8)
-        frames.append(_C.tile_rows_to_frame(data, width, height))
-
-    codecs = ["h265", "h264", "ffv1"]
-    ext_map = {"h265": ".h265", "h264": ".mkv", "ffv1": ".mkv"}
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        for codec_name in codecs:
-            codec_dir = os.path.join(tmpdir, codec_name)
-            os.makedirs(codec_dir)
-
-            ext = ext_map[codec_name]
-
-            for i, frame in enumerate(frames):
-                fpath = os.path.join(codec_dir, f'frame_{i:05d}{ext}')
-                _C.encode_frame_codec(frame, fpath, codec_name, True, 0)
-
-            # Create .h265-named links for batch_decode_gather_dequant
-            h265_dir = os.path.join(tmpdir, f'{codec_name}_h265')
-            os.makedirs(h265_dir, exist_ok=True)
-            for i in range(num_frames):
-                src = os.path.join(codec_dir, f'frame_{i:05d}{ext}')
-                dst = os.path.join(h265_dir, f'frame_{i:05d}.h265')
-                if not os.path.exists(dst):
-                    os.link(src, dst)
-
-            for K in K_values:
-                # Random indices spread across all frames
-                n_miss = min(3, num_frames)
-                miss_fids = list(range(n_miss))
-                K_per_frame = K // n_miss
-
-                all_indices = []
-                for fid in miss_fids:
-                    offsets = np.sort(np.random.choice(rows_per_frame, K_per_frame, replace=False))
-                    all_indices.extend(fid * rows_per_frame + offsets)
-                indices_t = torch.tensor(all_indices, dtype=torch.long)
-                miss_fids_t = torch.tensor(miss_fids, dtype=torch.long)
-
-                def fused_fn(d=h265_dir, mf=miss_fids_t, idx=indices_t):
-                    return _C.batch_decode_gather_dequant(
-                        d, mf, idx, rows_per_frame, tiles_per_row, SCALE, ZP)
-
-                print(f"\n--- {codec_name}, {n_miss} frames, {K} rows ---")
-                t_fused, _ = bench(fused_fn, warmup=1, iters=5,
-                                    label=f"batch_decode_gather_dequant")
-                per_row_us = t_fused * 1000 / K
-                print(f"    → {per_row_us:.1f} us/row")
-
-
-def benchmark_real_tables():
-    """Benchmark with real DLRM embedding table data."""
-    print(f"\n{'='*80}")
-    print(f"REAL DATA: Multi-codec comparison with DLRM embeddings")
-    print(f"{'='*80}")
-
-    model_path = "./models/dlrm_kaggle_correct.pt"
-    hotcold_dir = "results/hotcold"
-    reorder_dir = "results/reorder"
-
-    if not os.path.exists(model_path) or not os.path.exists(hotcold_dir):
-        print("  Model or hot/cold data not available, skipping")
-        return
-
-    # Load model weights
-    state = torch.load(model_path, map_location='cpu', weights_only=False)
-    if isinstance(state, dict) and 'state_dict' in state:
-        sd = state['state_dict']
-    elif isinstance(state, dict):
-        sd = state
-    else:
-        sd = state.state_dict()
-
-    # Find large tables with cold data
-    WIDTH, HEIGHT = 1920, 1080
-    RPF = (WIDTH // 4) * (HEIGHT // 4)
-    codecs = ["h265", "h264", "ffv1"]
-
-    # Get embedding keys and find large tables
-    emb_keys = sorted([k for k in sd.keys() if 'emb_l' in k and 'weight' in k],
-                       key=lambda k: int(k.split('.')[1]))
-
-    large_tables = []
-    for emb_key in emb_keys:
-        t_idx = int(emb_key.split('.')[1])
-        weight = sd[emb_key]
-        n_emb = weight.shape[0]
-        if n_emb < 50000:
+import lz4.frame
+import zstandard as zstd
+import snappy
+
+# ============================================================
+# CONFIG
+# ============================================================
+RESULTS_DIR = "results"
+HOTCOLD_DIR = os.path.join(RESULTS_DIR, "hotcold")
+REORDER_DIR = os.path.join(RESULTS_DIR, "reorder")
+ONDEMAND_DIR = os.path.join(RESULTS_DIR, "ondemand")
+OUTPUT_DIR = os.path.join(RESULTS_DIR, "codec_comparison")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+TILE_H, TILE_W = 4, 4
+FRAME_W, FRAME_H = 1920, 1080
+ROWS_PER_FRAME = (FRAME_W // TILE_W) * (FRAME_H // TILE_H)  # 129600
+
+# Tables with significant cold data
+LARGE_TABLES = [2, 3, 9, 11, 15, 20, 23, 25]
+
+
+def load_cold_data():
+    """Load quantized cold embeddings for all large tables."""
+    print("Loading model and cold data...")
+
+    # Load model state dict
+    ckpt_path = "./models/dlrm_kaggle_correct.pt"
+    sd = torch.load(ckpt_path, map_location='cpu', weights_only=False)
+    if 'state_dict' in sd:
+        sd = sd['state_dict']
+    elif 'model_state_dict' in sd:
+        sd = sd['model_state_dict']
+
+    tables = {}
+    for t_idx in LARGE_TABLES:
+        cold_idx_path = os.path.join(HOTCOLD_DIR, f"cold_indices_{t_idx}.pt")
+        if not os.path.exists(cold_idx_path):
             continue
-        cold_path = os.path.join(hotcold_dir, f'cold_indices_{t_idx}.pt')
-        if not os.path.exists(cold_path):
+
+        cold_indices = torch.load(cold_idx_path, weights_only=False)
+        if cold_indices.numel() == 0:
             continue
-        large_tables.append((t_idx, emb_key, weight, cold_path))
 
-    log(f"Found {len(large_tables)} large tables with cold data")
+        # Get cold embeddings
+        weight = sd[f'emb_l.{t_idx}.weight']
+        cold_weight = weight[cold_indices]  # (N, 16) fp32
 
-    for t_idx, emb_key, weight, cold_path in large_tables[:3]:
-        n_emb = weight.shape[0]
-
-        cold_indices = torch.load(cold_path, map_location='cpu', weights_only=True)
-        n_cold = len(cold_indices)
-        cold_weight = weight[cold_indices]
-
-        # Quantize
+        # Quantize to uint8
         mn, mx = cold_weight.min().item(), cold_weight.max().item()
-        s = (mx - mn) / 255.0
-        if s == 0: s = 1.0
-        zp = round(-mn / s)
-        q = ((cold_weight / s).round() + zp).clamp(0, 255).to(torch.uint8)
+        scale = (mx - mn) / 255.0
+        if scale == 0:
+            scale = 1.0
+        zp = round(-mn / scale)
+        quant = ((cold_weight / scale).round() + zp).clamp(0, 255).to(torch.uint8)
 
-        n_frames = (n_cold + RPF - 1) // RPF
-        print(f"\n--- Table {t_idx}: {n_emb:,} embeddings, {n_cold:,} cold, "
-              f"{n_frames} frames ---")
+        # Load reordered order if available
+        order_path = os.path.join(REORDER_DIR, f"cold_order_{t_idx}.npy")
+        if os.path.exists(order_path):
+            order = np.load(order_path)
+            quant = quant[torch.from_numpy(order.astype(np.int64))]
 
-        # Pad
-        padded_rows = n_frames * RPF
-        padded = torch.zeros(padded_rows, EMB_DIM, dtype=torch.uint8)
-        padded[:n_cold] = q
+        tables[t_idx] = {
+            'quant': quant.numpy(),  # (N, 16) uint8
+            'scale': scale,
+            'zp': zp,
+            'n_rows': quant.shape[0],
+        }
+        print(f"  Table {t_idx}: {quant.shape[0]:,} cold rows, {quant.nbytes/1e6:.1f}MB uint8")
 
-        # Tile all frames
-        tiled_frames = _C.fused_quantize_tile_multiframe(padded, WIDTH, HEIGHT)
-
-        raw_bytes = n_cold * EMB_DIM
-
-        for codec_name in codecs:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                frame_dir = os.path.join(tmpdir, codec_name)
-                os.makedirs(frame_dir)
-
-                # Encode
-                t0 = time.perf_counter()
-                total_bytes = _C.batch_encode_frames_codec(
-                    tiled_frames, frame_dir, codec_name, True)
-                t_encode = (time.perf_counter() - t0) * 1000
-
-                ratio = raw_bytes / total_bytes if total_bytes > 0 else 0
-
-                # Create .h265 links for decode function
-                ext_map = {"h265": ".h265", "h264": ".h264", "ffv1": ".mkv"}
-                ext = ext_map[codec_name]
-                h265_dir = os.path.join(tmpdir, f'{codec_name}_h265')
-                os.makedirs(h265_dir)
-                for i in range(n_frames):
-                    src = os.path.join(frame_dir, f'frame_{i:05d}{ext}')
-                    dst = os.path.join(h265_dir, f'frame_{i:05d}.h265')
-                    if os.path.exists(src):
-                        os.link(src, dst)
-
-                # Decode benchmark (1000 random rows)
-                test_K = min(1000, n_cold)
-                test_indices = torch.from_numpy(
-                    np.sort(np.random.choice(n_cold, test_K, replace=False))
-                ).long()
-                miss_frames = torch.unique(test_indices // RPF).long()
-
-                # Warmup
-                try:
-                    _C.batch_decode_gather_dequant(
-                        h265_dir, miss_frames, test_indices,
-                        RPF, WIDTH // 4, s, zp)
-                except Exception:
-                    pass
-
-                t0 = time.perf_counter()
-                _C.batch_decode_gather_dequant(
-                    h265_dir, miss_frames, test_indices,
-                    RPF, WIDTH // 4, s, zp)
-                t_decode = (time.perf_counter() - t0) * 1000
-
-                print(f"  {codec_name:5s}: encode={t_encode:7.0f}ms, "
-                      f"decode={t_decode:6.1f}ms ({len(miss_frames)} frames), "
-                      f"ratio={ratio:5.2f}x ({total_bytes/1024/1024:.1f}MB)")
+    return tables
 
 
-def print_summary(enc_results, dec_results):
-    """Print comparison summary table."""
+def tile_to_frame(rows_uint8):
+    """Tile embedding rows into a 2D frame for H.265 encoding."""
+    n_rows = rows_uint8.shape[0]
+    # Pad to fill frame
+    if n_rows < ROWS_PER_FRAME:
+        padded = np.zeros((ROWS_PER_FRAME, 16), dtype=np.uint8)
+        padded[:n_rows] = rows_uint8
+        rows_uint8 = padded
+
+    tiles_w = FRAME_W // TILE_W  # 480
+    tiles_h = FRAME_H // TILE_H  # 270
+    frame = rows_uint8.reshape(tiles_h, tiles_w, TILE_H, TILE_W)
+    frame = frame.transpose(0, 2, 1, 3).reshape(FRAME_H, FRAME_W)
+    return frame
+
+
+def split_into_frames(quant_data):
+    """Split quantized data into frame-sized chunks."""
+    n_rows = quant_data.shape[0]
+    n_frames = (n_rows + ROWS_PER_FRAME - 1) // ROWS_PER_FRAME
+    frames = []
+    for i in range(n_frames):
+        start = i * ROWS_PER_FRAME
+        end = min(start + ROWS_PER_FRAME, n_rows)
+        chunk = quant_data[start:end]
+        frames.append(chunk)
+    return frames
+
+
+# ============================================================
+# COMPRESSOR IMPLEMENTATIONS
+# ============================================================
+
+class H265Compressor:
+    """H.265 lossless via C++ extension."""
+    name = "H.265 (lossless)"
+
+    def __init__(self):
+        try:
+            import compressed_emb as _C
+            self._C = _C
+        except ImportError:
+            self._C = None
+
+    def compress_frame(self, rows_uint8):
+        """Compress a frame-worth of rows."""
+        frame = tile_to_frame(rows_uint8)
+        frame_t = torch.from_numpy(frame)
+        tmp_path = "/tmp/_bench_frame.h265"
+        self._C.encode_h265_frame_to_file(frame_t, tmp_path)
+        with open(tmp_path, 'rb') as f:
+            data = f.read()
+        os.remove(tmp_path)
+        return data
+
+    def decompress_frame(self, compressed_bytes, n_rows=None):
+        """Decompress to get back the frame."""
+        tmp_path = "/tmp/_bench_frame.h265"
+        with open(tmp_path, 'wb') as f:
+            f.write(compressed_bytes)
+        frame_t = self._C.decode_h265_frame_from_file(tmp_path)
+        os.remove(tmp_path)
+        return frame_t.numpy()
+
+    def decompress_frame_to_rows(self, compressed_bytes, n_rows):
+        """Decompress and untile to get embedding rows."""
+        frame = self.decompress_frame(compressed_bytes)
+        # Untile
+        tiles_w = FRAME_W // TILE_W
+        tiles_h = FRAME_H // TILE_H
+        rows = frame.reshape(tiles_h, TILE_H, tiles_w, TILE_W)
+        rows = rows.transpose(0, 2, 1, 3).reshape(-1, 16)
+        return rows[:n_rows]
+
+
+class LZ4Compressor:
+    """LZ4 frame compression."""
+    name = "LZ4"
+
+    def compress_frame(self, rows_uint8):
+        return lz4.frame.compress(rows_uint8.tobytes())
+
+    def decompress_frame(self, compressed_bytes, n_rows=None):
+        raw = lz4.frame.decompress(compressed_bytes)
+        return np.frombuffer(raw, dtype=np.uint8)
+
+    def decompress_frame_to_rows(self, compressed_bytes, n_rows):
+        raw = lz4.frame.decompress(compressed_bytes)
+        return np.frombuffer(raw, dtype=np.uint8).reshape(-1, 16)[:n_rows]
+
+
+class LZ4HCCompressor:
+    """LZ4 HC (high compression) mode."""
+    name = "LZ4-HC"
+
+    def compress_frame(self, rows_uint8):
+        return lz4.frame.compress(rows_uint8.tobytes(),
+                                  compression_level=lz4.frame.COMPRESSIONLEVEL_MAX)
+
+    def decompress_frame(self, compressed_bytes, n_rows=None):
+        raw = lz4.frame.decompress(compressed_bytes)
+        return np.frombuffer(raw, dtype=np.uint8)
+
+    def decompress_frame_to_rows(self, compressed_bytes, n_rows):
+        raw = lz4.frame.decompress(compressed_bytes)
+        return np.frombuffer(raw, dtype=np.uint8).reshape(-1, 16)[:n_rows]
+
+
+class ZstdCompressor:
+    """Zstandard compression at default level."""
+    name = "Zstd (level 3)"
+
+    def __init__(self, level=3):
+        self.level = level
+        self.name = f"Zstd (level {level})"
+        self.cctx = zstd.ZstdCompressor(level=level)
+        self.dctx = zstd.ZstdDecompressor()
+
+    def compress_frame(self, rows_uint8):
+        return self.cctx.compress(rows_uint8.tobytes())
+
+    def decompress_frame(self, compressed_bytes, n_rows=None):
+        raw = self.dctx.decompress(compressed_bytes)
+        return np.frombuffer(raw, dtype=np.uint8)
+
+    def decompress_frame_to_rows(self, compressed_bytes, n_rows):
+        raw = self.dctx.decompress(compressed_bytes)
+        return np.frombuffer(raw, dtype=np.uint8).reshape(-1, 16)[:n_rows]
+
+
+class ZstdMaxCompressor(ZstdCompressor):
+    """Zstandard at max compression."""
+    def __init__(self):
+        super().__init__(level=19)
+
+
+class SnappyCompressor:
+    """Snappy compression."""
+    name = "Snappy"
+
+    def compress_frame(self, rows_uint8):
+        return snappy.compress(rows_uint8.tobytes())
+
+    def decompress_frame(self, compressed_bytes, n_rows=None):
+        raw = snappy.decompress(compressed_bytes)
+        return np.frombuffer(raw, dtype=np.uint8)
+
+    def decompress_frame_to_rows(self, compressed_bytes, n_rows):
+        raw = snappy.decompress(compressed_bytes)
+        return np.frombuffer(raw, dtype=np.uint8).reshape(-1, 16)[:n_rows]
+
+
+class NoCompressor:
+    """Raw uint8 baseline (no compression)."""
+    name = "Raw uint8 (no compression)"
+
+    def compress_frame(self, rows_uint8):
+        return rows_uint8.tobytes()
+
+    def decompress_frame(self, compressed_bytes, n_rows=None):
+        return np.frombuffer(compressed_bytes, dtype=np.uint8)
+
+    def decompress_frame_to_rows(self, compressed_bytes, n_rows):
+        return np.frombuffer(compressed_bytes, dtype=np.uint8).reshape(-1, 16)[:n_rows]
+
+
+# ============================================================
+# H.265 with tiled data (tests if tiling helps compression)
+# ============================================================
+
+class H265TiledCompressor:
+    """H.265 on tiled frame layout (the layout we actually use)."""
+    name = "H.265 tiled (lossless)"
+
+    def __init__(self):
+        import compressed_emb as _C
+        self._C = _C
+
+    def compress_frame(self, rows_uint8):
+        frame = tile_to_frame(rows_uint8)
+        frame_t = torch.from_numpy(frame)
+        tmp_path = "/tmp/_bench_tiled.h265"
+        self._C.encode_h265_frame_to_file(frame_t, tmp_path)
+        with open(tmp_path, 'rb') as f:
+            data = f.read()
+        os.remove(tmp_path)
+        return data
+
+    def decompress_frame_to_rows(self, compressed_bytes, n_rows):
+        tmp_path = "/tmp/_bench_tiled.h265"
+        with open(tmp_path, 'wb') as f:
+            f.write(compressed_bytes)
+        frame_t = self._C.decode_h265_frame_from_file(tmp_path)
+        os.remove(tmp_path)
+        frame = frame_t.numpy()
+        tiles_w = FRAME_W // TILE_W
+        tiles_h = FRAME_H // TILE_H
+        rows = frame.reshape(tiles_h, TILE_H, tiles_w, TILE_W)
+        rows = rows.transpose(0, 2, 1, 3).reshape(-1, 16)
+        return rows[:n_rows]
+
+
+class LZ4TiledCompressor:
+    """LZ4 on the TILED frame layout (to test if tiling helps LZ4 too)."""
+    name = "LZ4 (tiled layout)"
+
+    def compress_frame(self, rows_uint8):
+        frame = tile_to_frame(rows_uint8)
+        return lz4.frame.compress(frame.tobytes())
+
+    def decompress_frame_to_rows(self, compressed_bytes, n_rows):
+        raw = lz4.frame.decompress(compressed_bytes)
+        frame = np.frombuffer(raw, dtype=np.uint8).reshape(FRAME_H, FRAME_W)
+        tiles_w = FRAME_W // TILE_W
+        tiles_h = FRAME_H // TILE_H
+        rows = frame.reshape(tiles_h, TILE_H, tiles_w, TILE_W)
+        rows = rows.transpose(0, 2, 1, 3).reshape(-1, 16)
+        return rows[:n_rows]
+
+
+class ZstdTiledCompressor:
+    """Zstd on the TILED frame layout."""
+    name = "Zstd (tiled layout)"
+
+    def __init__(self):
+        self.cctx = zstd.ZstdCompressor(level=3)
+        self.dctx = zstd.ZstdDecompressor()
+
+    def compress_frame(self, rows_uint8):
+        frame = tile_to_frame(rows_uint8)
+        return self.cctx.compress(frame.tobytes())
+
+    def decompress_frame_to_rows(self, compressed_bytes, n_rows):
+        raw = self.dctx.decompress(compressed_bytes)
+        frame = np.frombuffer(raw, dtype=np.uint8).reshape(FRAME_H, FRAME_W)
+        tiles_w = FRAME_W // TILE_W
+        tiles_h = FRAME_H // TILE_H
+        rows = frame.reshape(tiles_h, TILE_H, tiles_w, TILE_W)
+        rows = rows.transpose(0, 2, 1, 3).reshape(-1, 16)
+        return rows[:n_rows]
+
+
+# ============================================================
+# BENCHMARK
+# ============================================================
+
+def benchmark_compressor(compressor, frames_data, n_warmup=3, n_iters=20):
+    """Benchmark a single compressor on all frames."""
+    results = {
+        'name': compressor.name,
+        'compress_times_ms': [],
+        'decompress_times_ms': [],
+        'compressed_sizes': [],
+        'raw_sizes': [],
+    }
+
+    # Pre-compress all frames
+    compressed_frames = []
+    for i, (rows, n_rows) in enumerate(frames_data):
+        t0 = time.time()
+        compressed = compressor.compress_frame(rows)
+        t1 = time.time()
+        compressed_frames.append(compressed)
+        results['compressed_sizes'].append(len(compressed))
+        results['raw_sizes'].append(len(rows.tobytes()))
+        results['compress_times_ms'].append((t1 - t0) * 1000)
+
+    # Warmup decompression
+    for _ in range(n_warmup):
+        for compressed, (rows, n_rows) in zip(compressed_frames, frames_data):
+            _ = compressor.decompress_frame_to_rows(compressed, n_rows)
+
+    # Timed decompression
+    per_frame_times = []
+    for _ in range(n_iters):
+        for compressed, (rows, n_rows) in zip(compressed_frames, frames_data):
+            t0 = time.time()
+            _ = compressor.decompress_frame_to_rows(compressed, n_rows)
+            t1 = time.time()
+            per_frame_times.append((t1 - t0) * 1000)
+
+    n_frames = len(compressed_frames)
+    results['decompress_times_ms'] = per_frame_times
+
+    total_raw = sum(results['raw_sizes'])
+    total_compressed = sum(results['compressed_sizes'])
+    ratio = total_raw / total_compressed if total_compressed > 0 else 0
+
+    avg_decompress = np.mean(per_frame_times)
+    p50_decompress = np.median(per_frame_times)
+    avg_compress = np.mean(results['compress_times_ms'])
+
+    return {
+        'name': compressor.name,
+        'total_raw_mb': total_raw / 1e6,
+        'total_compressed_mb': total_compressed / 1e6,
+        'compression_ratio': ratio,
+        'ratio_vs_fp32': ratio * 4,
+        'avg_compress_ms': avg_compress,
+        'avg_decompress_ms': avg_decompress,
+        'p50_decompress_ms': p50_decompress,
+        'n_frames': n_frames,
+    }
+
+
+def benchmark_h265_existing(tables):
+    """Benchmark H.265 using existing .h265 files on disk (realistic)."""
+    try:
+        import compressed_emb as _C
+    except ImportError:
+        print("  SKIP: compressed_emb not available")
+        return None
+
+    total_raw = 0
+    total_compressed = 0
+    decomp_times = []
+
+    for t_idx, info in tables.items():
+        frame_dir = os.path.join(ONDEMAND_DIR, '1080p', f'table_{t_idx}')
+        if not os.path.exists(frame_dir):
+            continue
+
+        files = sorted([f for f in os.listdir(frame_dir) if f.endswith('.h265')])
+        n_rows = info['n_rows']
+        total_raw += n_rows * 16
+
+        for fname in files:
+            fpath = os.path.join(frame_dir, fname)
+            total_compressed += os.path.getsize(fpath)
+
+        # Time decoding: warmup
+        for _ in range(2):
+            for fname in files[:3]:
+                fpath = os.path.join(frame_dir, fname)
+                _ = _C.decode_h265_frame_from_file(fpath)
+
+        # Timed decoding
+        for _ in range(10):
+            for fname in files:
+                fpath = os.path.join(frame_dir, fname)
+                t0 = time.time()
+                _ = _C.decode_h265_frame_from_file(fpath)
+                t1 = time.time()
+                decomp_times.append((t1 - t0) * 1000)
+
+    ratio = total_raw / total_compressed if total_compressed > 0 else 0
+    return {
+        'name': 'H.265 lossless (existing files)',
+        'total_raw_mb': total_raw / 1e6,
+        'total_compressed_mb': total_compressed / 1e6,
+        'compression_ratio': ratio,
+        'ratio_vs_fp32': ratio * 4,
+        'avg_compress_ms': 83.0,  # from previous measurement
+        'avg_decompress_ms': np.mean(decomp_times),
+        'p50_decompress_ms': np.median(decomp_times),
+        'n_frames': len(decomp_times) // 10,
+    }
+
+
+def run_benchmark():
+    tables = load_cold_data()
+
+    # Prepare frame-sized chunks from largest table (table 2) for fair comparison
+    test_table = 2
+    if test_table not in tables:
+        test_table = list(tables.keys())[0]
+
+    info = tables[test_table]
+    quant = info['quant']
+    print(f"\nBenchmarking on table {test_table}: {info['n_rows']:,} rows")
+
+    frame_chunks = split_into_frames(quant)
+    frames_data = [(chunk, len(chunk)) for chunk in frame_chunks]
+    print(f"  Split into {len(frames_data)} frames of {ROWS_PER_FRAME:,} rows each")
+    print(f"  Raw uint8 per frame: {ROWS_PER_FRAME * 16 / 1e6:.2f} MB")
+
+    # Also prepare ALL tables combined
+    all_frames = []
+    for t_idx in sorted(tables.keys()):
+        chunks = split_into_frames(tables[t_idx]['quant'])
+        all_frames.extend([(c, len(c)) for c in chunks])
+    print(f"  Total frames across all tables: {len(all_frames)}")
+
+    compressors = [
+        NoCompressor(),
+        LZ4Compressor(),
+        LZ4HCCompressor(),
+        ZstdCompressor(level=3),
+        ZstdCompressor(level=9),
+        ZstdMaxCompressor(),
+        SnappyCompressor(),
+    ]
+
+    # Try tiled-layout variants
+    tiled_compressors = [
+        LZ4TiledCompressor(),
+        ZstdTiledCompressor(),
+    ]
+
+    # Try H.265
+    try:
+        h265_tiled = H265TiledCompressor()
+        tiled_compressors.append(h265_tiled)
+    except:
+        pass
+
+    # ---- Single table benchmark (table 2) ----
     print(f"\n{'='*80}")
-    print(f"SUMMARY: Codec Comparison (1080p)")
-    print(f"{'='*80}")
+    print(f"SINGLE TABLE BENCHMARK (Table {test_table}, {len(frames_data)} frames)")
+    print(f"{'='*80}\n")
 
-    print(f"\n{'Codec':<8} {'Encode':>10} {'Decode':>10} {'Ratio':>8} {'Size':>8}")
-    print("-" * 50)
+    print("--- Row-major layout (flat uint8) ---")
+    single_results = []
+    for comp in compressors:
+        print(f"  Testing {comp.name}...")
+        try:
+            r = benchmark_compressor(comp, frames_data)
+            single_results.append(r)
+            print(f"    Ratio: {r['compression_ratio']:.1f}x (vs fp32: {r['ratio_vs_fp32']:.1f}x) | "
+                  f"Decompress: {r['avg_decompress_ms']:.3f}ms/frame | "
+                  f"Compress: {r['avg_compress_ms']:.1f}ms/frame | "
+                  f"Size: {r['total_compressed_mb']:.1f}MB")
+        except Exception as e:
+            print(f"    FAILED: {e}")
 
-    for codec_name in ["h265", "h264", "ffv1"]:
-        enc = enc_results.get(codec_name, {})
-        dec = dec_results.get(codec_name, {})
-        enc_ms = enc.get('encode_ms', 0)
-        dec_ms = dec.get('decode_ms', 0)
-        ratio = enc.get('ratio', 0)
-        size_kb = enc.get('compressed_bytes', 0) / 1024
-        print(f"{codec_name:<8} {enc_ms:>8.1f}ms {dec_ms:>8.1f}ms {ratio:>7.2f}x {size_kb:>6.0f}KB")
+    print("\n--- Tiled layout (2D frame, same as H.265 uses) ---")
+    tiled_results = []
+    for comp in tiled_compressors:
+        print(f"  Testing {comp.name}...")
+        try:
+            r = benchmark_compressor(comp, frames_data, n_iters=10)
+            tiled_results.append(r)
+            print(f"    Ratio: {r['compression_ratio']:.1f}x (vs fp32: {r['ratio_vs_fp32']:.1f}x) | "
+                  f"Decompress: {r['avg_decompress_ms']:.3f}ms/frame | "
+                  f"Compress: {r['avg_compress_ms']:.1f}ms/frame | "
+                  f"Size: {r['total_compressed_mb']:.1f}MB")
+        except Exception as e:
+            print(f"    FAILED: {e}")
 
+    # ---- H.265 from existing files ----
+    print(f"\n  Testing H.265 from existing files (all tables)...")
+    h265_result = benchmark_h265_existing(tables)
+    if h265_result:
+        print(f"    Ratio: {h265_result['compression_ratio']:.1f}x (vs fp32: {h265_result['ratio_vs_fp32']:.1f}x) | "
+              f"Decompress: {h265_result['avg_decompress_ms']:.3f}ms/frame | "
+              f"Size: {h265_result['total_compressed_mb']:.1f}MB")
 
-if __name__ == "__main__":
-    print("=" * 80)
-    print("Multi-Codec Benchmark: H.265 vs H.264 vs FFV1")
-    print(f"PyTorch threads: {torch.get_num_threads()}")
-    print("=" * 80)
-
-    # 1080p benchmarks
-    enc_results = benchmark_single_frame_encode(1920, 1080)
-    dec_results = benchmark_single_frame_decode(1920, 1080)
-
-    print_summary(enc_results, dec_results)
-
-    # Batch decode comparison
-    benchmark_batch_decode(1920, 1080, [1, 3, 5])
-
-    # Full pipeline
-    benchmark_gather_pipeline(1920, 1080, [100, 1000])
-
-    # Real data
-    benchmark_real_tables()
-
+    # ---- All tables benchmark ----
     print(f"\n{'='*80}")
-    print("MULTI-CODEC BENCHMARK COMPLETE")
-    print("=" * 80)
+    print(f"ALL TABLES BENCHMARK ({len(all_frames)} frames)")
+    print(f"{'='*80}\n")
+
+    all_results = []
+    for comp in compressors:
+        if isinstance(comp, H265Compressor):
+            continue  # too slow for all frames
+        print(f"  Testing {comp.name}...")
+        try:
+            r = benchmark_compressor(comp, all_frames, n_iters=5)
+            all_results.append(r)
+            print(f"    Ratio: {r['compression_ratio']:.1f}x (vs fp32: {r['ratio_vs_fp32']:.1f}x) | "
+                  f"Decompress: {r['avg_decompress_ms']:.3f}ms/frame | "
+                  f"Size: {r['total_compressed_mb']:.1f}MB")
+        except Exception as e:
+            print(f"    FAILED: {e}")
+
+    if h265_result:
+        all_results.append(h265_result)
+
+    # ---- Row-group granularity benchmark ----
+    print(f"\n{'='*80}")
+    print(f"ROW-GROUP GRANULARITY BENCHMARK (varying chunk sizes)")
+    print(f"{'='*80}\n")
+
+    chunk_sizes = [512, 1024, 4096, 16384, ROWS_PER_FRAME]
+    granularity_results = {}
+
+    test_data = quant[:min(len(quant), ROWS_PER_FRAME * 5)]  # first 5 frames worth
+
+    for chunk_size in chunk_sizes:
+        n_chunks = (len(test_data) + chunk_size - 1) // chunk_size
+        chunks = []
+        for i in range(n_chunks):
+            start = i * chunk_size
+            end = min(start + chunk_size, len(test_data))
+            chunks.append((test_data[start:end], end - start))
+
+        print(f"\n  Chunk size: {chunk_size:,} rows ({chunk_size*16/1024:.0f} KB raw)")
+
+        for comp in [LZ4Compressor(), ZstdCompressor(level=3), SnappyCompressor()]:
+            try:
+                r = benchmark_compressor(comp, chunks, n_iters=10)
+                key = (comp.name, chunk_size)
+                granularity_results[key] = r
+                print(f"    {comp.name:20s}: ratio={r['compression_ratio']:.1f}x, "
+                      f"decomp={r['avg_decompress_ms']:.3f}ms/chunk")
+            except Exception as e:
+                print(f"    {comp.name:20s}: FAILED: {e}")
+
+    # ---- Summary ----
+    print(f"\n{'='*80}")
+    print(f"SUMMARY: Sorted by decompress time (fastest first)")
+    print(f"{'='*80}\n")
+
+    all_sorted = single_results + tiled_results
+    if h265_result:
+        all_sorted.append(h265_result)
+    all_sorted.sort(key=lambda x: x['avg_decompress_ms'])
+
+    print(f"{'Compressor':<35s} | {'Ratio':>6s} | {'vs fp32':>7s} | "
+          f"{'Decomp/frame':>13s} | {'Comp/frame':>11s} | {'Size':>8s}")
+    print("-" * 110)
+    for r in all_sorted:
+        print(f"{r['name']:<35s} | {r['compression_ratio']:>5.1f}x | {r['ratio_vs_fp32']:>6.1f}x | "
+              f"{r['avg_decompress_ms']:>10.3f} ms | {r['avg_compress_ms']:>8.1f} ms | "
+              f"{r['total_compressed_mb']:>6.1f} MB")
+
+    # ---- KEY QUESTION: Does H.265 provide better compression? ----
+    print(f"\n{'='*80}")
+    print("KEY FINDING: Does H.265 provide better compression than LZ4/Zstd?")
+    print(f"{'='*80}\n")
+
+    h265_ratio = None
+    for r in all_sorted:
+        if 'H.265' in r['name'] and 'tiled' in r['name']:
+            h265_ratio = r['compression_ratio']
+            break
+    if h265_ratio is None and h265_result:
+        h265_ratio = h265_result['compression_ratio']
+
+    if h265_ratio:
+        for r in all_sorted:
+            if 'H.265' not in r['name']:
+                better = "BETTER" if r['compression_ratio'] >= h265_ratio else "WORSE"
+                faster = r['avg_decompress_ms'] < (h265_result['avg_decompress_ms'] if h265_result else 999)
+                print(f"  {r['name']:<35s}: {r['compression_ratio']:.1f}x vs H.265 {h265_ratio:.1f}x "
+                      f"({better} compression, {'FASTER' if faster else 'SLOWER'} decode)")
+
+    # Save results
+    output = {
+        'single_table': single_results,
+        'tiled_layout': tiled_results,
+        'all_tables': all_results,
+        'h265_existing': h265_result,
+        'granularity': {f"{k[0]}_{k[1]}": v for k, v in granularity_results.items()},
+        'metadata': {
+            'test_table': test_table,
+            'n_rows': info['n_rows'],
+            'rows_per_frame': ROWS_PER_FRAME,
+            'raw_frame_bytes': ROWS_PER_FRAME * 16,
+        }
+    }
+
+    json_path = os.path.join(OUTPUT_DIR, 'codec_comparison.json')
+    with open(json_path, 'w') as f:
+        json.dump(output, f, indent=2, default=str)
+    print(f"\nResults saved to {json_path}")
+
+
+if __name__ == '__main__':
+    run_benchmark()

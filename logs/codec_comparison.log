@@ -1,0 +1,136 @@
+Loading model and cold data...
+  Table 2: 9,633,265 cold rows, 154.1MB uint8
+  Table 3: 2,168,208 cold rows, 34.7MB uint8
+  Table 9: 88,486 cold rows, 1.4MB uint8
+  Table 11: 7,965,378 cold rows, 127.4MB uint8
+  Table 15: 5,267,563 cold rows, 84.3MB uint8
+  Table 20: 6,741,517 cold rows, 107.9MB uint8
+  Table 23: 280,517 cold rows, 4.5MB uint8
+  Table 25: 137,719 cold rows, 2.2MB uint8
+
+Benchmarking on table 2: 9,633,265 rows
+  Split into 75 frames of 129,600 rows each
+  Raw uint8 per frame: 2.07 MB
+  Total frames across all tables: 254
+
+================================================================================
+SINGLE TABLE BENCHMARK (Table 2, 75 frames)
+================================================================================
+
+--- Row-major layout (flat uint8) ---
+  Testing Raw uint8 (no compression)...
+    Ratio: 1.0x (vs fp32: 4.0x) | Decompress: 0.001ms/frame | Compress: 0.8ms/frame | Size: 154.1MB
+  Testing LZ4...
+    Ratio: 7.8x (vs fp32: 31.2x) | Decompress: 1.169ms/frame | Compress: 1.8ms/frame | Size: 19.8MB
+  Testing LZ4-HC...
+    Ratio: 18.5x (vs fp32: 73.8x) | Decompress: 0.524ms/frame | Compress: 1140.8ms/frame | Size: 8.4MB
+  Testing Zstd (level 3)...
+    Ratio: 16.5x (vs fp32: 66.1x) | Decompress: 1.513ms/frame | Compress: 4.2ms/frame | Size: 9.3MB
+  Testing Zstd (level 9)...
+    Ratio: 19.3x (vs fp32: 77.2x) | Decompress: 1.106ms/frame | Compress: 26.3ms/frame | Size: 8.0MB
+  Testing Zstd (level 19)...
+    Ratio: 23.9x (vs fp32: 95.8x) | Decompress: 0.655ms/frame | Compress: 711.6ms/frame | Size: 6.4MB
+  Testing Snappy...
+    Ratio: 8.5x (vs fp32: 33.8x) | Decompress: 1.650ms/frame | Compress: 2.3ms/frame | Size: 18.2MB
+
+--- Tiled layout (2D frame, same as H.265 uses) ---
+  Testing LZ4 (tiled layout)...
+    Ratio: 7.0x (vs fp32: 27.9x) | Decompress: 4.340ms/frame | Compress: 4.8ms/frame | Size: 22.1MB
+  Testing Zstd (tiled layout)...
+    Ratio: 14.8x (vs fp32: 59.0x) | Decompress: 4.622ms/frame | Compress: 7.3ms/frame | Size: 10.4MB
+  Testing H.265 tiled (lossless)...
+    FAILED: encode_h265_frame_to_file(): incompatible function arguments. The following argument types are supported:
+    1. (arg0: torch.Tensor, arg1: str, arg2: bool) -> None
+
+Invoked with: tensor([[88, 88, 88,  ..., 88, 88, 88],
+        [88, 88, 88,  ..., 88, 88, 88],
+        [88, 88, 88,  ..., 88, 88, 88],
+        ...,
+        [87, 88, 88,  ..., 88, 88, 88],
+        [90, 88, 88,  ..., 88, 88, 88],
+        [93, 93, 88,  ..., 88, 88, 88]], dtype=torch.uint8), '/tmp/_bench_tiled.h265'
+
+  Testing H.265 from existing files (all tables)...
+    Ratio: 9.8x (vs fp32: 39.1x) | Decompress: 5.201ms/frame | Size: 52.8MB
+
+================================================================================
+ALL TABLES BENCHMARK (254 frames)
+================================================================================
+
+  Testing Raw uint8 (no compression)...
+    Ratio: 1.0x (vs fp32: 4.0x) | Decompress: 0.001ms/frame | Size: 516.5MB
+  Testing LZ4...
+    Ratio: 3.3x (vs fp32: 13.3x) | Decompress: 1.404ms/frame | Size: 155.3MB
+  Testing LZ4-HC...
+    Ratio: 7.0x (vs fp32: 28.1x) | Decompress: 0.671ms/frame | Size: 73.5MB
+  Testing Zstd (level 3)...
+    Ratio: 6.8x (vs fp32: 27.0x) | Decompress: 2.365ms/frame | Size: 76.5MB
+  Testing Zstd (level 9)...
+    Ratio: 7.6x (vs fp32: 30.3x) | Decompress: 1.798ms/frame | Size: 68.3MB
+  Testing Zstd (level 19)...
+    Ratio: 9.4x (vs fp32: 37.6x) | Decompress: 1.137ms/frame | Size: 55.0MB
+  Testing Snappy...
+    Ratio: 3.9x (vs fp32: 15.6x) | Decompress: 2.394ms/frame | Size: 132.8MB
+
+================================================================================
+ROW-GROUP GRANULARITY BENCHMARK (varying chunk sizes)
+================================================================================
+
+
+  Chunk size: 512 rows (8 KB raw)
+    LZ4                 : ratio=6.8x, decomp=0.006ms/chunk
+    Zstd (level 3)      : ratio=13.6x, decomp=0.010ms/chunk
+    Snappy              : ratio=7.6x, decomp=0.010ms/chunk
+
+  Chunk size: 1,024 rows (16 KB raw)
+    LZ4                 : ratio=7.0x, decomp=0.010ms/chunk
+    Zstd (level 3)      : ratio=14.3x, decomp=0.017ms/chunk
+    Snappy              : ratio=7.7x, decomp=0.017ms/chunk
+
+  Chunk size: 4,096 rows (64 KB raw)
+    LZ4                 : ratio=7.1x, decomp=0.034ms/chunk
+    Zstd (level 3)      : ratio=15.1x, decomp=0.052ms/chunk
+    Snappy              : ratio=7.9x, decomp=0.054ms/chunk
+
+  Chunk size: 16,384 rows (256 KB raw)
+    LZ4                 : ratio=7.7x, decomp=0.120ms/chunk
+    Zstd (level 3)      : ratio=15.1x, decomp=0.195ms/chunk
+    Snappy              : ratio=7.9x, decomp=0.204ms/chunk
+
+  Chunk size: 129,600 rows (2025 KB raw)
+    LZ4                 : ratio=7.8x, decomp=1.016ms/chunk
+    Zstd (level 3)      : ratio=15.2x, decomp=1.523ms/chunk
+    Snappy              : ratio=7.9x, decomp=1.677ms/chunk
+
+================================================================================
+SUMMARY: Sorted by decompress time (fastest first)
+================================================================================
+
+Compressor                          |  Ratio | vs fp32 |  Decomp/frame |  Comp/frame |     Size
+--------------------------------------------------------------------------------------------------------------
+Raw uint8 (no compression)          |   1.0x |    4.0x |      0.001 ms |      0.8 ms |  154.1 MB
+LZ4-HC                              |  18.5x |   73.8x |      0.524 ms |   1140.8 ms |    8.4 MB
+Zstd (level 19)                     |  23.9x |   95.8x |      0.655 ms |    711.6 ms |    6.4 MB
+Zstd (level 9)                      |  19.3x |   77.2x |      1.106 ms |     26.3 ms |    8.0 MB
+LZ4                                 |   7.8x |   31.2x |      1.169 ms |      1.8 ms |   19.8 MB
+Zstd (level 3)                      |  16.5x |   66.1x |      1.513 ms |      4.2 ms |    9.3 MB
+Snappy                              |   8.5x |   33.8x |      1.650 ms |      2.3 ms |   18.2 MB
+LZ4 (tiled layout)                  |   7.0x |   27.9x |      4.340 ms |      4.8 ms |   22.1 MB
+Zstd (tiled layout)                 |  14.8x |   59.0x |      4.622 ms |      7.3 ms |   10.4 MB
+H.265 lossless (existing files)     |   9.8x |   39.1x |      5.201 ms |     83.0 ms |   52.8 MB
+
+================================================================================
+KEY FINDING: Does H.265 provide better compression than LZ4/Zstd?
+================================================================================
+
+  Raw uint8 (no compression)         : 1.0x vs H.265 9.8x (WORSE compression, FASTER decode)
+  LZ4-HC                             : 18.5x vs H.265 9.8x (BETTER compression, FASTER decode)
+  Zstd (level 19)                    : 23.9x vs H.265 9.8x (BETTER compression, FASTER decode)
+  Zstd (level 9)                     : 19.3x vs H.265 9.8x (BETTER compression, FASTER decode)
+  LZ4                                : 7.8x vs H.265 9.8x (WORSE compression, FASTER decode)
+  Zstd (level 3)                     : 16.5x vs H.265 9.8x (BETTER compression, FASTER decode)
+  Snappy                             : 8.5x vs H.265 9.8x (WORSE compression, FASTER decode)
+  LZ4 (tiled layout)                 : 7.0x vs H.265 9.8x (WORSE compression, FASTER decode)
+  Zstd (tiled layout)                : 14.8x vs H.265 9.8x (BETTER compression, FASTER decode)
+
+Results saved to results/codec_comparison/codec_comparison.json

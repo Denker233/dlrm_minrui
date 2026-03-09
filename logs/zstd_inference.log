@@ -1,0 +1,122 @@
+[03:10:29] Loading model state dict...
+[03:10:30] Loading cold embeddings and compressing...
+[03:10:31]   Table 2: 9,633,265 rows, 75 frames
+[03:10:31]   Table 3: 2,168,208 rows, 17 frames
+[03:10:31]   Table 9: 88,486 rows, 1 frames
+[03:10:31]   Table 11: 7,965,378 rows, 62 frames
+[03:10:31]   Table 15: 5,267,563 rows, 41 frames
+[03:10:32]   Table 20: 6,741,517 rows, 53 frames
+[03:10:32]   Table 23: 280,517 rows, 3 frames
+[03:10:32]   Table 25: 137,719 rows, 2 frames
+[03:10:32] 
+============================================================
+[03:10:32] COMPRESSOR: Zstd-3
+[03:10:32] ============================================================
+[03:10:34]   Table 2: 75 frames, compressed=9.3MB
+[03:10:36]   Table 3: 17 frames, compressed=8.4MB
+[03:10:36]   Table 9: 1 frames, compressed=0.7MB
+[03:10:39]   Table 11: 62 frames, compressed=16.7MB
+[03:10:42]   Table 15: 41 frames, compressed=12.4MB
+[03:10:45]   Table 20: 53 frames, compressed=26.6MB
+[03:10:46]   Table 23: 3 frames, compressed=1.4MB
+[03:10:46]   Table 25: 2 frames, compressed=0.9MB
+[03:10:46]   Total: raw=516.5MB, compressed=76.5MB, ratio=6.8x (vs fp32: 27.0x)
+[03:10:46]   Decode: avg=2.370ms, p50=2.856ms per frame
+[03:10:46] 
+============================================================
+[03:10:46] COMPRESSOR: Zstd-9
+[03:10:46] ============================================================
+[03:10:49]   Table 2: 75 frames, compressed=8.0MB
+[03:10:51]   Table 3: 17 frames, compressed=7.6MB
+[03:10:52]   Table 9: 1 frames, compressed=0.7MB
+[03:10:57]   Table 11: 62 frames, compressed=14.3MB
+[03:11:00]   Table 15: 41 frames, compressed=10.6MB
+[03:11:06]   Table 20: 53 frames, compressed=24.9MB
+[03:11:07]   Table 23: 3 frames, compressed=1.3MB
+[03:11:07]   Table 25: 2 frames, compressed=0.8MB
+[03:11:07]   Total: raw=516.5MB, compressed=68.3MB, ratio=7.6x (vs fp32: 30.3x)
+[03:11:07]   Decode: avg=1.793ms, p50=1.942ms per frame
+[03:11:07] 
+============================================================
+[03:11:07] COMPRESSOR: Zstd-19
+[03:11:07] ============================================================
+[03:12:01]   Table 2: 75 frames, compressed=6.4MB
+[03:12:21]   Table 3: 17 frames, compressed=6.2MB
+[03:12:21]   Table 9: 1 frames, compressed=0.7MB
+[03:13:18]   Table 11: 62 frames, compressed=10.7MB
+[03:13:57]   Table 15: 41 frames, compressed=8.0MB
+[03:14:58]   Table 20: 53 frames, compressed=20.9MB
+[03:15:00]   Table 23: 3 frames, compressed=1.2MB
+[03:15:01]   Table 25: 2 frames, compressed=0.8MB
+[03:15:01]   Total: raw=516.5MB, compressed=55.0MB, ratio=9.4x (vs fp32: 37.6x)
+[03:15:01]   Decode: avg=1.132ms, p50=1.121ms per frame
+[03:15:01] 
+============================================================
+[03:15:01] COMPRESSOR: LZ4
+[03:15:01] ============================================================
+[03:15:03]   Table 2: 75 frames, compressed=19.8MB
+[03:15:03]   Table 3: 17 frames, compressed=16.5MB
+[03:15:03]   Table 9: 1 frames, compressed=1.4MB
+[03:15:05]   Table 11: 62 frames, compressed=33.6MB
+[03:15:07]   Table 15: 41 frames, compressed=24.8MB
+[03:15:09]   Table 20: 53 frames, compressed=55.2MB
+[03:15:09]   Table 23: 3 frames, compressed=2.6MB
+[03:15:09]   Table 25: 2 frames, compressed=1.4MB
+[03:15:09]   Total: raw=516.5MB, compressed=155.3MB, ratio=3.3x (vs fp32: 13.3x)
+[03:15:09]   Decode: avg=1.422ms, p50=1.584ms per frame
+[03:15:09] 
+============================================================
+[03:15:09] COMPRESSOR: Snappy
+[03:15:09] ============================================================
+[03:15:11]   Table 2: 75 frames, compressed=18.2MB
+[03:15:13]   Table 3: 17 frames, compressed=13.8MB
+[03:15:13]   Table 9: 1 frames, compressed=1.4MB
+[03:15:16]   Table 11: 62 frames, compressed=28.7MB
+[03:15:18]   Table 15: 41 frames, compressed=21.3MB
+[03:15:21]   Table 20: 53 frames, compressed=45.7MB
+[03:15:21]   Table 23: 3 frames, compressed=2.3MB
+[03:15:22]   Table 25: 2 frames, compressed=1.4MB
+[03:15:22]   Total: raw=516.5MB, compressed=132.8MB, ratio=3.9x (vs fp32: 15.6x)
+[03:15:22]   Decode: avg=2.321ms, p50=2.507ms per frame
+[03:15:22] 
+============================================================
+[03:15:22] COMPRESSOR: H.265 (existing files)
+[03:15:22] ============================================================
+[03:15:34]   Total: raw=516.5MB, compressed=52.8MB, ratio=9.8x (vs fp32: 39.1x)
+[03:15:34]   Decode: avg=4.972ms, p50=4.877ms per frame
+[03:15:34] 
+============================================================
+[03:15:34] LRU CACHE SIMULATION (using real access patterns)
+[03:15:34] ============================================================
+
+[03:15:34]   Loaded access patterns from full_comparison.json
+[03:15:34] 
+  Per-batch decode overhead (ms) for each compressor and cache size:
+[03:15:34]   Config               |    cache=4 |    cache=8 |   cache=16 |   cache=32
+[03:15:34]   ----------------------------------------------------------------------
+[03:15:34]   Zstd-3               |     8.91ms |     1.24ms |     0.03ms |     0.03ms
+[03:15:34]   Zstd-9               |     6.74ms |     0.94ms |     0.03ms |     0.03ms
+[03:15:34]   Zstd-19              |     4.26ms |     0.59ms |     0.02ms |     0.02ms
+[03:15:34]   LZ4                  |     5.34ms |     0.75ms |     0.02ms |     0.02ms
+[03:15:34]   Snappy               |     8.72ms |     1.22ms |     0.03ms |     0.03ms
+[03:15:34]   H.265                |    18.69ms |     2.61ms |     0.07ms |     0.07ms
+[03:15:34] 
+============================================================
+[03:15:34] FINAL COMPARISON TABLE
+[03:15:34] ============================================================
+
+[03:15:34]   Compressor           |  Ratio | vs fp32 |    Size |   Decode |   cache=16
+[03:15:34]   ---------------------------------------------------------------------------
+[03:15:34]   LZ4                  |   3.3x |   13.3x | 155.3MB |  1.422ms |    0.020ms
+[03:15:34]   Snappy               |   3.9x |   15.6x | 132.8MB |  2.321ms |    0.032ms
+[03:15:34]   Zstd-3               |   6.8x |   27.0x |  76.5MB |  2.370ms |    0.033ms
+[03:15:34]   Zstd-9               |   7.6x |   30.3x |  68.3MB |  1.793ms |    0.025ms
+[03:15:34]   Zstd-19              |   9.4x |   37.6x |  55.0MB |  1.132ms |    0.016ms
+[03:15:34]   H.265                |   9.8x |   39.1x |  52.8MB |  4.972ms |    0.070ms
+[03:15:34] 
+  KEY INSIGHT:
+[03:15:34]   Zstd-3 vs H.265: 2.1x faster decode, 0.7x worse compression
+[03:15:34]   Zstd-3 replaces H.265 with strictly better performance on both axes.
+[03:15:34]   -> H.265 has 1.4x better compression but 2.1x slower decode.
+[03:15:34] 
+Results saved to results/codec_comparison/compressor_comparison.json

@@ -1,0 +1,379 @@
+{
+  "single_table": [
+    {
+      "name": "Raw uint8 (no compression)",
+      "total_raw_mb": 154.13224,
+      "total_compressed_mb": 154.13224,
+      "compression_ratio": 1.0,
+      "ratio_vs_fp32": 4.0,
+      "avg_compress_ms": 0.7845052083333334,
+      "avg_decompress_ms": 0.0009320576985677084,
+      "p50_decompress_ms": 0.00095367431640625,
+      "n_frames": 75
+    },
+    {
+      "name": "LZ4",
+      "total_raw_mb": 154.13224,
+      "total_compressed_mb": 19.771747,
+      "compression_ratio": 7.795580228697039,
+      "ratio_vs_fp32": 31.182320914788157,
+      "avg_compress_ms": 1.7955843607584636,
+      "avg_decompress_ms": 1.1690382957458496,
+      "p50_decompress_ms": 1.21307373046875,
+      "n_frames": 75
+    },
+    {
+      "name": "LZ4-HC",
+      "total_raw_mb": 154.13224,
+      "total_compressed_mb": 8.352864,
+      "compression_ratio": 18.452621759434848,
+      "ratio_vs_fp32": 73.81048703773939,
+      "avg_compress_ms": 1140.8490816752117,
+      "avg_decompress_ms": 0.5240028699239095,
+      "p50_decompress_ms": 0.5099773406982422,
+      "n_frames": 75
+    },
+    {
+      "name": "Zstd (level 3)",
+      "total_raw_mb": 154.13224,
+      "total_compressed_mb": 9.327336,
+      "compression_ratio": 16.52478692737133,
+      "ratio_vs_fp32": 66.09914770948532,
+      "avg_compress_ms": 4.201119740804036,
+      "avg_decompress_ms": 1.512675444285075,
+      "p50_decompress_ms": 1.5940666198730469,
+      "n_frames": 75
+    },
+    {
+      "name": "Zstd (level 9)",
+      "total_raw_mb": 154.13224,
+      "total_compressed_mb": 7.983929,
+      "compression_ratio": 19.305311958560754,
+      "ratio_vs_fp32": 77.22124783424302,
+      "avg_compress_ms": 26.252950032552082,
+      "avg_decompress_ms": 1.1059810320536296,
+      "p50_decompress_ms": 1.1699199676513672,
+      "n_frames": 75
+    },
+    {
+      "name": "Zstd (level 19)",
+      "total_raw_mb": 154.13224,
+      "total_compressed_mb": 6.436087,
+      "compression_ratio": 23.948128731013114,
+      "ratio_vs_fp32": 95.79251492405245,
+      "avg_compress_ms": 711.5802955627441,
+      "avg_decompress_ms": 0.6547211011250814,
+      "p50_decompress_ms": 0.6840229034423828,
+      "n_frames": 75
+    },
+    {
+      "name": "Snappy",
+      "total_raw_mb": 154.13224,
+      "total_compressed_mb": 18.225664,
+      "compression_ratio": 8.456879266511223,
+      "ratio_vs_fp32": 33.82751706604489,
+      "avg_compress_ms": 2.2679837544759116,
+      "avg_decompress_ms": 1.650286038716634,
+      "p50_decompress_ms": 1.6690492630004883,
+      "n_frames": 75
+    }
+  ],
+  "tiled_layout": [
+    {
+      "name": "LZ4 (tiled layout)",
+      "total_raw_mb": 154.13224,
+      "total_compressed_mb": 22.080616,
+      "compression_ratio": 6.980432067656084,
+      "ratio_vs_fp32": 27.921728270624335,
+      "avg_compress_ms": 4.773422876993815,
+      "avg_decompress_ms": 4.339568138122559,
+      "p50_decompress_ms": 4.384636878967285,
+      "n_frames": 75
+    },
+    {
+      "name": "Zstd (tiled layout)",
+      "total_raw_mb": 154.13224,
+      "total_compressed_mb": 10.444684,
+      "compression_ratio": 14.757003658511833,
+      "ratio_vs_fp32": 59.02801463404733,
+      "avg_compress_ms": 7.33673095703125,
+      "avg_decompress_ms": 4.622348785400391,
+      "p50_decompress_ms": 4.706621170043945,
+      "n_frames": 75
+    }
+  ],
+  "all_tables": [
+    {
+      "name": "Raw uint8 (no compression)",
+      "total_raw_mb": 516.522448,
+      "total_compressed_mb": 516.522448,
+      "compression_ratio": 1.0,
+      "ratio_vs_fp32": 4.0,
+      "avg_compress_ms": 0.9644773062758558,
+      "avg_decompress_ms": 0.0009936610544760396,
+      "p50_decompress_ms": 0.00095367431640625,
+      "n_frames": 254
+    },
+    {
+      "name": "LZ4",
+      "total_raw_mb": 516.522448,
+      "total_compressed_mb": 155.28934,
+      "compression_ratio": 3.3261938520699488,
+      "ratio_vs_fp32": 13.304775408279795,
+      "avg_compress_ms": 3.094641242440291,
+      "avg_decompress_ms": 1.4039480780053326,
+      "p50_decompress_ms": 1.4797449111938477,
+      "n_frames": 254
+    },
+    {
+      "name": "LZ4-HC",
+      "total_raw_mb": 516.522448,
+      "total_compressed_mb": 73.512434,
+      "compression_ratio": 7.026327654992351,
+      "ratio_vs_fp32": 28.105310619969405,
+      "avg_compress_ms": 3080.051822925177,
+      "avg_decompress_ms": 0.671377707654097,
+      "p50_decompress_ms": 0.6771087646484375,
+      "n_frames": 254
+    },
+    {
+      "name": "Zstd (level 3)",
+      "total_raw_mb": 516.522448,
+      "total_compressed_mb": 76.451897,
+      "compression_ratio": 6.7561756904475505,
+      "ratio_vs_fp32": 27.024702761790202,
+      "avg_compress_ms": 6.9367022026242235,
+      "avg_decompress_ms": 2.36474547799178,
+      "p50_decompress_ms": 2.846360206604004,
+      "n_frames": 254
+    },
+    {
+      "name": "Zstd (level 9)",
+      "total_raw_mb": 516.522448,
+      "total_compressed_mb": 68.282237,
+      "compression_ratio": 7.564521472839268,
+      "ratio_vs_fp32": 30.258085891357073,
+      "avg_compress_ms": 44.93998448679766,
+      "avg_decompress_ms": 1.7976653857493963,
+      "p50_decompress_ms": 1.9429922103881836,
+      "n_frames": 254
+    },
+    {
+      "name": "Zstd (level 19)",
+      "total_raw_mb": 516.522448,
+      "total_compressed_mb": 54.954724,
+      "compression_ratio": 9.399054538059367,
+      "ratio_vs_fp32": 37.59621815223747,
+      "avg_compress_ms": 889.1340879004771,
+      "avg_decompress_ms": 1.13693128420612,
+      "p50_decompress_ms": 1.1273622512817383,
+      "n_frames": 254
+    },
+    {
+      "name": "Snappy",
+      "total_raw_mb": 516.522448,
+      "total_compressed_mb": 132.827791,
+      "compression_ratio": 3.88866248630153,
+      "ratio_vs_fp32": 15.55464994520612,
+      "avg_compress_ms": 3.7902950301883727,
+      "avg_decompress_ms": 2.3943563145915356,
+      "p50_decompress_ms": 2.593398094177246,
+      "n_frames": 254
+    },
+    {
+      "name": "H.265 lossless (existing files)",
+      "total_raw_mb": 516.522448,
+      "total_compressed_mb": 52.796185,
+      "compression_ratio": 9.78332900379071,
+      "ratio_vs_fp32": 39.13331601516284,
+      "avg_compress_ms": 83.0,
+      "avg_decompress_ms": 5.201445414325383,
+      "p50_decompress_ms": 5.066394805908203,
+      "n_frames": 254
+    }
+  ],
+  "h265_existing": {
+    "name": "H.265 lossless (existing files)",
+    "total_raw_mb": 516.522448,
+    "total_compressed_mb": 52.796185,
+    "compression_ratio": 9.78332900379071,
+    "ratio_vs_fp32": 39.13331601516284,
+    "avg_compress_ms": 83.0,
+    "avg_decompress_ms": 5.201445414325383,
+    "p50_decompress_ms": 5.066394805908203,
+    "n_frames": 254
+  },
+  "granularity": {
+    "LZ4_512": {
+      "name": "LZ4",
+      "total_raw_mb": 10.368,
+      "total_compressed_mb": 1.515909,
+      "compression_ratio": 6.839460680027627,
+      "ratio_vs_fp32": 27.357842720110508,
+      "avg_compress_ms": 0.008609434251348367,
+      "avg_decompress_ms": 0.006168110864045684,
+      "p50_decompress_ms": 0.005245208740234375,
+      "n_frames": 1266
+    },
+    "Zstd (level 3)_512": {
+      "name": "Zstd (level 3)",
+      "total_raw_mb": 10.368,
+      "total_compressed_mb": 0.763961,
+      "compression_ratio": 13.571373407804849,
+      "ratio_vs_fp32": 54.285493631219396,
+      "avg_compress_ms": 0.020074806695489146,
+      "avg_decompress_ms": 0.010473694281555465,
+      "p50_decompress_ms": 0.009298324584960938,
+      "n_frames": 1266
+    },
+    "Snappy_512": {
+      "name": "Snappy",
+      "total_raw_mb": 10.368,
+      "total_compressed_mb": 1.363063,
+      "compression_ratio": 7.606398236912014,
+      "ratio_vs_fp32": 30.425592947648056,
+      "avg_compress_ms": 0.01096593636848727,
+      "avg_decompress_ms": 0.010260435830548665,
+      "p50_decompress_ms": 0.009775161743164062,
+      "n_frames": 1266
+    },
+    "LZ4_1024": {
+      "name": "LZ4",
+      "total_raw_mb": 10.368,
+      "total_compressed_mb": 1.484787,
+      "compression_ratio": 6.982819757985489,
+      "ratio_vs_fp32": 27.931279031941955,
+      "avg_compress_ms": 0.0149047393557773,
+      "avg_decompress_ms": 0.010366311758803719,
+      "p50_decompress_ms": 0.008106231689453125,
+      "n_frames": 633
+    },
+    "Zstd (level 3)_1024": {
+      "name": "Zstd (level 3)",
+      "total_raw_mb": 10.368,
+      "total_compressed_mb": 0.726489,
+      "compression_ratio": 14.271379195005018,
+      "ratio_vs_fp32": 57.08551678002007,
+      "avg_compress_ms": 0.0338060972626552,
+      "avg_decompress_ms": 0.01665521383662171,
+      "p50_decompress_ms": 0.013828277587890625,
+      "n_frames": 633
+    },
+    "Snappy_1024": {
+      "name": "Snappy",
+      "total_raw_mb": 10.368,
+      "total_compressed_mb": 1.3425,
+      "compression_ratio": 7.722905027932961,
+      "ratio_vs_fp32": 30.891620111731843,
+      "avg_compress_ms": 0.01788290002711388,
+      "avg_decompress_ms": 0.016503914084291384,
+      "p50_decompress_ms": 0.015020370483398438,
+      "n_frames": 633
+    },
+    "LZ4_4096": {
+      "name": "LZ4",
+      "total_raw_mb": 10.368,
+      "total_compressed_mb": 1.456293,
+      "compression_ratio": 7.119446430079662,
+      "ratio_vs_fp32": 28.477785720318646,
+      "avg_compress_ms": 0.05444940531028891,
+      "avg_decompress_ms": 0.03419867101705299,
+      "p50_decompress_ms": 0.024318695068359375,
+      "n_frames": 159
+    },
+    "Zstd (level 3)_4096": {
+      "name": "Zstd (level 3)",
+      "total_raw_mb": 10.368,
+      "total_compressed_mb": 0.686645,
+      "compression_ratio": 15.099505566923229,
+      "ratio_vs_fp32": 60.398022267692916,
+      "avg_compress_ms": 0.114919254614872,
+      "avg_decompress_ms": 0.05213239657803901,
+      "p50_decompress_ms": 0.038623809814453125,
+      "n_frames": 159
+    },
+    "Snappy_4096": {
+      "name": "Snappy",
+      "total_raw_mb": 10.368,
+      "total_compressed_mb": 1.319934,
+      "compression_ratio": 7.854938201455528,
+      "ratio_vs_fp32": 31.41975280582211,
+      "avg_compress_ms": 0.059265760505724255,
+      "avg_decompress_ms": 0.05386145609729695,
+      "p50_decompress_ms": 0.0476837158203125,
+      "n_frames": 159
+    },
+    "LZ4_16384": {
+      "name": "LZ4",
+      "total_raw_mb": 10.368,
+      "total_compressed_mb": 1.339023,
+      "compression_ratio": 7.742958858809744,
+      "ratio_vs_fp32": 30.971835435238976,
+      "avg_compress_ms": 0.2077639102935791,
+      "avg_decompress_ms": 0.12012958526611328,
+      "p50_decompress_ms": 0.08666515350341797,
+      "n_frames": 40
+    },
+    "Zstd (level 3)_16384": {
+      "name": "Zstd (level 3)",
+      "total_raw_mb": 10.368,
+      "total_compressed_mb": 0.685956,
+      "compression_ratio": 15.114672078092472,
+      "ratio_vs_fp32": 60.45868831236989,
+      "avg_compress_ms": 0.4368007183074951,
+      "avg_decompress_ms": 0.19536077976226807,
+      "p50_decompress_ms": 0.14162063598632812,
+      "n_frames": 40
+    },
+    "Snappy_16384": {
+      "name": "Snappy",
+      "total_raw_mb": 10.368,
+      "total_compressed_mb": 1.319578,
+      "compression_ratio": 7.857057331965219,
+      "ratio_vs_fp32": 31.428229327860876,
+      "avg_compress_ms": 0.22600889205932617,
+      "avg_decompress_ms": 0.2037656307220459,
+      "p50_decompress_ms": 0.17845630645751953,
+      "n_frames": 40
+    },
+    "LZ4_129600": {
+      "name": "LZ4",
+      "total_raw_mb": 10.368,
+      "total_compressed_mb": 1.335707,
+      "compression_ratio": 7.762181376604301,
+      "ratio_vs_fp32": 31.048725506417203,
+      "avg_compress_ms": 1.7090320587158203,
+      "avg_decompress_ms": 1.0156059265136719,
+      "p50_decompress_ms": 1.0291337966918945,
+      "n_frames": 5
+    },
+    "Zstd (level 3)_129600": {
+      "name": "Zstd (level 3)",
+      "total_raw_mb": 10.368,
+      "total_compressed_mb": 0.680672,
+      "compression_ratio": 15.232006017582624,
+      "ratio_vs_fp32": 60.928024070330494,
+      "avg_compress_ms": 3.7386417388916016,
+      "avg_decompress_ms": 1.523427963256836,
+      "p50_decompress_ms": 1.4643669128417969,
+      "n_frames": 5
+    },
+    "Snappy_129600": {
+      "name": "Snappy",
+      "total_raw_mb": 10.368,
+      "total_compressed_mb": 1.319435,
+      "compression_ratio": 7.8579088776635455,
+      "ratio_vs_fp32": 31.431635510654182,
+      "avg_compress_ms": 1.929473876953125,
+      "avg_decompress_ms": 1.6765832901000977,
+      "p50_decompress_ms": 1.6292333602905273,
+      "n_frames": 5
+    }
+  },
+  "metadata": {
+    "test_table": 2,
+    "n_rows": 9633265,
+    "rows_per_frame": 129600,
+    "raw_frame_bytes": 2073600
+  }
+}
