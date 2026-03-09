@@ -1,0 +1,102 @@
+Unable to import mlperf_logging,  No module named 'mlperf_logging'
+Unable to import onnx.  No module named 'onnx'
+[03:24:05] Loading dataset...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+[03:26:11] Loading checkpoint...
+[03:26:12] Model loaded: 26 tables, emb_dim=16
+[03:26:15] Loading hot/cold split...
+[03:26:16]   Table 2: 9,633,265 cold rows, scale=0.001073, zp=88
+[03:26:16]   Table 3: 2,168,208 cold rows, scale=0.001098, zp=109
+[03:26:16]   Table 9: 88,486 cold rows, scale=0.000608, zp=158
+[03:26:17]   Table 11: 7,965,378 cold rows, scale=0.000862, zp=158
+[03:26:17]   Table 15: 5,267,563 cold rows, scale=0.000984, zp=117
+[03:26:17]   Table 20: 6,741,517 cold rows, scale=0.000497, zp=129
+[03:26:17]   Table 23: 280,517 cold rows, scale=0.001519, zp=197
+[03:26:17]   Table 25: 137,719 cold rows, scale=0.001327, zp=126
+[03:26:17] 
+============================================================
+[03:26:17] BASELINE (fp32)
+[03:26:17] ============================================================
+/home/cc/expr/dlrm_minrui/dlrm_data_pytorch.py:328: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor. (Triggered internally at /pytorch/torch/csrc/utils/tensor_new.cpp:253.)
+  X_int = torch.log(torch.tensor(transposed_data[0], dtype=torch.float) + 1)
+[03:26:57]   Baseline: AUC=0.802497, LogLoss=0.727019, Acc=0.2614
+[03:26:57] 
+============================================================
+[03:26:57] LOSSLESS QUANTIZATION (uint8 round-trip, no codec)
+[03:26:57] ============================================================
+[03:27:44]   Quantized: AUC=0.802496 (delta=-0.000001), LogLoss=0.727020, Acc=0.2614
+[03:27:44] 
+============================================================
+[03:27:44] CRF = 0 (lossless)
+[03:27:44] ============================================================
+[03:28:14]   Compression: 52.0MB, ratio=9.9x vs uint8
+[03:28:14]   Error (uint8): MSE=0.0000, MaxErr=0/255
+[03:28:14]   Error (fp32): MSE~0.0000000000
+[03:28:14]   Encode: avg=51.0ms/frame
+[03:28:14]   Decode: avg=40.051ms/frame
+[03:29:04]   AUC=0.802496 (delta=-0.000001), LogLoss=0.727020, Acc=0.2614
+[03:29:04] 
+============================================================
+[03:29:04] CRF = 10 (lossy)
+[03:29:04] ============================================================
+[03:29:31]   Compression: 24.7MB, ratio=20.9x vs uint8
+[03:29:31]   Error (uint8): MSE=0.1392, MaxErr=7/255
+[03:29:31]   Error (fp32): MSE~0.0000001603
+[03:29:31]   Encode: avg=50.9ms/frame
+[03:29:31]   Decode: avg=28.837ms/frame
+[03:30:06]   AUC=0.802463 (delta=-0.000034), LogLoss=0.727027, Acc=0.2614
+[03:30:06] 
+============================================================
+[03:30:06] CRF = 18 (lossy)
+[03:30:06] ============================================================
+[03:30:26]   Compression: 2.3MB, ratio=225.5x vs uint8
+[03:30:26]   Error (uint8): MSE=0.2183, MaxErr=19/255
+[03:30:26]   Error (fp32): MSE~0.0000002513
+[03:30:26]   Encode: avg=38.9ms/frame
+[03:30:26]   Decode: avg=11.878ms/frame
+[03:31:00]   AUC=0.802397 (delta=-0.000100), LogLoss=0.727040, Acc=0.2614
+[03:31:00] 
+============================================================
+[03:31:00] CRF = 23 (lossy)
+[03:31:00] ============================================================
+[03:31:19]   Compression: 1.2MB, ratio=434.1x vs uint8
+[03:31:19]   Error (uint8): MSE=0.2426, MaxErr=28/255
+[03:31:19]   Error (fp32): MSE~0.0000002793
+[03:31:19]   Encode: avg=37.6ms/frame
+[03:31:19]   Decode: avg=10.547ms/frame
+[03:31:54]   AUC=0.802307 (delta=-0.000190), LogLoss=0.727060, Acc=0.2614
+[03:31:54] 
+============================================================
+[03:31:54] CRF = 28 (lossy)
+[03:31:54] ============================================================
+[03:32:13]   Compression: 0.9MB, ratio=596.1x vs uint8
+[03:32:13]   Error (uint8): MSE=0.2711, MaxErr=56/255
+[03:32:13]   Error (fp32): MSE~0.0000003122
+[03:32:13]   Encode: avg=36.1ms/frame
+[03:32:13]   Decode: avg=9.674ms/frame
+[03:32:47]   AUC=0.802181 (delta=-0.000316), LogLoss=0.727087, Acc=0.2614
+[03:32:47] 
+============================================================
+[03:32:47] CRF ACCURACY SWEEP SUMMARY
+[03:32:47] ============================================================
+
+[03:32:47]   Config               |        AUC |      Delta |  Ratio |    Size |   Decode |  MaxErr
+[03:32:47]   --------------------------------------------------------------------------------
+[03:32:47]   Baseline (fp32)      |   0.802497 |        --- |   1.0x |  2061MB |      N/A |       0
+[03:32:47]   Quantized uint8      |   0.802496 |  -0.000001 |   4.0x |   516MB |      N/A |       0
+[03:32:47]   CRF=0 (lossless)     |   0.802496 |  -0.000001 |   9.9x |  52.0MB |  40.05ms |     0/255
+[03:32:47]   CRF=10               |   0.802463 |  -0.000034 |  20.9x |  24.7MB |  28.84ms |     7/255
+[03:32:47]   CRF=18               |   0.802397 |  -0.000100 | 225.5x |   2.3MB |  11.88ms |    19/255
+[03:32:47]   CRF=23               |   0.802307 |  -0.000190 | 434.1x |   1.2MB |  10.55ms |    28/255
+[03:32:47]   CRF=28               |   0.802181 |  -0.000316 | 596.1x |   0.9MB |   9.67ms |    56/255
+[03:32:47] 
+Results saved to results/codec_comparison/crf_accuracy_sweep.json
