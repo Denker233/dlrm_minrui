@@ -2736,7 +2736,7 @@ torch::Tensor encode_frame_codec(
                        "lossless=1:log-level=error", 0);
         } else {
             av_opt_set(enc_ctx->priv_data, "preset", "ultrafast", 0);
-            char params[128];
+            char params[512];
             snprintf(params, sizeof(params), "crf=%d:log-level=error", crf);
             av_opt_set(enc_ctx->priv_data, "x265-params", params, 0);
         }
@@ -2876,6 +2876,151 @@ torch::Tensor encode_frame_codec(
         return torch::empty({0}, torch::kUInt8);
     }
 }
+
+/**
+ * encode_frame_with_params - Like encode_frame_codec but accepts custom codec params string.
+ *
+ * For H.265, extra_params is appended to x265-params (e.g., "slices=4:wpp=1").
+ * For H.264, extra_params is appended to x264-params.
+ */
+void encode_frame_with_params(
+    const torch::Tensor& frame,
+    const std::string& output_path,
+    const std::string& codec_name,
+    bool lossless,
+    int crf,
+    const std::string& extra_params)
+{
+    TORCH_CHECK(frame.scalar_type() == torch::kUInt8, "Frame must be uint8");
+    TORCH_CHECK(frame.dim() == 2, "Frame must be 2D (H, W)");
+
+    av_log_set_level(AV_LOG_ERROR);
+
+    auto frame_c = frame.contiguous();
+    int width = frame_c.size(1);
+    int height = frame_c.size(0);
+    const uint8_t* src = frame_c.data_ptr<uint8_t>();
+
+    const AVCodec* codec = nullptr;
+    AVPixelFormat pix_fmt = AV_PIX_FMT_GRAY8;
+
+    if (codec_name == "h265" || codec_name == "hevc") {
+        codec = avcodec_find_encoder_by_name("libx265");
+        if (!codec) codec = avcodec_find_encoder(AV_CODEC_ID_HEVC);
+    } else if (codec_name == "h264" || codec_name == "avc") {
+        codec = avcodec_find_encoder_by_name("libx264");
+        if (!codec) codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+        pix_fmt = AV_PIX_FMT_YUV420P;
+    } else if (codec_name == "ffv1") {
+        codec = avcodec_find_encoder(AV_CODEC_ID_FFV1);
+    }
+    TORCH_CHECK(codec != nullptr, "Encoder not found for codec: ", codec_name);
+
+    AVFormatContext* fmt_ctx = nullptr;
+    avformat_alloc_output_context2(&fmt_ctx, nullptr, "matroska", output_path.c_str());
+    TORCH_CHECK(fmt_ctx != nullptr, "Failed to allocate output context");
+
+    AVStream* stream = avformat_new_stream(fmt_ctx, codec);
+    TORCH_CHECK(stream != nullptr, "Failed to create stream");
+
+    AVCodecContext* enc_ctx = avcodec_alloc_context3(codec);
+    enc_ctx->width = width;
+    enc_ctx->height = height;
+    enc_ctx->pix_fmt = pix_fmt;
+    enc_ctx->time_base = {1, 1};
+    enc_ctx->framerate = {1, 1};
+    enc_ctx->gop_size = 1;
+    enc_ctx->thread_count = 1;
+
+    if (codec_name == "h265" || codec_name == "hevc") {
+        av_opt_set(enc_ctx->priv_data, "preset", "ultrafast", 0);
+        char params[512];
+        if (lossless || crf == 0) {
+            snprintf(params, sizeof(params), "lossless=1:log-level=error");
+        } else {
+            snprintf(params, sizeof(params), "crf=%d:log-level=error", crf);
+        }
+        if (!extra_params.empty()) {
+            strncat(params, ":", sizeof(params) - strlen(params) - 1);
+            strncat(params, extra_params.c_str(), sizeof(params) - strlen(params) - 1);
+        }
+        av_opt_set(enc_ctx->priv_data, "x265-params", params, 0);
+    } else if (codec_name == "h264" || codec_name == "avc") {
+        av_opt_set(enc_ctx->priv_data, "preset", "ultrafast", 0);
+        if (lossless) {
+            av_opt_set(enc_ctx->priv_data, "qp", "0", 0);
+        } else {
+            char crf_str[16];
+            snprintf(crf_str, sizeof(crf_str), "%d", crf);
+            av_opt_set(enc_ctx->priv_data, "crf", crf_str, 0);
+        }
+        if (!extra_params.empty()) {
+            av_opt_set(enc_ctx->priv_data, "x264-params", extra_params.c_str(), 0);
+        }
+    } else if (codec_name == "ffv1") {
+        enc_ctx->level = 3;
+        enc_ctx->slices = 4;  // FFV1 supports multi-slice
+    }
+
+    if (fmt_ctx->oformat->flags & AVFMT_GLOBALHEADER)
+        enc_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+    int ret = avcodec_open2(enc_ctx, codec, nullptr);
+    TORCH_CHECK(ret >= 0, "Failed to open encoder");
+
+    avcodec_parameters_from_context(stream->codecpar, enc_ctx);
+
+    ret = avio_open(&fmt_ctx->pb, output_path.c_str(), AVIO_FLAG_WRITE);
+    TORCH_CHECK(ret >= 0, "Failed to open output file: ", output_path);
+
+    ret = avformat_write_header(fmt_ctx, nullptr);
+    TORCH_CHECK(ret >= 0, "Failed to write header");
+
+    AVFrame* av_frame = av_frame_alloc();
+    av_frame->format = pix_fmt;
+    av_frame->width = width;
+    av_frame->height = height;
+    ret = av_frame_get_buffer(av_frame, 0);
+
+    if (pix_fmt == AV_PIX_FMT_GRAY8) {
+        for (int y = 0; y < height; y++) {
+            std::memcpy(av_frame->data[0] + y * av_frame->linesize[0],
+                       src + y * width, width);
+        }
+    } else if (pix_fmt == AV_PIX_FMT_YUV420P) {
+        for (int y = 0; y < height; y++) {
+            std::memcpy(av_frame->data[0] + y * av_frame->linesize[0],
+                       src + y * width, width);
+        }
+        int chroma_h = (height + 1) / 2;
+        int chroma_w = (width + 1) / 2;
+        for (int y = 0; y < chroma_h; y++) {
+            std::memset(av_frame->data[1] + y * av_frame->linesize[1], 128, chroma_w);
+            std::memset(av_frame->data[2] + y * av_frame->linesize[2], 128, chroma_w);
+        }
+    }
+
+    av_frame->pts = 0;
+    AVPacket* pkt = av_packet_alloc();
+    avcodec_send_frame(enc_ctx, av_frame);
+    avcodec_send_frame(enc_ctx, nullptr);
+
+    while (true) {
+        ret = avcodec_receive_packet(enc_ctx, pkt);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
+        pkt->stream_index = stream->index;
+        av_interleaved_write_frame(fmt_ctx, pkt);
+        av_packet_unref(pkt);
+    }
+
+    av_write_trailer(fmt_ctx);
+    av_packet_free(&pkt);
+    av_frame_free(&av_frame);
+    avcodec_free_context(&enc_ctx);
+    avio_closep(&fmt_ctx->pb);
+    avformat_free_context(fmt_ctx);
+}
+
 
 /**
  * batch_encode_frames_codec - Encode multiple frames to files in parallel using specified codec.
@@ -3395,6 +3540,64 @@ std::vector<torch::Tensor> batch_decode_frames(
 }
 
 
+// scan_needed_frames: given batch indices, find which cold frames are needed per table.
+// Replaces the Python loop over compressed tables with a single fused C++ call.
+// Returns a list of K int64 tensors (one per compressed table), each containing
+// the unique frame IDs needed for this batch.
+std::vector<torch::Tensor> scan_needed_frames(
+    const std::vector<torch::Tensor>& lS_i_list,      // K tensors, each [N] int64
+    const std::vector<torch::Tensor>& is_hot_list,     // K bool tensors, each [num_emb] bool
+    const std::vector<torch::Tensor>& o2c_map_list,    // K int32 tensors, each [num_emb] int32
+    int64_t rows_per_frame
+) {
+    const int64_t K = lS_i_list.size();
+    TORCH_CHECK((int64_t)is_hot_list.size() == K, "is_hot_list size mismatch");
+    TORCH_CHECK((int64_t)o2c_map_list.size() == K, "o2c_map_list size mismatch");
+
+    std::vector<torch::Tensor> results(K);
+
+    // Process tables in parallel
+    at::parallel_for(0, K, 1, [&](int64_t k_begin, int64_t k_end) {
+        for (int64_t k = k_begin; k < k_end; k++) {
+            const auto& indices = lS_i_list[k];
+            const auto& is_hot = is_hot_list[k];
+            const auto& o2c = o2c_map_list[k];
+
+            const int64_t N = indices.size(0);
+            const int64_t* idx_ptr = indices.data_ptr<int64_t>();
+            const bool* hot_ptr = is_hot.data_ptr<bool>();
+            const int32_t* o2c_ptr = o2c.data_ptr<int32_t>();
+
+            // Collect unique frame IDs using a small set
+            std::unordered_set<int64_t> frame_set;
+            for (int64_t i = 0; i < N; i++) {
+                int64_t idx = idx_ptr[i];
+                if (!hot_ptr[idx]) {
+                    int32_t cold_idx = o2c_ptr[idx];
+                    if (cold_idx >= 0) {
+                        int64_t fid = static_cast<int64_t>(cold_idx) / rows_per_frame;
+                        frame_set.insert(fid);
+                    }
+                }
+            }
+
+            if (frame_set.empty()) {
+                results[k] = torch::empty({0}, torch::dtype(torch::kInt64));
+            } else {
+                auto out = torch::empty({(int64_t)frame_set.size()}, torch::dtype(torch::kInt64));
+                int64_t* out_ptr = out.data_ptr<int64_t>();
+                int64_t j = 0;
+                for (int64_t fid : frame_set) {
+                    out_ptr[j++] = fid;
+                }
+                results[k] = out;
+            }
+        }
+    });
+
+    return results;
+}
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("compressed_emb_bag_forward", &compressed_emb_bag_forward,
           "Compressed EmbeddingBag forward (hot path in C++, returns cold_mask)");
@@ -3482,4 +3685,14 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           "Encode multiple frames in parallel with specified codec",
           py::arg("frames"), py::arg("output_dir"),
           py::arg("codec_name") = "h265", py::arg("lossless") = true);
+    m.def("encode_frame_with_params", &encode_frame_with_params,
+          "Encode single frame with custom codec params (e.g., slices, wpp)",
+          py::arg("frame"), py::arg("output_path"),
+          py::arg("codec_name") = "h265", py::arg("lossless") = true,
+          py::arg("crf") = 0, py::arg("extra_params") = "");
+    // Fused scan for needed frames
+    m.def("scan_needed_frames", &scan_needed_frames,
+          "Scan batch indices to find needed cold frames per table (fused C++)",
+          py::arg("lS_i_list"), py::arg("is_hot_list"),
+          py::arg("o2c_map_list"), py::arg("rows_per_frame"));
 }
