@@ -7,16 +7,18 @@
 | Baseline (fp32) | None | 2,061 | 0.802497 | — | 4.21 | — |
 | Quantize (uint8) | In-memory | 539 | 0.802481 | -0.002% | ~4.2 | ~0% |
 | mmap (uint8) | OS page cache | 539 | 0.802481 | -0.002% | 5.72 | +36% |
-| **Zstd-19 + LRU** | **C++ fused** | **55** | **0.802496** | **-0.0001%** | **5.35** | **+27%** |
-| Zstd-3 + LRU | C++ fused | 77 | 0.802496 | -0.0001% | 5.55 | +32% |
-| H.265 CRF=0 + LRU | Python + cache | 53 | 0.802496 | -0.0001% | 6.19 | +47% |
-| H.265 CRF=18 + LRU | Lossy | 4.3 | 0.802397 | -0.012% | ~6.0 | ~43% |
+| **Zstd-19 cache=4** | **C++ fused** | **55** | **0.802496** | **-0.0001%** | **5.15** | **+28%** |
+| Zstd-19 cache=16 | C++ fused | 55 | 0.802496 | -0.0001% | 5.35 | +27% |
+| Zstd-3 cache=16 | C++ fused | 77 | 0.802496 | -0.0001% | 5.55 | +32% |
+| H.265 CRF=0 cache=16 | Python + cache | 53 | 0.802496 | -0.0001% | 6.19 | +47% |
+| H.265 CRF=18 cache=16 | Lossy | 4.3 | 0.802397 | -0.012% | ~6.0 | ~43% |
 
 Notes:
 - All lossless systems achieve AUC within 0.002% of baseline (quantization noise)
 - BLat = mean batch latency over 1,599 batches (batch_size=2048)
-- LRU cache = 16 frames, 99.84% hit rate (22 misses in 13,812 frame accesses)
+- LRU cache hit rate: 99.84% for cache >= 4 (22 misses in 13,812 frame accesses)
 - Zstd-19 uses C++ fused scan+scatter pipeline; H.265 uses Python decode path
+- Cache=4 uses only 33MB cache memory vs 133MB for cache=16
 
 ## Table 2: Compression Ratio
 
