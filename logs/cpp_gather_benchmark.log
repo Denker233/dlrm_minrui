@@ -1,0 +1,61 @@
+[04:57:11] Loading model...
+[04:57:12] Building cold storage...
+[04:58:07]   Table 2: 9,633,265 cold, 75 frames
+[04:58:26]   Table 3: 2,168,208 cold, 17 frames
+[04:58:26]   Table 9: 88,486 cold, 1 frames
+[04:59:22]   Table 11: 7,965,378 cold, 62 frames
+[05:00:00]   Table 15: 5,267,563 cold, 41 frames
+[05:00:59]   Table 20: 6,741,517 cold, 53 frames
+[05:01:01]   Table 23: 280,517 cold, 3 frames
+[05:01:02]   Table 25: 137,719 cold, 2 frames
+[05:01:02] Loading test data...
+Unable to import mlperf_logging,  No module named 'mlperf_logging'
+Unable to import onnx.  No module named 'onnx'
+[05:01:02] Loading dataset...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+[05:03:06] Loading checkpoint...
+[05:03:07] Model loaded: 26 tables, emb_dim=16
+[05:03:11] Warming up caches...
+/home/cc/expr/dlrm_minrui/dlrm_data_pytorch.py:328: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor. (Triggered internally at /pytorch/torch/csrc/utils/tensor_new.cpp:253.)
+  X_int = torch.log(torch.tensor(transposed_data[0], dtype=torch.float) + 1)
+[05:03:12] 
+Benchmarking Python scan + Python gather...
+[05:03:46] Benchmarking C++ scan + Python gather...
+[05:04:18] Benchmarking C++ scan + C++ gather...
+[05:04:44] 
+Verifying correctness...
+[05:04:45]   Correctness: PASS
+[05:04:45] 
+============================================================
+[05:04:45] SCAN+GATHER BENCHMARK RESULTS
+[05:04:45] ============================================================
+[05:04:45]   Batches: 1599
+[05:04:45] 
+  Python scan + Python gather:
+[05:04:45]     Mean: 2.017 ms
+[05:04:45]     p50:  1.873 ms
+[05:04:45]     p99:  4.053 ms
+[05:04:45] 
+  C++ scan + Python gather:
+[05:04:45]     Mean: 1.593 ms
+[05:04:45]     p50:  1.493 ms
+[05:04:45]     p99:  3.367 ms
+[05:04:45] 
+  C++ scan + C++ gather:
+[05:04:45]     Mean: 0.693 ms
+[05:04:45]     p50:  0.608 ms
+[05:04:45]     p99:  4.395 ms
+[05:04:45] 
+  Speedup (C++ scan only): 1.27x
+[05:04:45]   Speedup (C++ scan+gather): 2.91x
+[05:04:45] 
+Results saved to results/codec_comparison/scan_gather_benchmark.json

@@ -42,16 +42,28 @@ This is a unique capability of video codecs that general-purpose compressors can
 
 | Config | AUC | Batch Latency | Overhead | Storage |
 |--------|-----|---------------|----------|---------|
-| Baseline (fp32) | 0.802497 | 4.77ms | --- | 2,061MB |
-| mmap (uint8) | 0.802481 | 5.72ms | +20% | 539MB |
-| Zstd-19 cache=16 | 0.802496 | 6.13ms | +29% | 55MB |
-| Zstd-3 cache=16 | 0.802496 | 6.50ms | +36% | 77MB |
-| H.265 CRF=0 cache=16 | 0.802496 | 6.19ms | +30% | 53MB |
+| Baseline (fp32) | 0.802497 | 3.87ms | --- | 2,061MB |
+| mmap (uint8) | 0.802481 | 5.72ms | +48% | 539MB |
+| **Zstd-19 cache=16** | **0.802496** | **5.04ms** | **+30%** | **55MB** |
+| Zstd-3 cache=16 | 0.802496 | 5.95ms | +54% | 77MB |
+| H.265 CRF=0 cache=16 | 0.802496 | 6.19ms | +60% | 53MB |
 
 **Cache statistics** (cache=16 frames):
 - Hit rate: 99.84% (22 misses in 13,812 accesses)
-- Actual decode: 0.010ms/batch (negligible)
-- Scan overhead: 2.2ms/batch (Python-level cold index scanning)
+- Actual decode: 0.08ms/batch (negligible)
+- Scan+gather overhead: 0.88ms/batch (C++ fused scan + C++ gather)
+
+## 3b. C++ Scan+Gather Optimization
+
+| Method | Mean (ms) | p50 (ms) | p99 (ms) |
+|--------|-----------|----------|----------|
+| Python scan + Python gather | 2.017 | 1.873 | 4.053 |
+| C++ scan + Python gather | 1.593 | 1.493 | 3.367 |
+| **C++ scan + C++ gather** | **0.693** | **0.608** | 4.395 |
+
+**Speedup: 2.9x** over pure Python with zero correctness errors.
+The C++ scan alone is 6.4x faster (0.138ms vs 0.886ms); adding C++ gather
+eliminates the remaining Python tensor indexing overhead.
 
 ## 4. mmap Baseline
 
@@ -110,12 +122,34 @@ Baseline: 4.16ms mean, 5.58ms p99
 Only 22 frame misses across all 1,599 batches (13,812 frame accesses).
 Cache memory cost: 4 frames * 129,600 rows * 16 bytes * 4 (fp32) = 33MB.
 
+## 7. Per-Table Compression Analysis
+
+Compression ratio varies dramatically across tables, correlated with data entropy.
+
+| Table | Cold Rows | Raw MB | Entropy (bits/byte) | Row Diff | Zstd-19 | H.265 |
+|-------|-----------|--------|---------------------|----------|---------|-------|
+| 2     | 9.6M      | 154.1  | 0.29                | 0.08     | 23.9x   | 27.9x |
+| 11    | 8.0M      | 127.4  | 0.69                | 0.23     | 11.9x   | 12.0x |
+| 15    | 5.3M      | 84.3   | 0.79                | 0.27     | 10.6x   | 10.5x |
+| 3     | 2.2M      | 34.7   | 1.33                | 0.57     | 5.6x    | 6.0x  |
+| 20    | 6.7M      | 107.9  | 1.39                | 0.63     | 5.2x    | 5.6x  |
+| 23    | 0.3M      | 4.5    | 2.00                | 1.10     | 3.7x    | 3.9x  |
+| 25    | 0.1M      | 2.2    | 2.69                | 1.79     | 2.9x    | 2.8x  |
+| 9     | 0.1M      | 1.4    | 3.91                | 4.30     | 2.0x    | 1.9x  |
+
+**Correlation**: Entropy vs Zstd-19 ratio: r = -0.763 (lower entropy = better compression).
+
+**Key insight**: Table 2 (largest, 154MB) has the lowest entropy (0.29) and gets the best
+compression (23.9x), accounting for most of the aggregate compression benefit. Tables with
+higher entropy (>2 bits/byte) get modest 2-4x compression regardless of codec.
+
 ### Recommended approach for production:
 1. **Hot/cold split** with 4.3% hot threshold
 2. **Zstd-19** for lossless cold compression (9.4x ratio, 1.13ms decode)
-3. **LRU frame cache** size=16 (99.84% hit rate)
-4. **Frequency-based reordering** for cache locality (not compression)
-5. Total: **37x memory reduction**, **29% latency overhead**, **<0.01% AUC loss**
+3. **LRU frame cache** size=4 (99.84% hit rate, 33MB cache memory)
+4. **C++ fused scan+gather** for 2.9x faster cold lookup (0.7ms vs 2.0ms)
+5. **Frequency-based reordering** for cache locality (not compression)
+6. Total: **37x memory reduction**, **30% latency overhead**, **<0.01% AUC loss**
 
 ### When to use H.265 instead:
 - Need >10x compression (use CRF=18 for 225x)

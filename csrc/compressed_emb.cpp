@@ -3598,6 +3598,92 @@ std::vector<torch::Tensor> scan_needed_frames(
     return results;
 }
 
+
+// gather_cold_embeddings: given batch indices, cached frames, and mappings,
+// produce fp32 cold embeddings for each cold index. Fuses the Python gather loop.
+//
+// For each compressed table k:
+//   1. Find cold indices in the batch (those where is_hot[idx] == false)
+//   2. Map to cold_reordered via o2c_map
+//   3. Compute frame_id and row_in_frame
+//   4. Gather from the cached frame tensors
+//
+// Returns a list of K tensors, each (n_cold_in_batch, emb_dim) fp32,
+// plus a list of K int64 tensors containing the original cold indices.
+std::vector<torch::Tensor> gather_cold_embeddings(
+    const std::vector<torch::Tensor>& lS_i_list,      // K tensors, each [N] int64
+    const std::vector<torch::Tensor>& is_hot_list,     // K bool tensors
+    const std::vector<torch::Tensor>& o2c_map_list,    // K int32 tensors
+    const std::vector<std::vector<torch::Tensor>>& cached_frames_list, // K lists of frame tensors
+    const std::vector<int64_t>& frame_offsets_list,    // K values: first frame ID for each table
+    int64_t rows_per_frame,
+    int64_t emb_dim
+) {
+    const int64_t K = lS_i_list.size();
+    // Returns: [gathered_0, orig_cold_idx_0, gathered_1, orig_cold_idx_1, ...]
+    std::vector<torch::Tensor> results(2 * K);
+
+    at::parallel_for(0, K, 1, [&](int64_t k_begin, int64_t k_end) {
+        for (int64_t k = k_begin; k < k_end; k++) {
+            const auto& indices = lS_i_list[k];
+            const auto& is_hot = is_hot_list[k];
+            const auto& o2c = o2c_map_list[k];
+            const auto& cached_frames = cached_frames_list[k];
+            const int64_t frame_offset = frame_offsets_list[k];
+
+            const int64_t N = indices.size(0);
+            const int64_t* idx_ptr = indices.data_ptr<int64_t>();
+            const bool* hot_ptr = is_hot.data_ptr<bool>();
+            const int32_t* o2c_ptr = o2c.data_ptr<int32_t>();
+
+            // First pass: count cold indices
+            int64_t n_cold = 0;
+            for (int64_t i = 0; i < N; i++) {
+                if (!hot_ptr[idx_ptr[i]]) n_cold++;
+            }
+
+            if (n_cold == 0) {
+                results[2*k] = torch::empty({0, emb_dim}, torch::kFloat32);
+                results[2*k+1] = torch::empty({0}, torch::kInt64);
+                continue;
+            }
+
+            auto gathered = torch::empty({n_cold, emb_dim}, torch::kFloat32);
+            auto orig_indices = torch::empty({n_cold}, torch::kInt64);
+            float* g_ptr = gathered.data_ptr<float>();
+            int64_t* oi_ptr = orig_indices.data_ptr<int64_t>();
+
+            int64_t j = 0;
+            for (int64_t i = 0; i < N; i++) {
+                int64_t idx = idx_ptr[i];
+                if (!hot_ptr[idx]) {
+                    int32_t cold_idx = o2c_ptr[idx];
+                    int64_t fid = static_cast<int64_t>(cold_idx) / rows_per_frame;
+                    int64_t row = static_cast<int64_t>(cold_idx) % rows_per_frame;
+
+                    // Find frame in cached_frames list
+                    int64_t frame_local = fid - frame_offset;
+                    if (frame_local >= 0 && frame_local < (int64_t)cached_frames.size()) {
+                        const auto& frame = cached_frames[frame_local];
+                        const float* f_ptr = frame.data_ptr<float>();
+                        // Copy row from frame
+                        std::memcpy(g_ptr + j * emb_dim, f_ptr + row * emb_dim, emb_dim * sizeof(float));
+                    }
+
+                    oi_ptr[j] = idx;
+                    j++;
+                }
+            }
+
+            results[2*k] = gathered;
+            results[2*k+1] = orig_indices;
+        }
+    });
+
+    return results;
+}
+
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("compressed_emb_bag_forward", &compressed_emb_bag_forward,
           "Compressed EmbeddingBag forward (hot path in C++, returns cold_mask)");
@@ -3695,4 +3781,11 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           "Scan batch indices to find needed cold frames per table (fused C++)",
           py::arg("lS_i_list"), py::arg("is_hot_list"),
           py::arg("o2c_map_list"), py::arg("rows_per_frame"));
+    // Fused gather from cached cold frames
+    m.def("gather_cold_embeddings", &gather_cold_embeddings,
+          "Gather cold embeddings from cached frames for all tables (fused C++)",
+          py::arg("lS_i_list"), py::arg("is_hot_list"),
+          py::arg("o2c_map_list"), py::arg("cached_frames_list"),
+          py::arg("frame_offsets_list"), py::arg("rows_per_frame"),
+          py::arg("emb_dim"));
 }

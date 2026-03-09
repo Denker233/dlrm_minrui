@@ -256,7 +256,7 @@ def main():
                 t_scan = time.time()
 
                 if has_cpp_scan:
-                    # C++ fused scan: find needed frames for all tables at once
+                    # C++ fused scan+gather: single call for all tables
                     lS_i_for_scan = []
                     for t_idx in comp_tables:
                         if isinstance(lS_i, list) or isinstance(lS_i, tuple):
@@ -266,49 +266,47 @@ def main():
                         else:
                             lS_i_for_scan.append(lS_i.long())
 
+                    # Step 1: C++ scan for needed frames
                     frame_lists = _C.scan_needed_frames(
                         lS_i_for_scan, is_hot_list, o2c_map_list, ROWS_PER_FRAME
                     )
 
-                    # Process each table
+                    # Step 2: Ensure frames are in cache (decode on miss)
+                    t_dec = time.time()
                     for k, t_idx in enumerate(comp_tables):
                         storage = storages[t_idx]
-                        needed_frames = frame_lists[k]
-                        if needed_frames.numel() == 0:
-                            continue
+                        needed = frame_lists[k]
+                        if needed.numel() > 0:
+                            for fid in needed.tolist():
+                                storage.get_frame(fid)
+                    decode_times.append(time.time() - t_dec)
 
-                        frame_ids = needed_frames.tolist()
+                    # Step 3: C++ gather from cached frames
+                    cached_frames_list = []
+                    frame_offsets_list = []
+                    for t_idx in comp_tables:
+                        storage = storages[t_idx]
+                        frames = []
+                        for fid in range(storage.n_frames):
+                            if fid in storage.cache:
+                                frames.append(storage.cache[fid])
+                            else:
+                                frames.append(torch.empty(0, dtype=torch.float32))
+                        cached_frames_list.append(frames)
+                        frame_offsets_list.append(0)
 
-                        # Pre-decode needed frames
-                        t_dec = time.time()
-                        for fid in frame_ids:
-                            storage.get_frame(fid)
-                        decode_times.append(time.time() - t_dec)
+                    gather_results = _C.gather_cold_embeddings(
+                        lS_i_for_scan, is_hot_list, o2c_map_list,
+                        cached_frames_list, frame_offsets_list,
+                        ROWS_PER_FRAME, EMB_DIM
+                    )
 
-                        # Get cold indices for this table
-                        if isinstance(lS_i, list) or isinstance(lS_i, tuple):
-                            indices = lS_i[t_idx]
-                        elif lS_i.dim() == 2:
-                            indices = lS_i[t_idx]
-                        else:
-                            indices = lS_i
-
-                        cold_mask = ~storage.is_hot[indices]
-                        if not cold_mask.any():
-                            continue
-
-                        cold_orig = indices[cold_mask]
-                        cold_reordered = storage.orig_to_cold[cold_orig].long()
-
-                        # Vectorized gather
-                        frame_ids_all = cold_reordered // ROWS_PER_FRAME
-                        rows_in_frame = cold_reordered % ROWS_PER_FRAME
-                        gathered = torch.zeros(len(cold_orig), storage.emb_dim)
-                        for fid in frame_ids:
-                            fmask = (frame_ids_all == fid)
-                            if fmask.any():
-                                gathered[fmask] = storage.cache[fid][rows_in_frame[fmask]]
-                        dlrm.emb_l[t_idx].weight.data[cold_orig] = gathered
+                    # Step 4: Write gathered embeddings back
+                    for k, t_idx in enumerate(comp_tables):
+                        gathered = gather_results[2*k]
+                        orig_indices = gather_results[2*k+1]
+                        if gathered.size(0) > 0:
+                            dlrm.emb_l[t_idx].weight.data[orig_indices] = gathered
 
                 else:
                     # Python scan fallback
@@ -365,7 +363,7 @@ def main():
 
         total_compressed = sum(s.total_compressed_bytes for s in storages.values())
 
-        scan_method = "C++ fused" if has_cpp_scan else "Python"
+        scan_method = "C++ fused scan+gather" if has_cpp_scan else "Python"
         log(f"  AUC={auc:.6f} (delta={auc - baseline['auc']:+.6f})")
         log(f"  BLat={np.mean(blats)*1000:.2f}ms (p50={np.percentile(blats,50)*1000:.2f}ms)")
         log(f"  Total={total_time:.1f}s")

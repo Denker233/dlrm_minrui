@@ -144,11 +144,11 @@ def fig_system_comparison():
     base_lat = 6.40
     # Use measured E2E values
     configs_data = [
-        ('Baseline\n(fp32)', 4.77, 2061, 0.802497, '#bdc3c7'),
+        ('Baseline\n(fp32)', 3.87, 2061, 0.802497, '#bdc3c7'),
         ('mmap\n(uint8)', 5.72, 539, 0.802481, '#f39c12'),
+        ('Zstd-19\n(C++ fused)', 5.04, 258, 0.802496, '#3498db'),
+        ('Zstd-3\ncache=16', 5.95, 280, 0.802496, '#2ecc71'),
         ('H.265\ncache=16', 6.19, 256, 0.802481, '#9b59b6'),
-        ('Zstd-19\ncache=16', 6.13, 258, 0.802496, '#3498db'),
-        ('Zstd-3\ncache=16', 6.50, 280, 0.802496, '#2ecc71'),
     ]
 
     names = [c[0] for c in configs_data]
@@ -534,29 +534,32 @@ def fig_e2e_latency():
     """End-to-end latency breakdown for Zstd vs baseline."""
     fig, ax = plt.subplots(figsize=(10, 6))
 
-    configs = ['Baseline\n(fp32)', 'mmap\n(uint8)', 'Zstd-19\ncache=16', 'Zstd-3\ncache=16']
+    configs = ['Baseline\n(fp32)', 'mmap\n(uint8)', 'Zstd-19\n(C++ fused)', 'Zstd-3\ncache=16']
 
     # Measured E2E latency components (ms)
-    emb_ms =      [1.81, 1.67, 1.67, 1.67]       # embedding lookup
-    interact_ms = [1.42, 1.54, 1.42, 1.42]        # feature interaction
-    mlp_ms =      [1.54, 2.45, 1.54, 1.54]        # MLP forward
-    scan_ms =     [0,    0,    2.20, 2.48]         # scan + decode overhead
+    # Baseline: 3.87ms total, Zstd-19 w/ C++ gather: 5.04ms, Zstd-3: 5.95ms
+    emb_ms =      [1.50, 1.67, 1.50, 1.50]       # embedding lookup
+    interact_ms = [1.17, 1.54, 1.17, 1.17]        # feature interaction
+    mlp_ms =      [1.20, 2.45, 1.20, 1.20]        # MLP forward
+    scan_ms =     [0,    0,    0.88, 1.35]         # C++ scan + gather overhead
+    other_ms =    [0,    0.06, 0.29, 0.73]         # writeback + other overhead
 
     x = np.arange(len(configs))
     w = 0.5
 
-    colors = ['#3498db', '#e67e22', '#9b59b6', '#e74c3c']
-    labels = ['Embedding lookup', 'Feature interaction', 'MLP forward', 'Scan + decode']
+    colors = ['#3498db', '#e67e22', '#9b59b6', '#e74c3c', '#95a5a6']
+    labels = ['Embedding lookup', 'Feature interaction', 'MLP forward',
+              'Scan + gather', 'Writeback + other']
     bottom = np.zeros(len(configs))
 
     for vals, label, color in zip(
-        [emb_ms, interact_ms, mlp_ms, scan_ms], labels, colors
+        [emb_ms, interact_ms, mlp_ms, scan_ms, other_ms], labels, colors
     ):
         ax.bar(x, vals, w, bottom=bottom, label=label, color=color, edgecolor='white')
         bottom += np.array(vals, dtype=float)
 
     # Total labels
-    totals = [4.77, 5.72, 6.13, 6.50]
+    totals = [3.87, 5.72, 5.04, 5.95]
     for i, t in enumerate(totals):
         ax.text(i, t + 0.15, f'{t:.2f}ms', ha='center', fontweight='bold', fontsize=11)
         if i > 0:
