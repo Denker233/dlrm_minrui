@@ -3684,6 +3684,54 @@ std::vector<torch::Tensor> gather_cold_embeddings(
 }
 
 
+// scatter_cold_to_weights: combined scan + gather + writeback in one call.
+// For each compressed table: find cold indices, gather from cached frames,
+// and write directly into the weight tensors. No Python intermediate.
+void scatter_cold_to_weights(
+    const std::vector<torch::Tensor>& lS_i_list,
+    const std::vector<torch::Tensor>& is_hot_list,
+    const std::vector<torch::Tensor>& o2c_map_list,
+    const std::vector<std::vector<torch::Tensor>>& cached_frames_list,
+    std::vector<torch::Tensor>& weight_list,  // mutable: writes directly into model weights
+    int64_t rows_per_frame,
+    int64_t emb_dim
+) {
+    const int64_t K = lS_i_list.size();
+
+    at::parallel_for(0, K, 1, [&](int64_t k_begin, int64_t k_end) {
+        for (int64_t k = k_begin; k < k_end; k++) {
+            const auto& indices = lS_i_list[k];
+            const auto& is_hot = is_hot_list[k];
+            const auto& o2c = o2c_map_list[k];
+            const auto& cached_frames = cached_frames_list[k];
+            auto& weight = weight_list[k];
+
+            const int64_t N = indices.size(0);
+            const int64_t* idx_ptr = indices.data_ptr<int64_t>();
+            const bool* hot_ptr = is_hot.data_ptr<bool>();
+            const int32_t* o2c_ptr = o2c.data_ptr<int32_t>();
+            float* w_ptr = weight.data_ptr<float>();
+
+            for (int64_t i = 0; i < N; i++) {
+                int64_t idx = idx_ptr[i];
+                if (!hot_ptr[idx]) {
+                    int32_t cold_idx = o2c_ptr[idx];
+                    if (cold_idx < 0) continue;
+                    int64_t fid = static_cast<int64_t>(cold_idx) / rows_per_frame;
+                    int64_t row = static_cast<int64_t>(cold_idx) % rows_per_frame;
+
+                    if (fid < (int64_t)cached_frames.size() && cached_frames[fid].numel() > 0) {
+                        const float* f_ptr = cached_frames[fid].data_ptr<float>();
+                        // Direct memcpy into weight tensor
+                        std::memcpy(w_ptr + idx * emb_dim, f_ptr + row * emb_dim, emb_dim * sizeof(float));
+                    }
+                }
+            }
+        }
+    });
+}
+
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("compressed_emb_bag_forward", &compressed_emb_bag_forward,
           "Compressed EmbeddingBag forward (hot path in C++, returns cold_mask)");
@@ -3787,5 +3835,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           py::arg("lS_i_list"), py::arg("is_hot_list"),
           py::arg("o2c_map_list"), py::arg("cached_frames_list"),
           py::arg("frame_offsets_list"), py::arg("rows_per_frame"),
+          py::arg("emb_dim"));
+    // Fused scan + gather + writeback (no Python intermediate)
+    m.def("scatter_cold_to_weights", &scatter_cold_to_weights,
+          "Scan, gather, and write cold embeddings directly into weight tensors",
+          py::arg("lS_i_list"), py::arg("is_hot_list"),
+          py::arg("o2c_map_list"), py::arg("cached_frames_list"),
+          py::arg("weight_list"), py::arg("rows_per_frame"),
           py::arg("emb_dim"));
 }

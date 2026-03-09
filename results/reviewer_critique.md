@@ -89,20 +89,31 @@ actual contribution of reordering: better caching, not better compression.
 
 ### 6. Zstd E2E Inference [COMPLETED]
 
-**Result: Zstd-19 adds 29% latency overhead (6.13ms vs 4.77ms baseline).**
+**Result: Zstd-19 adds 30% latency overhead (5.04ms vs 3.87ms baseline) with C++ fused scan+gather.**
 
 | Config | AUC | Batch Latency | Overhead | Compressed Size |
 |--------|-----|---------------|----------|----------------|
-| Baseline (fp32) | 0.802497 | 4.77ms | --- | 2,061MB |
-| Zstd-19 cache=16 | 0.802496 | 6.13ms | +1.36ms (29%) | 55MB |
-| Zstd-3 cache=16 | 0.802496 | 6.50ms | +1.73ms (36%) | 77MB |
+| Baseline (fp32) | 0.802497 | 3.87ms | --- | 2,061MB |
+| Zstd-19 cache=16 | 0.802496 | 5.04ms | +1.17ms (30%) | 55MB |
+| Zstd-3 cache=16 | 0.802496 | 5.95ms | +2.08ms (54%) | 77MB |
 
 Cache hit rate: 99.84% (only 22 misses in 13,812 accesses)
-Actual decode: 0.010ms/batch (negligible due to high cache hit rate)
-Scan overhead: 2.2ms/batch (Python-level cold index scanning)
+Actual decode: 0.08ms/batch (negligible due to high cache hit rate)
+C++ fused scan+gather: 0.88ms/batch (2.9x faster than Python path)
+
+### 6b. C++ Scan+Gather Optimization [COMPLETED]
+
+| Method | Mean (ms) | Speedup |
+|--------|-----------|---------|
+| Python scan + Python gather | 2.017 | 1.0x |
+| C++ scan + Python gather | 1.593 | 1.27x |
+| **C++ scan + C++ gather** | **0.693** | **2.91x** |
+
+The C++ `scan_needed_frames` (6.4x faster) eliminates Python overhead in index scanning.
+The C++ `gather_cold_embeddings` further eliminates Python tensor indexing overhead.
 
 ### 7. Wall-clock Speedup
-- With Zstd: 29% latency overhead, but 37x memory reduction
+- With Zstd + C++ fused: 30% latency overhead, 37x memory reduction
 - **Honest framing**: Memory reduction is the primary benefit, not latency
 
 ## Revised Contribution Narrative
@@ -116,7 +127,9 @@ Instead of "H.265 is the best compressor for embeddings", the story should be:
    compression ratio)
 3. **Lossy compression opportunity**: Video codecs uniquely offer lossy compression
    (CRF=18: 225x compression, 0.01% AUC loss) — general-purpose compressors cannot
-4. **Reordering for cache locality**: Frequency-based reordering improves cache hit rates
+4. **C++ fused pipeline**: Fused scan+gather in C++ reduces cold lookup overhead to
+   0.69ms (2.9x vs Python), enabling only 30% E2E latency overhead
+5. **Reordering for cache locality**: Frequency-based reordering improves cache hit rates
    (not compression), reducing decode overhead per batch
 
 ## Action Items Status
@@ -125,5 +138,7 @@ Instead of "H.265 is the best compressor for embeddings", the story should be:
 3. [x] CRF sweep with AUC measurement → Done
 4. [x] Compare with mmap baseline → Done
 5. [x] Measure reordering benefit → Done (1-2% compression, value is caching)
-6. [x] Zstd E2E inference measurement → Done (6.13ms vs 4.77ms baseline)
-7. [ ] Measure GPU inference scenario → TODO
+6. [x] Zstd E2E inference measurement → Done (5.04ms vs 3.87ms baseline, 30% overhead)
+7. [x] C++ fused scan+gather → Done (2.9x faster cold lookup, 0.69ms per batch)
+8. [ ] Measure GPU inference scenario → Blocked (no GPU available)
+9. [ ] Run on Criteo Terabyte dataset → Blocked (missing data days 7-24)

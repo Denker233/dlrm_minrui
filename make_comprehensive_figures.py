@@ -144,10 +144,10 @@ def fig_system_comparison():
     base_lat = 6.40
     # Use measured E2E values
     configs_data = [
-        ('Baseline\n(fp32)', 3.87, 2061, 0.802497, '#bdc3c7'),
+        ('Baseline\n(fp32)', 4.21, 2061, 0.802497, '#bdc3c7'),
         ('mmap\n(uint8)', 5.72, 539, 0.802481, '#f39c12'),
-        ('Zstd-19\n(C++ fused)', 5.04, 258, 0.802496, '#3498db'),
-        ('Zstd-3\ncache=16', 5.95, 280, 0.802496, '#2ecc71'),
+        ('Zstd-19\n(C++ fused)', 5.35, 258, 0.802496, '#3498db'),
+        ('Zstd-3\ncache=16', 5.55, 280, 0.802496, '#2ecc71'),
         ('H.265\ncache=16', 6.19, 256, 0.802481, '#9b59b6'),
     ]
 
@@ -537,19 +537,19 @@ def fig_e2e_latency():
     configs = ['Baseline\n(fp32)', 'mmap\n(uint8)', 'Zstd-19\n(C++ fused)', 'Zstd-3\ncache=16']
 
     # Measured E2E latency components (ms)
-    # Baseline: 3.87ms total, Zstd-19 w/ C++ gather: 5.04ms, Zstd-3: 5.95ms
-    emb_ms =      [1.50, 1.67, 1.50, 1.50]       # embedding lookup
-    interact_ms = [1.17, 1.54, 1.17, 1.17]        # feature interaction
-    mlp_ms =      [1.20, 2.45, 1.20, 1.20]        # MLP forward
-    scan_ms =     [0,    0,    0.88, 1.35]         # C++ scan + gather overhead
-    other_ms =    [0,    0.06, 0.29, 0.73]         # writeback + other overhead
+    # Baseline: 4.21ms, Zstd-19 scatter: 5.35ms, Zstd-3: 5.55ms
+    emb_ms =      [1.70, 1.67, 1.70, 1.70]       # embedding lookup
+    interact_ms = [1.25, 1.54, 1.25, 1.25]        # feature interaction
+    mlp_ms =      [1.26, 2.45, 1.26, 1.26]        # MLP forward
+    scan_ms =     [0,    0,    0.74, 0.94]         # C++ fused scan+scatter
+    other_ms =    [0,    0.06, 0.40, 0.40]         # other overhead
 
     x = np.arange(len(configs))
     w = 0.5
 
     colors = ['#3498db', '#e67e22', '#9b59b6', '#e74c3c', '#95a5a6']
     labels = ['Embedding lookup', 'Feature interaction', 'MLP forward',
-              'Scan + gather', 'Writeback + other']
+              'C++ scan+scatter', 'Other overhead']
     bottom = np.zeros(len(configs))
 
     for vals, label, color in zip(
@@ -559,7 +559,7 @@ def fig_e2e_latency():
         bottom += np.array(vals, dtype=float)
 
     # Total labels
-    totals = [3.87, 5.72, 5.04, 5.95]
+    totals = [4.21, 5.72, 5.35, 5.55]
     for i, t in enumerate(totals):
         ax.text(i, t + 0.15, f'{t:.2f}ms', ha='center', fontweight='bold', fontsize=11)
         if i > 0:

@@ -232,6 +232,10 @@ def main():
             hot_weight[storage.cold_idx] = 0
             dlrm.emb_l[t_idx].weight.data = hot_weight
 
+        # Build weight tensor list for C++ scatter (once)
+        if has_cpp_scan:
+            weight_list = [dlrm.emb_l[t].weight.data for t in comp_tables]
+
         # Custom inference with Zstd cold lookup
         max_samples = 2000 * 2048
         all_scores = np.empty(max_samples, dtype=np.float32)
@@ -256,7 +260,7 @@ def main():
                 t_scan = time.time()
 
                 if has_cpp_scan:
-                    # C++ fused scan+gather: single call for all tables
+                    # C++ fused scan+gather+writeback: minimal Python overhead
                     lS_i_for_scan = []
                     for t_idx in comp_tables:
                         if isinstance(lS_i, list) or isinstance(lS_i, tuple):
@@ -281,9 +285,8 @@ def main():
                                 storage.get_frame(fid)
                     decode_times.append(time.time() - t_dec)
 
-                    # Step 3: C++ gather from cached frames
+                    # Step 3: C++ scatter — fused gather + direct write into weight tensors
                     cached_frames_list = []
-                    frame_offsets_list = []
                     for t_idx in comp_tables:
                         storage = storages[t_idx]
                         frames = []
@@ -293,20 +296,12 @@ def main():
                             else:
                                 frames.append(torch.empty(0, dtype=torch.float32))
                         cached_frames_list.append(frames)
-                        frame_offsets_list.append(0)
 
-                    gather_results = _C.gather_cold_embeddings(
+                    _C.scatter_cold_to_weights(
                         lS_i_for_scan, is_hot_list, o2c_map_list,
-                        cached_frames_list, frame_offsets_list,
+                        cached_frames_list, weight_list,
                         ROWS_PER_FRAME, EMB_DIM
                     )
-
-                    # Step 4: Write gathered embeddings back
-                    for k, t_idx in enumerate(comp_tables):
-                        gathered = gather_results[2*k]
-                        orig_indices = gather_results[2*k+1]
-                        if gathered.size(0) > 0:
-                            dlrm.emb_l[t_idx].weight.data[orig_indices] = gathered
 
                 else:
                     # Python scan fallback

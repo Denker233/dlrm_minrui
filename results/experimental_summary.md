@@ -42,28 +42,40 @@ This is a unique capability of video codecs that general-purpose compressors can
 
 | Config | AUC | Batch Latency | Overhead | Storage |
 |--------|-----|---------------|----------|---------|
-| Baseline (fp32) | 0.802497 | 3.87ms | --- | 2,061MB |
-| mmap (uint8) | 0.802481 | 5.72ms | +48% | 539MB |
-| **Zstd-19 cache=16** | **0.802496** | **5.04ms** | **+30%** | **55MB** |
-| Zstd-3 cache=16 | 0.802496 | 5.95ms | +54% | 77MB |
-| H.265 CRF=0 cache=16 | 0.802496 | 6.19ms | +60% | 53MB |
+| Baseline (fp32) | 0.802497 | 4.21ms | --- | 2,061MB |
+| mmap (uint8) | 0.802481 | 5.72ms | +36% | 539MB |
+| **Zstd-19 cache=16** | **0.802496** | **5.35ms** | **+27%** | **55MB** |
+| Zstd-3 cache=16 | 0.802496 | 5.55ms | +32% | 77MB |
+| H.265 CRF=0 cache=16 | 0.802496 | 6.19ms | +47% | 53MB |
 
 **Cache statistics** (cache=16 frames):
 - Hit rate: 99.84% (22 misses in 13,812 accesses)
-- Actual decode: 0.08ms/batch (negligible)
-- Scan+gather overhead: 0.88ms/batch (C++ fused scan + C++ gather)
+- Actual decode: 0.09ms/batch (negligible)
+- C++ fused scan+scatter: 0.74ms/batch (scan + gather + writeback in C++)
 
-## 3b. C++ Scan+Gather Optimization
+## 3b. C++ Pipeline Optimization
 
-| Method | Mean (ms) | p50 (ms) | p99 (ms) |
-|--------|-----------|----------|----------|
-| Python scan + Python gather | 2.017 | 1.873 | 4.053 |
-| C++ scan + Python gather | 1.593 | 1.493 | 3.367 |
-| **C++ scan + C++ gather** | **0.693** | **0.608** | 4.395 |
+Progressive optimization of the cold lookup path:
 
-**Speedup: 2.9x** over pure Python with zero correctness errors.
-The C++ scan alone is 6.4x faster (0.138ms vs 0.886ms); adding C++ gather
-eliminates the remaining Python tensor indexing overhead.
+| Method | Mean (ms) | Speedup |
+|--------|-----------|---------|
+| Python scan + Python gather + writeback | 2.017 | 1.0x |
+| C++ scan + Python gather + writeback | 1.593 | 1.27x |
+| C++ scan + C++ gather + Python writeback | 0.693 | 2.91x |
+| **C++ scan + C++ scatter (fused)** | **0.740** | **2.73x** |
+
+The fused `scatter_cold_to_weights` eliminates the 348us Python writeback overhead
+by directly memcpy-ing gathered rows into weight tensors within the C++ parallel loop.
+
+### Overhead breakdown (per batch):
+| Step | Time (us) | % |
+|------|-----------|---|
+| Build index list | 31 | 4.7% |
+| C++ scan | 127 | 19.3% |
+| Cache ensure | 60 | 9.1% |
+| Build frames list | 27 | 4.1% |
+| C++ gather+scatter | 64 | 9.7% |
+| ~~Writeback (eliminated)~~ | ~~348~~ | ~~52.9%~~ |
 
 ## 4. mmap Baseline
 
@@ -149,7 +161,7 @@ higher entropy (>2 bits/byte) get modest 2-4x compression regardless of codec.
 3. **LRU frame cache** size=4 (99.84% hit rate, 33MB cache memory)
 4. **C++ fused scan+gather** for 2.9x faster cold lookup (0.7ms vs 2.0ms)
 5. **Frequency-based reordering** for cache locality (not compression)
-6. Total: **37x memory reduction**, **30% latency overhead**, **<0.01% AUC loss**
+6. Total: **37x memory reduction**, **27% latency overhead**, **<0.01% AUC loss**
 
 ### When to use H.265 instead:
 - Need >10x compression (use CRF=18 for 225x)
