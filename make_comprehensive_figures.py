@@ -578,6 +578,75 @@ def fig_e2e_latency():
     print(f"Saved: {path}")
 
 
+def fig_cache_sweep():
+    """Cache size vs latency and hit rate."""
+    cache_path = "results/codec_comparison/cache_sweep.json"
+    if not os.path.exists(cache_path):
+        print(f"Skipping cache sweep: {cache_path} not found")
+        return
+
+    data = load_json(cache_path)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5.5))
+
+    cache_sizes = []
+    lats = []
+    hit_rates = []
+    misses = []
+    p99s = []
+
+    for key, val in sorted(data.items()):
+        if key.startswith('cache_'):
+            cache_sizes.append(val['cache_size'])
+            lats.append(val['mean_lat_ms'])
+            hit_rates.append(val['hit_rate'] * 100)
+            misses.append(val['cache_misses'])
+            p99s.append(val['p99_lat_ms'])
+
+    baseline_lat = data['baseline']['mean_lat_ms']
+
+    # Left: Latency vs cache size
+    ax1.plot(cache_sizes, lats, 'o-', color='#3498db', linewidth=2, markersize=8, label='Mean')
+    ax1.plot(cache_sizes, p99s, 's--', color='#e74c3c', linewidth=2, markersize=6, label='p99')
+    ax1.axhline(y=baseline_lat, color='gray', linestyle=':', linewidth=2, label=f'Baseline ({baseline_lat:.1f}ms)')
+
+    ax1.set_xlabel('LRU Cache Size (frames)', fontsize=13)
+    ax1.set_ylabel('Batch Latency (ms)', fontsize=13)
+    ax1.set_title('Latency vs Cache Size\n(Zstd-19 compressed cold storage)', fontsize=13)
+    ax1.legend(fontsize=11)
+    ax1.set_xscale('log', base=2)
+    ax1.set_xticks(cache_sizes)
+    ax1.set_xticklabels([str(c) for c in cache_sizes])
+    ax1.set_ylim(0, max(lats) * 1.1)
+
+    # Annotate the sweet spot
+    for i, (cs, lat, hr) in enumerate(zip(cache_sizes, lats, hit_rates)):
+        if cs == 4:
+            ax1.annotate(f'cache=4\n{lat:.1f}ms\n{hr:.1f}% hit',
+                        xy=(cs, lat), xytext=(20, 30), textcoords='offset points',
+                        fontsize=10, fontweight='bold', color='#2ecc71',
+                        arrowprops=dict(arrowstyle='->', color='#2ecc71'))
+
+    # Right: Cache misses vs cache size
+    ax2.bar(range(len(cache_sizes)), misses, color='#e74c3c', edgecolor='white')
+    ax2.set_xlabel('LRU Cache Size (frames)', fontsize=13)
+    ax2.set_ylabel('Total Cache Misses', fontsize=13)
+    ax2.set_title('Cache Misses vs Cache Size\n(out of ~13,800 frame accesses)', fontsize=13)
+    ax2.set_xticks(range(len(cache_sizes)))
+    ax2.set_xticklabels([str(c) for c in cache_sizes])
+
+    for i, (m, cs) in enumerate(zip(misses, cache_sizes)):
+        ax2.text(i, m + 50, f'{m}', ha='center', fontsize=11, fontweight='bold')
+
+    # Highlight sweet spot
+    ax2.bar(2, misses[2], color='#2ecc71', edgecolor='white')  # cache=4
+
+    plt.tight_layout()
+    path = os.path.join(OUTDIR, 'cache_sweep.png')
+    plt.savefig(path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Saved: {path}")
+
+
 if __name__ == '__main__':
     fig_crf_pareto()
     fig_system_comparison()
@@ -587,4 +656,5 @@ if __name__ == '__main__':
     fig_spatial_locality()
     fig_reorder_benefit()
     fig_e2e_latency()
+    fig_cache_sweep()
     print(f"\nAll comprehensive figures saved to {OUTDIR}/")

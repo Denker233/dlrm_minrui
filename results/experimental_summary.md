@@ -92,6 +92,24 @@ frame to maximize LRU cache hit rates.
 2. **Practical advantage at cache=16**: Both achieve 99.84% cache hit rate,
    so the decode speed difference is mostly irrelevant
 
+## 6. Cache Size Sweep (Zstd-19)
+
+| Cache Size | Batch Latency | p99 Latency | Hit Rate | Misses |
+|-----------|---------------|-------------|----------|--------|
+| 1         | 12.79ms       | 20.09ms     | 85.86%   | 1,953  |
+| 2         | 7.49ms        | 20.18ms     | 98.08%   | 265    |
+| **4**     | **6.84ms**    | **10.48ms** | **99.84%** | **22** |
+| 8         | 6.68ms        | 10.34ms     | 99.84%   | 22     |
+| 16        | 6.69ms        | 10.45ms     | 99.84%   | 22     |
+| 32        | 6.48ms        | 10.20ms     | 99.84%   | 22     |
+| 64        | 6.55ms        | 9.00ms      | 99.84%   | 22     |
+
+Baseline: 4.16ms mean, 5.58ms p99
+
+**Finding**: Cache=4 is the sweet spot. Hit rate saturates at 99.84% from cache=4.
+Only 22 frame misses across all 1,599 batches (13,812 frame accesses).
+Cache memory cost: 4 frames * 129,600 rows * 16 bytes * 4 (fp32) = 33MB.
+
 ### Recommended approach for production:
 1. **Hot/cold split** with 4.3% hot threshold
 2. **Zstd-19** for lossless cold compression (9.4x ratio, 1.13ms decode)

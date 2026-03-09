@@ -203,6 +203,14 @@ def main():
                     f"compressed={storage.total_compressed_bytes/1e6:.1f}MB "
                     f"(ratio={storage.total_raw_bytes/storage.total_compressed_bytes:.1f}x)")
 
+    # Try to use C++ scan
+    try:
+        import compressed_emb as _C
+        has_cpp_scan = True
+        log("C++ scan_needed_frames available")
+    except ImportError:
+        has_cpp_scan = False
+
     # ---- Run inference with Zstd cold storage ----
     for comp_name in ['Zstd-19', 'Zstd-3']:
         log(f"\n{'='*60}")
@@ -210,11 +218,16 @@ def main():
         log(f"{'='*60}")
 
         storages = cold_storages[comp_name]
+        comp_tables = sorted(storages.keys())
+
+        # Build C++ scan inputs (once, not per batch)
+        if has_cpp_scan:
+            is_hot_list = [storages[t].is_hot for t in comp_tables]
+            o2c_map_list = [storages[t].orig_to_cold for t in comp_tables]
 
         # Replace cold embeddings with quantized versions in the model
         for t_idx, storage in storages.items():
             key = f'emb_l.{t_idx}.weight'
-            # Keep hot rows as fp32, set cold rows to 0 (will be filled from cache)
             hot_weight = state_dict[key].clone()
             hot_weight[storage.cold_idx] = 0
             dlrm.emb_l[t_idx].weight.data = hot_weight
@@ -240,44 +253,94 @@ def main():
                 X, lS_o, lS_i, T = inputBatch[0], inputBatch[1], inputBatch[2], inputBatch[3]
                 bt0 = time.time()
 
-                # Pre-populate cold embeddings for this batch (vectorized)
                 t_scan = time.time()
-                for t_idx, storage in storages.items():
-                    if isinstance(lS_i, list) or isinstance(lS_i, tuple):
-                        indices = lS_i[t_idx]
-                    elif lS_i.dim() == 2:
-                        indices = lS_i[t_idx]
-                    else:
-                        indices = lS_i
 
-                    # Find cold indices that need decoding
-                    cold_mask = ~storage.is_hot[indices]
-                    if not cold_mask.any():
-                        continue
+                if has_cpp_scan:
+                    # C++ fused scan: find needed frames for all tables at once
+                    lS_i_for_scan = []
+                    for t_idx in comp_tables:
+                        if isinstance(lS_i, list) or isinstance(lS_i, tuple):
+                            lS_i_for_scan.append(lS_i[t_idx].long())
+                        elif lS_i.dim() == 2:
+                            lS_i_for_scan.append(lS_i[t_idx].long())
+                        else:
+                            lS_i_for_scan.append(lS_i.long())
 
-                    cold_orig = indices[cold_mask]
-                    cold_reordered = storage.orig_to_cold[cold_orig].long()
+                    frame_lists = _C.scan_needed_frames(
+                        lS_i_for_scan, is_hot_list, o2c_map_list, ROWS_PER_FRAME
+                    )
 
-                    # Determine needed frames
-                    frame_ids = (cold_reordered // ROWS_PER_FRAME).unique().tolist()
+                    # Process each table
+                    for k, t_idx in enumerate(comp_tables):
+                        storage = storages[t_idx]
+                        needed_frames = frame_lists[k]
+                        if needed_frames.numel() == 0:
+                            continue
 
-                    # Pre-decode needed frames
-                    t_dec = time.time()
-                    for fid in frame_ids:
-                        storage.get_frame(fid)
-                    decode_times.append(time.time() - t_dec)
+                        frame_ids = needed_frames.tolist()
 
-                    # Vectorized gather from cached frames
-                    frame_ids_all = cold_reordered // ROWS_PER_FRAME
-                    rows_in_frame = cold_reordered % ROWS_PER_FRAME
-                    gathered = torch.zeros(len(cold_orig), storage.emb_dim)
-                    for fid in frame_ids:
-                        fmask = (frame_ids_all == fid)
-                        if fmask.any():
-                            gathered[fmask] = storage.cache[fid][rows_in_frame[fmask]]
+                        # Pre-decode needed frames
+                        t_dec = time.time()
+                        for fid in frame_ids:
+                            storage.get_frame(fid)
+                        decode_times.append(time.time() - t_dec)
 
-                    # Vectorized write-back
-                    dlrm.emb_l[t_idx].weight.data[cold_orig] = gathered
+                        # Get cold indices for this table
+                        if isinstance(lS_i, list) or isinstance(lS_i, tuple):
+                            indices = lS_i[t_idx]
+                        elif lS_i.dim() == 2:
+                            indices = lS_i[t_idx]
+                        else:
+                            indices = lS_i
+
+                        cold_mask = ~storage.is_hot[indices]
+                        if not cold_mask.any():
+                            continue
+
+                        cold_orig = indices[cold_mask]
+                        cold_reordered = storage.orig_to_cold[cold_orig].long()
+
+                        # Vectorized gather
+                        frame_ids_all = cold_reordered // ROWS_PER_FRAME
+                        rows_in_frame = cold_reordered % ROWS_PER_FRAME
+                        gathered = torch.zeros(len(cold_orig), storage.emb_dim)
+                        for fid in frame_ids:
+                            fmask = (frame_ids_all == fid)
+                            if fmask.any():
+                                gathered[fmask] = storage.cache[fid][rows_in_frame[fmask]]
+                        dlrm.emb_l[t_idx].weight.data[cold_orig] = gathered
+
+                else:
+                    # Python scan fallback
+                    for t_idx, storage in storages.items():
+                        if isinstance(lS_i, list) or isinstance(lS_i, tuple):
+                            indices = lS_i[t_idx]
+                        elif lS_i.dim() == 2:
+                            indices = lS_i[t_idx]
+                        else:
+                            indices = lS_i
+
+                        cold_mask = ~storage.is_hot[indices]
+                        if not cold_mask.any():
+                            continue
+
+                        cold_orig = indices[cold_mask]
+                        cold_reordered = storage.orig_to_cold[cold_orig].long()
+                        frame_ids = (cold_reordered // ROWS_PER_FRAME).unique().tolist()
+
+                        t_dec = time.time()
+                        for fid in frame_ids:
+                            storage.get_frame(fid)
+                        decode_times.append(time.time() - t_dec)
+
+                        frame_ids_all = cold_reordered // ROWS_PER_FRAME
+                        rows_in_frame = cold_reordered % ROWS_PER_FRAME
+                        gathered = torch.zeros(len(cold_orig), storage.emb_dim)
+                        for fid in frame_ids:
+                            fmask = (frame_ids_all == fid)
+                            if fmask.any():
+                                gathered[fmask] = storage.cache[fid][rows_in_frame[fmask]]
+                        dlrm.emb_l[t_idx].weight.data[cold_orig] = gathered
 
                 scan_times.append(time.time() - t_scan)
 
@@ -302,10 +365,11 @@ def main():
 
         total_compressed = sum(s.total_compressed_bytes for s in storages.values())
 
+        scan_method = "C++ fused" if has_cpp_scan else "Python"
         log(f"  AUC={auc:.6f} (delta={auc - baseline['auc']:+.6f})")
         log(f"  BLat={np.mean(blats)*1000:.2f}ms (p50={np.percentile(blats,50)*1000:.2f}ms)")
         log(f"  Total={total_time:.1f}s")
-        log(f"  Scan+decode={np.mean(scan_times)*1000:.2f}ms/batch, "
+        log(f"  Scan ({scan_method})+decode={np.mean(scan_times)*1000:.2f}ms/batch, "
             f"decode_only={np.mean(decode_times)*1000:.3f}ms/batch")
         log(f"  Cache: hits={total_hits}, misses={total_misses}, rate={hit_rate:.4f}")
         log(f"  Compressed: {total_compressed/1e6:.1f}MB")

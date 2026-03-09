@@ -1,0 +1,114 @@
+Unable to import mlperf_logging,  No module named 'mlperf_logging'
+Unable to import onnx.  No module named 'onnx'
+[04:14:17] Loading dataset...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+[04:16:23] Loading checkpoint...
+[04:16:24] Model loaded: 26 tables, emb_dim=16
+[04:16:28] 
+============================================================
+[04:16:29] BASELINE
+[04:16:29] ============================================================
+/home/cc/expr/dlrm_minrui/dlrm_data_pytorch.py:328: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor. (Triggered internally at /pytorch/torch/csrc/utils/tensor_new.cpp:253.)
+  X_int = torch.log(torch.tensor(transposed_data[0], dtype=torch.float) + 1)
+[04:17:10]   AUC=0.802497, BLat=4.16ms
+[04:17:10] 
+============================================================
+[04:17:10] BUILDING ZSTD-19 COLD STORAGE
+[04:17:10] ============================================================
+[04:18:04]   Table 2: 9,633,265 cold, 75 frames
+[04:18:23]   Table 3: 2,168,208 cold, 17 frames
+[04:18:23]   Table 9: 88,486 cold, 1 frames
+[04:19:19]   Table 11: 7,965,378 cold, 62 frames
+[04:19:57]   Table 15: 5,267,563 cold, 41 frames
+[04:20:55]   Table 20: 6,741,517 cold, 53 frames
+[04:20:57]   Table 23: 280,517 cold, 3 frames
+[04:20:58]   Table 25: 137,719 cold, 2 frames
+[04:20:58] 
+============================================================
+[04:20:58] CACHE SIZE = 1
+[04:20:58] ============================================================
+[04:21:47]   AUC=0.802496 (delta=-0.000001)
+[04:21:47]   BLat=12.79ms (p50=15.71ms)
+[04:21:47]   Total=48.4s
+[04:21:47]   Cache: hits=11859, misses=1953, rate=0.8586
+[04:21:47]   RSS=18380MB
+[04:21:48] 
+============================================================
+[04:21:48] CACHE SIZE = 2
+[04:21:48] ============================================================
+[04:22:28]   AUC=0.802496 (delta=-0.000001)
+[04:22:28]   BLat=7.49ms (p50=6.82ms)
+[04:22:28]   Total=38.6s
+[04:22:28]   Cache: hits=13547, misses=265, rate=0.9808
+[04:22:28]   RSS=18569MB
+[04:22:28] 
+============================================================
+[04:22:28] CACHE SIZE = 4
+[04:22:28] ============================================================
+[04:23:06]   AUC=0.802496 (delta=-0.000001)
+[04:23:06]   BLat=6.84ms (p50=6.71ms)
+[04:23:06]   Total=37.2s
+[04:23:06]   Cache: hits=13790, misses=22, rate=0.9984
+[04:23:06]   RSS=18503MB
+[04:23:07] 
+============================================================
+[04:23:07] CACHE SIZE = 8
+[04:23:07] ============================================================
+[04:23:45]   AUC=0.802496 (delta=-0.000001)
+[04:23:45]   BLat=6.68ms (p50=6.61ms)
+[04:23:45]   Total=37.0s
+[04:23:45]   Cache: hits=13790, misses=22, rate=0.9984
+[04:23:45]   RSS=18582MB
+[04:23:45] 
+============================================================
+[04:23:45] CACHE SIZE = 16
+[04:23:45] ============================================================
+[04:24:23]   AUC=0.802496 (delta=-0.000001)
+[04:24:23]   BLat=6.69ms (p50=6.66ms)
+[04:24:23]   Total=37.0s
+[04:24:23]   Cache: hits=13790, misses=22, rate=0.9984
+[04:24:23]   RSS=18502MB
+[04:24:24] 
+============================================================
+[04:24:24] CACHE SIZE = 32
+[04:24:24] ============================================================
+[04:25:02]   AUC=0.802496 (delta=-0.000001)
+[04:25:02]   BLat=6.48ms (p50=6.33ms)
+[04:25:02]   Total=36.6s
+[04:25:02]   Cache: hits=13790, misses=22, rate=0.9984
+[04:25:02]   RSS=18582MB
+[04:25:02] 
+============================================================
+[04:25:02] CACHE SIZE = 64
+[04:25:02] ============================================================
+[04:25:40]   AUC=0.802496 (delta=-0.000001)
+[04:25:40]   BLat=6.55ms (p50=6.41ms)
+[04:25:40]   Total=37.2s
+[04:25:40]   Cache: hits=13790, misses=22, rate=0.9984
+[04:25:40]   RSS=18582MB
+[04:25:40] 
+============================================================
+[04:25:40] CACHE SIZE SWEEP SUMMARY
+[04:25:40] ============================================================
+
+[04:25:40]    Cache |        AUC |     BLat |      p99 |     Hits |   Misses |     Hit%
+[04:25:40]   ----------------------------------------------------------------------
+[04:25:40]     base |   0.802497 |   4.16ms |   5.58ms |      N/A |      N/A |      N/A
+[04:25:40]        1 |   0.802496 |  12.79ms |  20.09ms |    11859 |     1953 |  85.86%
+[04:25:40]        2 |   0.802496 |   7.49ms |  20.18ms |    13547 |      265 |  98.08%
+[04:25:40]        4 |   0.802496 |   6.84ms |  10.48ms |    13790 |       22 |  99.84%
+[04:25:40]        8 |   0.802496 |   6.68ms |  10.34ms |    13790 |       22 |  99.84%
+[04:25:40]       16 |   0.802496 |   6.69ms |  10.45ms |    13790 |       22 |  99.84%
+[04:25:40]       32 |   0.802496 |   6.48ms |  10.20ms |    13790 |       22 |  99.84%
+[04:25:40]       64 |   0.802496 |   6.55ms |   9.00ms |    13790 |       22 |  99.84%
+[04:25:40] 
+Results saved to results/codec_comparison/cache_sweep.json
