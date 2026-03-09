@@ -1,0 +1,104 @@
+[03:46:12] Loading model state dict...
+[03:46:13] 
+============================================================
+[03:46:13] TABLE 2
+[03:46:13] ============================================================
+[03:46:14]   9,633,265 cold rows, 154.1MB uint8
+[03:46:15]   LZ4       : random=7.7x, natural=7.8x, reordered=7.8x (vs_rand=1.01x)
+[03:46:15]   Snappy    : random=8.5x, natural=8.5x, reordered=8.5x (vs_rand=1.00x)
+[03:46:16]   Zstd-3    : random=16.2x, natural=16.6x, reordered=16.5x (vs_rand=1.02x)
+[03:46:22]   Zstd-9    : random=18.9x, natural=19.3x, reordered=19.3x (vs_rand=1.02x)
+[03:49:13]   Zstd-19   : random=23.2x, natural=24.0x, reordered=23.9x (vs_rand=1.03x)
+[03:49:26]   H.265     : random=27.6x, natural=27.9x, reordered=27.9x (vs_rand=1.01x)
+[03:49:26] 
+============================================================
+[03:49:26] TABLE 3
+[03:49:26] ============================================================
+[03:49:26]   2,168,208 cold rows, 34.7MB uint8
+[03:49:27]   LZ4       : random=2.1x, natural=2.1x, reordered=2.1x (vs_rand=1.00x)
+[03:49:27]   Snappy    : random=2.5x, natural=2.5x, reordered=2.5x (vs_rand=1.01x)
+[03:49:27]   Zstd-3    : random=4.1x, natural=4.2x, reordered=4.2x (vs_rand=1.01x)
+[03:49:31]   Zstd-9    : random=4.5x, natural=4.6x, reordered=4.6x (vs_rand=1.01x)
+[03:50:27]   Zstd-19   : random=5.5x, natural=5.6x, reordered=5.6x (vs_rand=1.01x)
+[03:50:31]   H.265     : random=5.9x, natural=6.0x, reordered=6.0x (vs_rand=1.01x)
+[03:50:31] 
+============================================================
+[03:50:31] TABLE 9
+[03:50:31] ============================================================
+[03:50:31]   88,486 cold rows, 1.4MB uint8
+[03:50:31]   LZ4       : random=1.0x, natural=1.0x, reordered=1.0x (vs_rand=1.00x)
+[03:50:31]   Snappy    : random=1.1x, natural=1.1x, reordered=1.0x (vs_rand=0.98x)
+[03:50:31]   Zstd-3    : random=1.9x, natural=1.9x, reordered=1.9x (vs_rand=1.02x)
+[03:50:32]   Zstd-9    : random=1.9x, natural=1.9x, reordered=1.9x (vs_rand=1.02x)
+[03:50:33]   Zstd-19   : random=2.0x, natural=2.0x, reordered=2.0x (vs_rand=1.02x)
+[03:50:33]   H.265     : random=1.9x, natural=1.9x, reordered=1.9x (vs_rand=1.00x)
+[03:50:33] 
+============================================================
+[03:50:33] TABLE 11
+[03:50:33] ============================================================
+[03:50:34]   7,965,378 cold rows, 127.4MB uint8
+[03:50:35]   LZ4       : random=3.7x, natural=3.8x, reordered=3.8x (vs_rand=1.02x)
+[03:50:35]   Snappy    : random=4.4x, natural=4.4x, reordered=4.4x (vs_rand=1.01x)
+[03:50:36]   Zstd-3    : random=7.4x, natural=7.7x, reordered=7.6x (vs_rand=1.03x)
+[03:50:45]   Zstd-9    : random=8.7x, natural=8.9x, reordered=8.9x (vs_rand=1.03x)
+[03:53:41]   Zstd-19   : random=11.5x, natural=12.0x, reordered=11.9x (vs_rand=1.03x)
+[03:53:54]   H.265     : random=11.9x, natural=12.0x, reordered=12.0x (vs_rand=1.01x)
+[03:53:54] 
+============================================================
+[03:53:54] TABLE 15
+[03:53:54] ============================================================
+[03:53:54]   5,267,563 cold rows, 84.3MB uint8
+[03:53:55]   LZ4       : random=3.3x, natural=3.4x, reordered=3.4x (vs_rand=1.02x)
+[03:53:55]   Snappy    : random=3.9x, natural=4.0x, reordered=4.0x (vs_rand=1.01x)
+[03:53:56]   Zstd-3    : random=6.6x, natural=6.8x, reordered=6.8x (vs_rand=1.03x)
+[03:54:02]   Zstd-9    : random=7.7x, natural=8.0x, reordered=7.9x (vs_rand=1.03x)
+[03:56:00]   Zstd-19   : random=10.2x, natural=10.6x, reordered=10.6x (vs_rand=1.03x)
+[03:56:08]   H.265     : random=10.3x, natural=10.5x, reordered=10.5x (vs_rand=1.01x)
+[03:56:08] 
+============================================================
+[03:56:08] TABLE 20
+[03:56:08] ============================================================
+[03:56:09]   6,741,517 cold rows, 107.9MB uint8
+[03:56:09]   LZ4       : random=2.0x, natural=2.0x, reordered=2.0x (vs_rand=1.00x)
+[03:56:10]   Snappy    : random=2.4x, natural=2.4x, reordered=2.4x (vs_rand=1.00x)
+[03:56:12]   Zstd-3    : random=4.0x, natural=4.1x, reordered=4.1x (vs_rand=1.00x)
+[03:56:22]   Zstd-9    : random=4.3x, natural=4.3x, reordered=4.3x (vs_rand=1.00x)
+[03:59:18]   Zstd-19   : random=5.2x, natural=5.2x, reordered=5.2x (vs_rand=1.00x)
+[03:59:29]   H.265     : random=5.6x, natural=5.6x, reordered=5.6x (vs_rand=1.00x)
+[03:59:29] 
+============================================================
+[03:59:29] TABLE 23
+[03:59:29] ============================================================
+[03:59:29]   280,517 cold rows, 4.5MB uint8
+[03:59:29]   LZ4       : random=1.7x, natural=1.7x, reordered=1.7x (vs_rand=1.00x)
+[03:59:29]   Snappy    : random=1.9x, natural=2.0x, reordered=2.0x (vs_rand=1.01x)
+[03:59:29]   Zstd-3    : random=3.2x, natural=3.3x, reordered=3.3x (vs_rand=1.03x)
+[03:59:29]   Zstd-9    : random=3.3x, natural=3.4x, reordered=3.4x (vs_rand=1.03x)
+[03:59:35]   Zstd-19   : random=3.7x, natural=3.8x, reordered=3.7x (vs_rand=1.01x)
+[03:59:36]   H.265     : random=3.9x, natural=3.9x, reordered=3.9x (vs_rand=1.01x)
+[03:59:36] 
+============================================================
+[03:59:36] TABLE 25
+[03:59:36] ============================================================
+[03:59:36]   137,719 cold rows, 2.2MB uint8
+[03:59:36]   LZ4       : random=1.5x, natural=1.5x, reordered=1.5x (vs_rand=1.00x)
+[03:59:36]   Snappy    : random=1.6x, natural=1.6x, reordered=1.6x (vs_rand=1.01x)
+[03:59:36]   Zstd-3    : random=2.4x, natural=2.5x, reordered=2.5x (vs_rand=1.02x)
+[03:59:36]   Zstd-9    : random=2.6x, natural=2.6x, reordered=2.6x (vs_rand=1.02x)
+[03:59:39]   Zstd-19   : random=2.9x, natural=3.0x, reordered=2.9x (vs_rand=0.99x)
+[03:59:39]   H.265     : random=2.8x, natural=2.8x, reordered=2.8x (vs_rand=1.01x)
+[03:59:39] 
+============================================================
+[03:59:39] SUMMARY: AVERAGE IMPROVEMENT FROM REORDERING
+[03:59:39] ============================================================
+
+[03:59:39]   Compressor   |   Random |   Natural |  Reordered |  vs Random
+[03:59:39]   -----------------------------------------------------------------
+[03:59:39]   LZ4          |    2.9x |     2.9x |      2.9x |     1.01x
+[03:59:39]   Snappy       |    3.3x |     3.3x |      3.3x |     1.00x
+[03:59:39]   Zstd-3       |    5.7x |     5.9x |      5.8x |     1.02x
+[03:59:39]   Zstd-9       |    6.5x |     6.6x |      6.6x |     1.02x
+[03:59:39]   Zstd-19      |    8.0x |     8.3x |      8.2x |     1.02x
+[03:59:39]   H.265        |    8.7x |     8.8x |      8.8x |     1.01x
+[03:59:39] 
+Results saved to results/codec_comparison/reorder_benefit.json

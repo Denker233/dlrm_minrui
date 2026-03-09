@@ -1,0 +1,62 @@
+Unable to import mlperf_logging,  No module named 'mlperf_logging'
+Unable to import onnx.  No module named 'onnx'
+[03:46:10] Loading dataset...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined train indices...
+Randomized indices across days ...
+Split data according to indices...
+Reading pre-processed data=/home/cc/input/kaggleAdDisplayChallenge_processed.npz
+Sparse fea = 26, Dense fea = 13
+Defined test indices...
+Randomized indices across days ...
+Split data according to indices...
+[03:48:16] Loading checkpoint...
+[03:48:16] Model loaded: 26 tables, emb_dim=16
+[03:48:20] 
+============================================================
+[03:48:21] BASELINE (fp32, all in memory)
+[03:48:21] ============================================================
+/home/cc/expr/dlrm_minrui/dlrm_data_pytorch.py:328: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor. (Triggered internally at /pytorch/torch/csrc/utils/tensor_new.cpp:253.)
+  X_int = torch.log(torch.tensor(transposed_data[0], dtype=torch.float) + 1)
+[03:48:58]   AUC=0.802497, BLat=4.77ms, Total=36.4s, RSS=19476MB
+[03:48:58] 
+============================================================
+[03:48:58] BUILDING ZSTD COLD STORAGE
+[03:48:58] ============================================================
+[03:49:53]   Table 2: 9,633,265 cold, 75 frames, compressed=6.4MB (ratio=23.9x)
+[03:50:12]   Table 3: 2,168,208 cold, 17 frames, compressed=6.2MB (ratio=5.6x)
+[03:50:13]   Table 9: 88,486 cold, 1 frames, compressed=0.7MB (ratio=2.0x)
+[03:51:09]   Table 11: 7,965,378 cold, 62 frames, compressed=10.7MB (ratio=11.9x)
+[03:51:48]   Table 15: 5,267,563 cold, 41 frames, compressed=8.0MB (ratio=10.6x)
+[03:52:47]   Table 20: 6,741,517 cold, 53 frames, compressed=20.9MB (ratio=5.2x)
+[03:52:50]   Table 23: 280,517 cold, 3 frames, compressed=1.2MB (ratio=3.7x)
+[03:52:51]   Table 25: 137,719 cold, 2 frames, compressed=0.8MB (ratio=2.9x)
+[03:52:51] 
+============================================================
+[03:52:51] Zstd-19 + LRU cache=16
+[03:52:51] ============================================================
+[03:53:33]   AUC=0.802496 (delta=-0.000001)
+[03:53:33]   BLat=6.13ms (p50=6.09ms)
+[03:53:33]   Total=40.8s
+[03:53:33]   Scan+decode=2.20ms/batch, decode_only=0.010ms/batch
+[03:53:33]   Cache: hits=13790, misses=22, rate=0.9984
+[03:53:33]   Compressed: 55.0MB
+[03:53:33]   RSS=19329MB
+[03:53:33] 
+============================================================
+[03:53:33] Zstd-3 + LRU cache=16
+[03:53:33] ============================================================
+[03:54:15]   AUC=0.802496 (delta=-0.000001)
+[03:54:15]   BLat=6.50ms (p50=6.01ms)
+[03:54:15]   Total=40.7s
+[03:54:15]   Scan+decode=2.48ms/batch, decode_only=0.011ms/batch
+[03:54:15]   Cache: hits=13790, misses=22, rate=0.9984
+[03:54:15]   Compressed: 76.5MB
+[03:54:15]   RSS=19501MB
+[03:54:15] 
+============================================================
+[03:54:15] SUMMARY
+[03:54:15] ============================================================
+[03:54:15]   Baseline: AUC=0.802497, BLat=4.77ms
+[03:54:15]   See above for Zstd-19 and Zstd-3 results

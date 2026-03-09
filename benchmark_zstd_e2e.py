@@ -137,13 +137,19 @@ class ZstdColdStorage:
         for fid in frame_ids:
             self.get_frame(fid)
 
-        # Gather embeddings
-        result = torch.zeros(cold_mask.sum().item(), self.emb_dim)
-        for i, cr_idx in enumerate(cold_reordered):
-            fid = cr_idx.item() // ROWS_PER_FRAME
-            row_in_frame = cr_idx.item() % ROWS_PER_FRAME
+        # Vectorized gather from cached frames
+        frame_ids_all = cold_reordered // ROWS_PER_FRAME
+        rows_in_frame = cold_reordered % ROWS_PER_FRAME
+        n = cold_mask.sum().item()
+        result = torch.zeros(n, self.emb_dim)
+
+        # Group by frame for efficient gather
+        for fid in frame_ids:
             frame_data = self.cache[fid]
-            result[i] = frame_data[row_in_frame]
+            mask_fid = (frame_ids_all == fid)
+            if mask_fid.any():
+                row_indices = rows_in_frame[mask_fid]
+                result[mask_fid] = frame_data[row_indices]
 
         return result, cold_mask
 
@@ -234,7 +240,7 @@ def main():
                 X, lS_o, lS_i, T = inputBatch[0], inputBatch[1], inputBatch[2], inputBatch[3]
                 bt0 = time.time()
 
-                # Pre-populate cold embeddings for this batch
+                # Pre-populate cold embeddings for this batch (vectorized)
                 t_scan = time.time()
                 for t_idx, storage in storages.items():
                     if isinstance(lS_i, list) or isinstance(lS_i, tuple):
@@ -250,7 +256,7 @@ def main():
                         continue
 
                     cold_orig = indices[cold_mask]
-                    cold_reordered = storage.orig_to_cold[cold_orig]
+                    cold_reordered = storage.orig_to_cold[cold_orig].long()
 
                     # Determine needed frames
                     frame_ids = (cold_reordered // ROWS_PER_FRAME).unique().tolist()
@@ -261,11 +267,17 @@ def main():
                         storage.get_frame(fid)
                     decode_times.append(time.time() - t_dec)
 
-                    # Fill in cold embeddings
-                    for i, (orig_idx, cr_idx) in enumerate(zip(cold_orig, cold_reordered)):
-                        fid = cr_idx.item() // ROWS_PER_FRAME
-                        row = cr_idx.item() % ROWS_PER_FRAME
-                        dlrm.emb_l[t_idx].weight.data[orig_idx.item()] = storage.cache[fid][row]
+                    # Vectorized gather from cached frames
+                    frame_ids_all = cold_reordered // ROWS_PER_FRAME
+                    rows_in_frame = cold_reordered % ROWS_PER_FRAME
+                    gathered = torch.zeros(len(cold_orig), storage.emb_dim)
+                    for fid in frame_ids:
+                        fmask = (frame_ids_all == fid)
+                        if fmask.any():
+                            gathered[fmask] = storage.cache[fid][rows_in_frame[fmask]]
+
+                    # Vectorized write-back
+                    dlrm.emb_l[t_idx].weight.data[cold_orig] = gathered
 
                 scan_times.append(time.time() - t_scan)
 
