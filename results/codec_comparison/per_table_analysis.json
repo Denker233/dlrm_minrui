@@ -1,0 +1,266 @@
+{
+  "table_2": {
+    "table_idx": 2,
+    "n_total": 10131227,
+    "n_cold": 9633265,
+    "cold_fraction": 0.9508487964981932,
+    "raw_mb": 154.13224,
+    "entropy": 0.29276111056820414,
+    "unique_values": 112,
+    "mean": 87.99588775634766,
+    "std": 0.2316257208585739,
+    "zero_point": 88,
+    "zero_fraction": 0.9594748898737863,
+    "row_diff": 0.08081366866827011,
+    "scale": 0.0010730401850214191,
+    "compressors": {
+      "LZ4": {
+        "compressed_bytes": 19771747,
+        "ratio": 7.795580228697039
+      },
+      "Zstd-3": {
+        "compressed_bytes": 9327336,
+        "ratio": 16.52478692737133
+      },
+      "Zstd-19": {
+        "compressed_bytes": 6436087,
+        "ratio": 23.948128731013114
+      },
+      "H.265": {
+        "compressed_bytes": 5528914,
+        "ratio": 27.8774891416289
+      }
+    }
+  },
+  "table_3": {
+    "table_idx": 3,
+    "n_total": 2202608,
+    "n_cold": 2168208,
+    "cold_fraction": 0.984382150614181,
+    "raw_mb": 34.691328,
+    "entropy": 1.3304710813485863,
+    "unique_values": 156,
+    "mean": 108.99037170410156,
+    "std": 0.750167727470398,
+    "zero_point": 109,
+    "zero_fraction": 0.7071285942123634,
+    "row_diff": 0.5720629096031189,
+    "scale": 0.0010976545658766055,
+    "compressors": {
+      "LZ4": {
+        "compressed_bytes": 16477644,
+        "ratio": 2.1053572950113497
+      },
+      "Zstd-3": {
+        "compressed_bytes": 8350045,
+        "ratio": 4.154627669671242
+      },
+      "Zstd-19": {
+        "compressed_bytes": 6242497,
+        "ratio": 5.557283888162061
+      },
+      "H.265": {
+        "compressed_bytes": 5829626,
+        "ratio": 5.9508668309081925
+      }
+    }
+  },
+  "table_9": {
+    "table_idx": 9,
+    "n_total": 93145,
+    "n_cold": 88486,
+    "cold_fraction": 0.9499812120886789,
+    "raw_mb": 1.415776,
+    "entropy": 3.9050181688054546,
+    "unique_values": 195,
+    "mean": 158.0911102294922,
+    "std": 4.326160430908203,
+    "zero_point": 158,
+    "zero_fraction": 0.08877251768641367,
+    "row_diff": 4.2999725341796875,
+    "scale": 0.0006079670991383346,
+    "compressors": {
+      "LZ4": {
+        "compressed_bytes": 1397113,
+        "ratio": 1.013358260928071
+      },
+      "Zstd-3": {
+        "compressed_bytes": 749340,
+        "ratio": 1.8893639736301278
+      },
+      "Zstd-19": {
+        "compressed_bytes": 698837,
+        "ratio": 2.0259030360441703
+      },
+      "H.265": {
+        "compressed_bytes": 728499,
+        "ratio": 1.9434151591148374
+      }
+    }
+  },
+  "table_11": {
+    "table_idx": 11,
+    "n_total": 8351593,
+    "n_cold": 7965378,
+    "cold_fraction": 0.9537555290349997,
+    "raw_mb": 127.446048,
+    "entropy": 0.686463046681588,
+    "unique_values": 143,
+    "mean": 157.99685668945312,
+    "std": 0.4325874149799347,
+    "zero_point": 158,
+    "zero_fraction": 0.8856919674747388,
+    "row_diff": 0.2310994267463684,
+    "scale": 0.0008621952405162886,
+    "compressors": {
+      "LZ4": {
+        "compressed_bytes": 33607481,
+        "ratio": 3.7921928156412554
+      },
+      "Zstd-3": {
+        "compressed_bytes": 16709806,
+        "ratio": 7.627021402881637
+      },
+      "Zstd-19": {
+        "compressed_bytes": 10714889,
+        "ratio": 11.894294751910168
+      },
+      "H.265": {
+        "compressed_bytes": 10615699,
+        "ratio": 12.005431578269128
+      }
+    }
+  },
+  "table_15": {
+    "table_idx": 15,
+    "n_total": 5461306,
+    "n_cold": 5267563,
+    "cold_fraction": 0.9645244196168462,
+    "raw_mb": 84.281008,
+    "entropy": 0.7906512614252982,
+    "unique_values": 144,
+    "mean": 116.99613189697266,
+    "std": 0.4801522493362427,
+    "zero_point": 117,
+    "zero_fraction": 0.8627303437092257,
+    "row_diff": 0.2736015021800995,
+    "scale": 0.0009841341306181515,
+    "compressors": {
+      "LZ4": {
+        "compressed_bytes": 24773383,
+        "ratio": 3.402079078178382
+      },
+      "Zstd-3": {
+        "compressed_bytes": 12430630,
+        "ratio": 6.780107524719182
+      },
+      "Zstd-19": {
+        "compressed_bytes": 7982351,
+        "ratio": 10.558419192541145
+      },
+      "H.265": {
+        "compressed_bytes": 8043241,
+        "ratio": 10.478488460062305
+      }
+    }
+  },
+  "table_20": {
+    "table_idx": 20,
+    "n_total": 7046547,
+    "n_cold": 6741517,
+    "cold_fraction": 0.9567121314879472,
+    "raw_mb": 107.864272,
+    "entropy": 1.3854688524592833,
+    "unique_values": 146,
+    "mean": 129.00100708007812,
+    "std": 0.651400625705719,
+    "zero_point": 129,
+    "zero_fraction": 0.62750614958028,
+    "row_diff": 0.6256564259529114,
+    "scale": 0.0004967211508283429,
+    "compressors": {
+      "LZ4": {
+        "compressed_bytes": 55236748,
+        "ratio": 1.9527628961791885
+      },
+      "Zstd-3": {
+        "compressed_bytes": 26627707,
+        "ratio": 4.050828409671174
+      },
+      "Zstd-19": {
+        "compressed_bytes": 20908757,
+        "ratio": 5.158808436101677
+      },
+      "H.265": {
+        "compressed_bytes": 19377800,
+        "ratio": 5.566383800018578
+      }
+    }
+  },
+  "table_23": {
+    "table_idx": 23,
+    "n_total": 286181,
+    "n_cold": 280517,
+    "cold_fraction": 0.9802083296934457,
+    "raw_mb": 4.488272,
+    "entropy": 1.9979148559886712,
+    "unique_values": 135,
+    "mean": 197.00222778320312,
+    "std": 1.3478162288665771,
+    "zero_point": 197,
+    "zero_fraction": 0.3826630828078156,
+    "row_diff": 1.096470832824707,
+    "scale": 0.0015185137589772543,
+    "compressors": {
+      "LZ4": {
+        "compressed_bytes": 2583816,
+        "ratio": 1.7370710607876103
+      },
+      "Zstd-3": {
+        "compressed_bytes": 1366007,
+        "ratio": 3.2856874086296775
+      },
+      "Zstd-19": {
+        "compressed_bytes": 1199579,
+        "ratio": 3.7415393233792855
+      },
+      "H.265": {
+        "compressed_bytes": 1143606,
+        "ratio": 3.9246663623660596
+      }
+    }
+  },
+  "table_25": {
+    "table_idx": 25,
+    "n_total": 142572,
+    "n_cold": 137719,
+    "cold_fraction": 0.9659610582723115,
+    "raw_mb": 2.203504,
+    "entropy": 2.6949244045151244,
+    "unique_values": 139,
+    "mean": 126.0241470336914,
+    "std": 1.9976866245269775,
+    "zero_point": 126,
+    "zero_fraction": 0.2350315679027585,
+    "row_diff": 1.790336012840271,
+    "scale": 0.0013268297209459194,
+    "compressors": {
+      "LZ4": {
+        "compressed_bytes": 1441408,
+        "ratio": 1.5287163662196963
+      },
+      "Zstd-3": {
+        "compressed_bytes": 891026,
+        "ratio": 2.4729962986489733
+      },
+      "Zstd-19": {
+        "compressed_bytes": 771727,
+        "ratio": 2.8552895000434093
+      },
+      "H.265": {
+        "compressed_bytes": 775206,
+        "ratio": 2.842475419436898
+      }
+    }
+  }
+}
