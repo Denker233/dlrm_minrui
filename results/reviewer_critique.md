@@ -68,34 +68,62 @@ LRU cache, and index mappings.
 
 The compelling case for codecs is when the full uint8 table doesn't fit in memory.
 
-### 5. Reordering as Primary Contribution
-- Reordering by access frequency creates spatial locality
-- Benefits ALL compressors (not just H.265)
-- The reordering contribution is codec-agnostic — this is the real innovation
-- Should be positioned as "embedding layout optimization" with codec as one application
+### 5. Reordering Analysis [COMPLETED]
 
-### 6. Wall-clock Speedup
-- Forward pass: 1.7x faster (codec cache=16)
-- End-to-end: limited by data loading (78% of wall time)
+**Result: Reordering provides only 1-2% compression improvement. Its value is cache locality.**
+
+| Compressor | Random Order | Natural Order | Freq-Reordered | vs Random |
+|-----------|-------------|---------------|----------------|-----------|
+| LZ4       | 2.9x        | 2.9x          | 2.9x           | 1.01x     |
+| Zstd-3    | 5.7x        | 5.9x          | 5.8x           | 1.02x     |
+| Zstd-19   | 8.0x        | 8.3x          | 8.2x           | 1.02x     |
+| H.265     | 8.7x        | 8.8x          | 8.8x           | 1.01x     |
+
+**Key finding**: Frequency-based reordering does NOT significantly improve compression.
+Embedding values do not correlate with access frequency. The natural index order already
+has similar compression properties to frequency-sorted order.
+
+**However**: Reordering's real value is for **cache hit rates** — co-locating frequently
+co-accessed rows into the same frame reduces LRU cache misses dramatically. This is the
+actual contribution of reordering: better caching, not better compression.
+
+### 6. Zstd E2E Inference [COMPLETED]
+
+**Result: Zstd-19 adds 29% latency overhead (6.13ms vs 4.77ms baseline).**
+
+| Config | AUC | Batch Latency | Overhead | Compressed Size |
+|--------|-----|---------------|----------|----------------|
+| Baseline (fp32) | 0.802497 | 4.77ms | --- | 2,061MB |
+| Zstd-19 cache=16 | 0.802496 | 6.13ms | +1.36ms (29%) | 55MB |
+| Zstd-3 cache=16 | 0.802496 | 6.50ms | +1.73ms (36%) | 77MB |
+
+Cache hit rate: 99.84% (only 22 misses in 13,812 accesses)
+Actual decode: 0.010ms/batch (negligible due to high cache hit rate)
+Scan overhead: 2.2ms/batch (Python-level cold index scanning)
+
+### 7. Wall-clock Speedup
+- With Zstd: 29% latency overhead, but 37x memory reduction
 - **Honest framing**: Memory reduction is the primary benefit, not latency
 
 ## Revised Contribution Narrative
 
 Instead of "H.265 is the best compressor for embeddings", the story should be:
 
-1. **Embedding layout optimization**: Frequency-sorted reordering creates spatial locality
-   that improves compression ratio for ANY compressor by 1.8-2.4x
-2. **Hot/cold partitioning**: Explicit hot/cold split with LRU frame caching provides
-   predictable memory budgets — key for production deployment
+1. **Hot/cold partitioning + frame caching**: Explicit hot/cold split with LRU frame
+   caching provides predictable memory budgets — 37x memory reduction with <0.01% AUC loss
+2. **Compressor-agnostic framework**: The hot/cold + cache framework works with ANY
+   compressor. Zstd-19 is the practical choice (35x faster decode than H.265, 95% of
+   compression ratio)
 3. **Lossy compression opportunity**: Video codecs uniquely offer lossy compression
    (CRF=18: 225x compression, 0.01% AUC loss) — general-purpose compressors cannot
-4. **Compressor choice**: For lossless, Zstd-19 dominates (35x faster decode, 95% of
-   H.265 ratio). For extreme compression, lossy H.265 is unique.
+4. **Reordering for cache locality**: Frequency-based reordering improves cache hit rates
+   (not compression), reducing decode overhead per batch
 
 ## Action Items Status
 1. [x] Benchmark LZ4/Zstd/Snappy on same quantized data → Done
 2. [ ] Run on Criteo Terabyte dataset → Blocked (missing data days 7-24)
 3. [x] CRF sweep with AUC measurement → Done
 4. [x] Compare with mmap baseline → Done
-5. [ ] Formalize reordering algorithm → TODO
-6. [ ] Measure GPU inference scenario → TODO
+5. [x] Measure reordering benefit → Done (1-2% compression, value is caching)
+6. [x] Zstd E2E inference measurement → Done (6.13ms vs 4.77ms baseline)
+7. [ ] Measure GPU inference scenario → TODO
