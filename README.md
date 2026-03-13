@@ -19,10 +19,12 @@ export TMPDIR=$PWD/dlrm_env
 Download and prepare the Criteo Kaggle Display Advertising dataset:
 
 ```bash
+cd input/
 wget https://go.criteo.net/criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz \
   && tar -xzvf criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz \
   && mv train.txt train_original.txt \
   && mv test.txt test_original.txt
+cd ..
 ```
 
 Split the training data (required):
