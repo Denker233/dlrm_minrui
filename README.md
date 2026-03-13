@@ -90,7 +90,15 @@ python3 codec_ondemand_benchmark.py
 
 This runs the full pipeline with in-memory H.265 decode, LRU frame cache, Markov prefetching, and measures AUC/latency at multiple resolutions.
 
-**Step 2: Compare Python vs C++ overhead during inference**
+**Step 2: Standalone microbenchmark (tiling operations only)**
+
+```bash
+python3 benchmark_frame_packing.py
+```
+
+Benchmarks individual operations (tiling, untiling, gather, fused encode) per frame in isolation without running the full model.
+
+**Step 3: Compare Python vs C++ overhead during inference**
 
 ```bash
 # First run (encodes H.265 from scratch)
@@ -108,14 +116,6 @@ Runs 4 experiments on the same compressed model:
 | Python compressed | Pure Python: PyAV in-memory H.265 decode, reshape+transpose untiling, numpy dequant |
 | C++ compressed | C++ in-memory H.265 decode, fused gather+dequant from tiled frame, merged mapping |
 | Full C++ fast_forward | Single C++ call per batch, all 26 tables, pre-decoded frames, zero Python loop |
-
-**Step 3: Standalone microbenchmark (tiling operations only)**
-
-```bash
-python3 benchmark_frame_packing.py
-```
-
-Benchmarks individual operations (tiling, untiling, gather, fused encode) per frame in isolation without running the full model.
 
 ## How It Works
 
