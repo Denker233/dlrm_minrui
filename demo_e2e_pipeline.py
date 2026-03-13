@@ -45,8 +45,8 @@ except ImportError:
 # Configuration
 # ============================================================
 MODEL_PATH = "./models/dlrm_kaggle_correct.pt"
-DATA_FILE = os.path.expanduser("~/input/train.txt")
-PROCESSED_DATA = os.path.expanduser("~/input/kaggleAdDisplayChallenge_processed.npz")
+DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "input/train.txt")
+PROCESSED_DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "input/kaggleAdDisplayChallenge_processed.npz")
 
 ARCH_SPARSE_FEATURE_SIZE = 16
 ARCH_MLP_BOT = "13-512-256-64-16"
