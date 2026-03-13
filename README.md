@@ -7,7 +7,7 @@ Post-training compression of DLRM embedding tables using H.265 video codecs. Ach
 ### GitHub Codespaces Setup
 
 ```bash
-git clone https://github.com/Denker233/dlrm_minrui
+git clone -b codecs_display https://github.com/Denker233/dlrm_minrui
 cd dlrm_minrui
 chmod +x *.sh
 ./set_env.sh
