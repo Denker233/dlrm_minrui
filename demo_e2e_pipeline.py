@@ -18,7 +18,7 @@ Usage:
     --num-batches: limit test batches (0 = all)
 """
 
-import os, sys, time, json, gc, argparse
+import os, sys, time, json, gc, argparse, io
 import numpy as np
 import torch
 import torch.nn as nn
@@ -355,7 +355,7 @@ def _encode_single_frame(frame_2d, frame_path, width, height, crf):
 # Step 3: Decode frame (for inference)
 # ============================================================
 def decode_frame(frame_path, width, height):
-    """Decode a single H.265 frame file → (H, W) uint8 array."""
+    """Decode a single H.265 frame file from disk → (H, W) uint8 array."""
     if HAS_CPP and hasattr(_C, 'decode_h265_frame_from_file'):
         return _C.decode_h265_frame_from_file(frame_path)
 
@@ -364,6 +364,21 @@ def decode_frame(frame_path, width, height):
         img = frame.to_ndarray(format='gray')
         container.close()
         return torch.from_numpy(img) if HAS_CPP else img
+    container.close()
+    return None
+
+
+def decode_frame_from_bytes(data):
+    """Decode a single H.265 frame from in-memory bytes → (H, W) uint8 tensor."""
+    if HAS_CPP and hasattr(_C, 'decode_h265_frame_from_bytes'):
+        compressed_t = torch.frombuffer(bytearray(data), dtype=torch.uint8)
+        return _C.decode_h265_frame_from_bytes(compressed_t)
+
+    container = av.open(io.BytesIO(data))
+    for frame in container.decode(video=0):
+        img = frame.to_ndarray(format='gray')
+        container.close()
+        return torch.from_numpy(img)
     container.close()
     return None
 
@@ -377,13 +392,13 @@ class SimpleCompressedEmbeddingBag(nn.Module):
     Hot rows: fp32 compact tensor.
     Cold rows: on-demand H.265 decode with LRU frame cache.
     """
-    def __init__(self, hot_weight, mapping, cold_frames_dir, rows_per_frame,
+    def __init__(self, hot_weight, mapping, compressed_frames, rows_per_frame,
                  width, height, quant_scale, quant_zp, n_cold, cache_size=20):
         super().__init__()
         self.embedding_dim = EMB_DIM
         self.hot_weight = hot_weight
         self.mapping = mapping  # int32: >=0 = hot idx, <0 = -(cold_idx+1)
-        self.cold_frames_dir = cold_frames_dir
+        self.compressed_frames = compressed_frames  # list of bytes, one per frame
         self.rows_per_frame = rows_per_frame
         self.width = width
         self.height = height
@@ -393,18 +408,10 @@ class SimpleCompressedEmbeddingBag(nn.Module):
         self.tiles_per_row = width // TILE_W
         self.mode = 'sum'
 
-        # LRU frame cache
+        # LRU frame cache (decoded frames)
         self.cache = {}
         self.cache_order = []
         self.cache_size = cache_size
-
-        # Detect frame extension
-        self._frame_ext = '.h265'
-        for ext in ['.h265', '.h264', '.mkv']:
-            test_path = os.path.join(cold_frames_dir, f'frame_00000{ext}')
-            if os.path.exists(test_path):
-                self._frame_ext = ext
-                break
 
         # Stats
         self.cache_hits = 0
@@ -414,15 +421,13 @@ class SimpleCompressedEmbeddingBag(nn.Module):
         self._empty_psw = torch.empty(0)
 
     def _get_frame(self, frame_id):
-        """Get decoded frame from cache or decode from disk."""
+        """Get decoded frame from cache or decode from in-memory compressed bytes."""
         if frame_id in self.cache:
             self.cache_hits += 1
             return self.cache[frame_id]
 
         self.cache_misses += 1
-        frame_path = os.path.join(
-            self.cold_frames_dir, f'frame_{frame_id:05d}{self._frame_ext}')
-        frame_data = decode_frame(frame_path, self.width, self.height)
+        frame_data = decode_frame_from_bytes(self.compressed_frames[frame_id])
 
         # LRU eviction
         if len(self.cache) >= self.cache_size:
@@ -631,7 +636,7 @@ def main():
     log("\n" + "=" * 70)
     log("STEP 2: Tile + H.265 Encode Cold Embeddings")
     log("=" * 70)
-    frame_dirs = {}
+    compressed_frames_per_table = {}  # table_id → list of bytes (in-memory)
     rpf_per_table = {}
     total_raw_bytes = 0
     total_compressed_bytes = 0
@@ -643,7 +648,17 @@ def main():
         log(f"  Table {t}: {n_cold:,} cold rows")
         num_frames, frame_dir, comp_bytes, rpf = encode_h265_frames(
             cold_weights_q[t], width, height, args.crf, output_dir, t)
-        frame_dirs[t] = frame_dir
+
+        # Load compressed frames into RAM (total ~0.8 MB for Kaggle)
+        frame_files = sorted([f for f in os.listdir(frame_dir)
+                              if f.startswith('frame_') and
+                              (f.endswith('.h265') or f.endswith('.h264') or f.endswith('.mkv'))])
+        frame_bytes = []
+        for ff in frame_files:
+            with open(os.path.join(frame_dir, ff), 'rb') as fh:
+                frame_bytes.append(fh.read())
+        compressed_frames_per_table[t] = frame_bytes
+
         rpf_per_table[t] = rpf
         total_raw_bytes += n_cold * EMB_DIM
         total_compressed_bytes += comp_bytes
@@ -674,7 +689,7 @@ def main():
     total_hot_mb = 0
     total_mapping_mb = 0
     for t in large_tables:
-        if t not in frame_dirs:
+        if t not in compressed_frames_per_table:
             continue
         w = state_dict[emb_keys[t]]
         h_idx = hot_indices[t]
@@ -699,7 +714,7 @@ def main():
         comp_emb = SimpleCompressedEmbeddingBag(
             hot_weight=hot_weight,
             mapping=mapping,
-            cold_frames_dir=frame_dirs[t],
+            compressed_frames=compressed_frames_per_table[t],
             rows_per_frame=rpf_per_table[t],
             width=width, height=height,
             quant_scale=s, quant_zp=zp,

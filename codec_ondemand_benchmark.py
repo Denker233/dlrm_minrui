@@ -5,7 +5,7 @@ True On-Demand H.265 Codec Benchmark for DLRM Embedding Tables.
 Key changes from codec_prefetch_benchmark.py:
 1. Proper video-resolution frames (1080p, 4K) instead of width=16
 2. Per-frame compressed files for true on-demand decode (option 2)
-3. NO pre-decode — each cache miss does disk read + H.265 decode + dequantize
+3. NO pre-decode — each cache miss does in-memory H.265 decode + dequantize
 
 Reuses Phases 1-2 (profiling, hot/cold split) and reordering from previous runs.
 Only re-encodes with new frame geometry and runs Markov predictor experiments.
@@ -1925,7 +1925,7 @@ def main():
     all_results[key] = run_ondemand_inference(
         res_name='1080p', cache_capacity=32,
         predictor_type='none', lookahead_depth=1, tag=key,
-        use_global_cache=True, disk_decode=True, quantize_hot=True,
+        use_global_cache=True, disk_decode=False, quantize_hot=True,
         warmup_batches=1, full_cpp=True)
 
     # 1080p bitmap + full_cpp (with packed 24-bit cold_mapping)
@@ -1933,7 +1933,7 @@ def main():
     all_results[key] = run_ondemand_inference(
         res_name='1080p', cache_capacity=32,
         predictor_type='none', lookahead_depth=1, tag=key,
-        use_global_cache=True, disk_decode=True, quantize_hot=True,
+        use_global_cache=True, disk_decode=False, quantize_hot=True,
         use_bitmap=True, warmup_batches=1, full_cpp=True)
 
     # 480p bitmap + full_cpp (with packed 24-bit cold_mapping)
@@ -1941,7 +1941,7 @@ def main():
     all_results[key] = run_ondemand_inference(
         res_name='480p', cache_capacity=64,
         predictor_type='none', lookahead_depth=1, tag=key,
-        use_global_cache=True, disk_decode=True, quantize_hot=True,
+        use_global_cache=True, disk_decode=False, quantize_hot=True,
         use_bitmap=True, warmup_batches=1, full_cpp=True)
 
     # 4K array + full_cpp
@@ -1949,7 +1949,7 @@ def main():
     all_results[key] = run_ondemand_inference(
         res_name='4K', cache_capacity=8,
         predictor_type='none', lookahead_depth=1, tag=key,
-        use_global_cache=True, disk_decode=True, quantize_hot=True,
+        use_global_cache=True, disk_decode=False, quantize_hot=True,
         warmup_batches=1, full_cpp=True)
 
     # Restore default thread count
