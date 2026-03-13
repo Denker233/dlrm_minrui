@@ -564,11 +564,14 @@ def benchmark_end_to_end_with_codec(res_name, width, height, frame_np):
         def cpp_tile_encode():
             rows = torch.randint(0, 256, (rows_per_frame, 16), dtype=torch.uint8)
             frame_2d = _C.tile_rows_to_frame(rows, width, height)
-            return encode_pyav(frame_2d.numpy())
+            return encode_pyav(np.ascontiguousarray(frame_2d.numpy()))
 
-        cpp_enc_time, _ = bench(cpp_tile_encode, iters=5, warmup=1,
-                                 label="C++ tile + PyAV encode")
-        print(f"  Tile overhead reduction: {(py_enc_time - cpp_enc_time):.1f}ms saved")
+        try:
+            cpp_enc_time, _ = bench(cpp_tile_encode, iters=5, warmup=1,
+                                     label="C++ tile + PyAV encode")
+            print(f"  Tile overhead reduction: {(py_enc_time - cpp_enc_time):.1f}ms saved")
+        except Exception as e:
+            print(f"  C++ tile + PyAV encode: SKIPPED ({e})")
 
     # Decode
     print(f"\n--- Decode single frame from H.265 ({len(compressed)/1024:.1f}KB) ---")

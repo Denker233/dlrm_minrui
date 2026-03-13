@@ -1,0 +1,448 @@
+{
+  "dataset": "kaggle",
+  "D": 16,
+  "tiling": "4x4",
+  "rpf": 129600,
+  "large_tables": [
+    2,
+    3,
+    9,
+    11,
+    15,
+    20,
+    23,
+    25
+  ],
+  "table_info": {
+    "2": {
+      "n_rows": 10131227,
+      "n_hot": 435642,
+      "n_cold": 9695585,
+      "n_frames": 75,
+      "accessed_frames": 4,
+      "n_accessed": 946681
+    },
+    "3": {
+      "n_rows": 2202608,
+      "n_hot": 94712,
+      "n_cold": 2107896,
+      "n_frames": 17,
+      "accessed_frames": 2,
+      "n_accessed": 305825
+    },
+    "9": {
+      "n_rows": 93145,
+      "n_hot": 4005,
+      "n_cold": 89140,
+      "n_frames": 1,
+      "accessed_frames": 1,
+      "n_accessed": 45643
+    },
+    "11": {
+      "n_rows": 8351593,
+      "n_hot": 359118,
+      "n_cold": 7992475,
+      "n_frames": 62,
+      "accessed_frames": 4,
+      "n_accessed": 814963
+    },
+    "15": {
+      "n_rows": 5461306,
+      "n_hot": 234836,
+      "n_cold": 5226470,
+      "n_frames": 41,
+      "accessed_frames": 3,
+      "n_accessed": 594358
+    },
+    "20": {
+      "n_rows": 7046547,
+      "n_hot": 303001,
+      "n_cold": 6743546,
+      "n_frames": 53,
+      "accessed_frames": 4,
+      "n_accessed": 720100
+    },
+    "23": {
+      "n_rows": 286181,
+      "n_hot": 12305,
+      "n_cold": 273876,
+      "n_frames": 3,
+      "accessed_frames": 1,
+      "n_accessed": 78300
+    },
+    "25": {
+      "n_rows": 142572,
+      "n_hot": 6130,
+      "n_cold": 136442,
+      "n_frames": 2,
+      "accessed_frames": 1,
+      "n_accessed": 54262
+    }
+  },
+  "cache_simulation": {
+    "2": {
+      "cache_size": 2,
+      "total_accesses": 31513,
+      "hits": 0,
+      "misses": 31513,
+      "hit_rate": 0.0,
+      "unique_frames": 20
+    },
+    "4": {
+      "cache_size": 4,
+      "total_accesses": 31513,
+      "hits": 0,
+      "misses": 31513,
+      "hit_rate": 0.0,
+      "unique_frames": 20
+    },
+    "8": {
+      "cache_size": 8,
+      "total_accesses": 31513,
+      "hits": 0,
+      "misses": 31513,
+      "hit_rate": 0.0,
+      "unique_frames": 20
+    },
+    "16": {
+      "cache_size": 16,
+      "total_accesses": 31513,
+      "hits": 0,
+      "misses": 31513,
+      "hit_rate": 0.0,
+      "unique_frames": 20
+    },
+    "32": {
+      "cache_size": 32,
+      "total_accesses": 31513,
+      "hits": 31493,
+      "misses": 20,
+      "hit_rate": 99.93653412877225,
+      "unique_frames": 20
+    },
+    "64": {
+      "cache_size": 64,
+      "total_accesses": 31513,
+      "hits": 31493,
+      "misses": 20,
+      "hit_rate": 99.93653412877225,
+      "unique_frames": 20
+    },
+    "128": {
+      "cache_size": 128,
+      "total_accesses": 31513,
+      "hits": 31493,
+      "misses": 20,
+      "hit_rate": 99.93653412877225,
+      "unique_frames": 20
+    }
+  },
+  "unique_frames": 20,
+  "total_frames": 254,
+  "memory": {
+    "total_fp32_mb": 2057.8112182617188,
+    "total_cold_uint8_mb": 492.3313903808594,
+    "hot_fp32_mb": 88.48565673828125,
+    "mapping_mb": 134.6420135498047,
+    "frame_bytes": 2073600
+  },
+  "crf_compressed_mb": {
+    "0": 16.387775421142578,
+    "10": 1.4885034561157227,
+    "18": 0.7714509963989258,
+    "23": 0.7279443740844727,
+    "28": 0.7159833908081055
+  },
+  "auc": {
+    "baseline": 0.8024972457390324,
+    "0": {
+      "auc": 0.8024776199591256,
+      "delta": -1.962577990677339e-05
+    },
+    "10": {
+      "auc": 0.8022896337538623,
+      "delta": -0.00020761198517005308
+    },
+    "18": {
+      "auc": 0.8016120996574786,
+      "delta": -0.0008851460815537671
+    },
+    "23": {
+      "auc": 0.8005777899245728,
+      "delta": -0.0019194558144595142
+    },
+    "28": {
+      "auc": 0.7974133851403213,
+      "delta": -0.005083860598711021
+    }
+  },
+  "configs": [
+    {
+      "name": "Baseline (fp32)",
+      "hot_mb": 2057.8112182617188,
+      "compressed_mb": 0,
+      "decoded_mb": 0,
+      "mapping_mb": 0,
+      "total_mb": 2057.8112182617188,
+      "storage_mb": 2057.8112182617188,
+      "crf": "-",
+      "cache": "-",
+      "auc_delta": 0
+    },
+    {
+      "name": "CRF=0, pre-decode",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 16.387775421142578,
+      "decoded_mb": 39.55078125,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 279.0662269592285,
+      "storage_mb": 104.87343215942383,
+      "crf": 0,
+      "cache": "all",
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=0, cache=4",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 16.387775421142578,
+      "decoded_mb": 7.91015625,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 247.42560195922852,
+      "storage_mb": 104.87343215942383,
+      "crf": 0,
+      "cache": 4,
+      "hit_rate": 0.0,
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=0, cache=8",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 16.387775421142578,
+      "decoded_mb": 15.8203125,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 255.33575820922852,
+      "storage_mb": 104.87343215942383,
+      "crf": 0,
+      "cache": 8,
+      "hit_rate": 0.0,
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=0, cache=16",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 16.387775421142578,
+      "decoded_mb": 31.640625,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 271.1560707092285,
+      "storage_mb": 104.87343215942383,
+      "crf": 0,
+      "cache": 16,
+      "hit_rate": 0.0,
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=10, pre-decode",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 1.4885034561157227,
+      "decoded_mb": 39.55078125,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 264.16695499420166,
+      "storage_mb": 89.97416019439697,
+      "crf": 10,
+      "cache": "all",
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=10, cache=4",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 1.4885034561157227,
+      "decoded_mb": 7.91015625,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 232.52632999420166,
+      "storage_mb": 89.97416019439697,
+      "crf": 10,
+      "cache": 4,
+      "hit_rate": 0.0,
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=10, cache=8",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 1.4885034561157227,
+      "decoded_mb": 15.8203125,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 240.43648624420166,
+      "storage_mb": 89.97416019439697,
+      "crf": 10,
+      "cache": 8,
+      "hit_rate": 0.0,
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=10, cache=16",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 1.4885034561157227,
+      "decoded_mb": 31.640625,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 256.25679874420166,
+      "storage_mb": 89.97416019439697,
+      "crf": 10,
+      "cache": 16,
+      "hit_rate": 0.0,
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=18, pre-decode",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 0.7714509963989258,
+      "decoded_mb": 39.55078125,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 263.44990253448486,
+      "storage_mb": 89.25710773468018,
+      "crf": 18,
+      "cache": "all",
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=18, cache=4",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 0.7714509963989258,
+      "decoded_mb": 7.91015625,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 231.80927753448486,
+      "storage_mb": 89.25710773468018,
+      "crf": 18,
+      "cache": 4,
+      "hit_rate": 0.0,
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=18, cache=8",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 0.7714509963989258,
+      "decoded_mb": 15.8203125,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 239.71943378448486,
+      "storage_mb": 89.25710773468018,
+      "crf": 18,
+      "cache": 8,
+      "hit_rate": 0.0,
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=18, cache=16",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 0.7714509963989258,
+      "decoded_mb": 31.640625,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 255.53974628448486,
+      "storage_mb": 89.25710773468018,
+      "crf": 18,
+      "cache": 16,
+      "hit_rate": 0.0,
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=23, pre-decode",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 0.7279443740844727,
+      "decoded_mb": 39.55078125,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 263.4063959121704,
+      "storage_mb": 89.21360111236572,
+      "crf": 23,
+      "cache": "all",
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=23, cache=4",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 0.7279443740844727,
+      "decoded_mb": 7.91015625,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 231.7657709121704,
+      "storage_mb": 89.21360111236572,
+      "crf": 23,
+      "cache": 4,
+      "hit_rate": 0.0,
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=23, cache=8",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 0.7279443740844727,
+      "decoded_mb": 15.8203125,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 239.6759271621704,
+      "storage_mb": 89.21360111236572,
+      "crf": 23,
+      "cache": 8,
+      "hit_rate": 0.0,
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=23, cache=16",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 0.7279443740844727,
+      "decoded_mb": 31.640625,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 255.4962396621704,
+      "storage_mb": 89.21360111236572,
+      "crf": 23,
+      "cache": 16,
+      "hit_rate": 0.0,
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=28, pre-decode",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 0.7159833908081055,
+      "decoded_mb": 39.55078125,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 263.39443492889404,
+      "storage_mb": 89.20164012908936,
+      "crf": 28,
+      "cache": "all",
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=28, cache=4",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 0.7159833908081055,
+      "decoded_mb": 7.91015625,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 231.75380992889404,
+      "storage_mb": 89.20164012908936,
+      "crf": 28,
+      "cache": 4,
+      "hit_rate": 0.0,
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=28, cache=8",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 0.7159833908081055,
+      "decoded_mb": 15.8203125,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 239.66396617889404,
+      "storage_mb": 89.20164012908936,
+      "crf": 28,
+      "cache": 8,
+      "hit_rate": 0.0,
+      "auc_delta": "-"
+    },
+    {
+      "name": "CRF=28, cache=16",
+      "hot_mb": 88.48565673828125,
+      "compressed_mb": 0.7159833908081055,
+      "decoded_mb": 31.640625,
+      "mapping_mb": 134.6420135498047,
+      "total_mb": 255.48427867889404,
+      "storage_mb": 89.20164012908936,
+      "crf": 28,
+      "cache": 16,
+      "hit_rate": 0.0,
+      "auc_delta": "-"
+    }
+  ]
+}

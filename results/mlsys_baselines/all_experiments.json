@@ -1,0 +1,144 @@
+{
+  "kaggle_exp1": {
+    "config_A": {
+      "batch_ms": 4.441738128662109,
+      "emb_ms": 1.390218734741211,
+      "auc": 0.8024972458772107
+    },
+    "config_B": {
+      "batch_ms": 2.44903564453125,
+      "emb_ms": 0.27179718017578125,
+      "auc": 0.8024972458772107
+    },
+    "config_C": {
+      "batch_ms": 2.4619102478027344,
+      "emb_ms": 0.2319812774658203,
+      "auc": 0.8024963962234933
+    },
+    "decomposition": {
+      "speedup_A_to_B": 1.814,
+      "speedup_B_to_C": 0.995,
+      "speedup_A_to_C": 1.804,
+      "cpp_benefit_ms": 1.993,
+      "compression_benefit_ms": -0.013
+    }
+  },
+  "kaggle_exp4": {
+    "config_A": {
+      "counters": {
+        "L1-dcache-loads": 33245428038,
+        "L1-dcache-load-misses": 2677647976,
+        "LLC-loads": 92183012,
+        "LLC-load-misses": 34804984,
+        "instructions": 124768423805,
+        "cycles": 358161103935
+      },
+      "mean_lat_ms": 4.325106143951416,
+      "n_batches": 200,
+      "l1_miss_rate": 8.0542,
+      "llc_miss_rate": 37.7564,
+      "ipc": 0.348
+    },
+    "config_B": {
+      "counters": {
+        "L1-dcache-loads": 32163801598,
+        "L1-dcache-load-misses": 2626308430,
+        "LLC-loads": 69898833,
+        "LLC-load-misses": 24707502,
+        "instructions": 117964758562,
+        "cycles": 312495302334
+      },
+      "mean_lat_ms": 2.4243342876434326,
+      "n_batches": 200,
+      "l1_miss_rate": 8.1654,
+      "llc_miss_rate": 35.3475,
+      "ipc": 0.377
+    },
+    "config_C": {
+      "counters": {
+        "L1-dcache-loads": 32421260929,
+        "L1-dcache-load-misses": 2653621821,
+        "LLC-loads": 82391656,
+        "LLC-load-misses": 32609090,
+        "instructions": 118925399485,
+        "cycles": 316941382775
+      },
+      "mean_lat_ms": 2.5437211990356445,
+      "n_batches": 200,
+      "l1_miss_rate": 8.1848,
+      "llc_miss_rate": 39.5781,
+      "ipc": 0.375
+    }
+  },
+  "terabyte_exp1": {
+    "config_A": {
+      "batch_ms": 5.281686782836914,
+      "emb_ms": 1.4777183532714844,
+      "auc": 0.768817724257801
+    },
+    "config_B": {
+      "batch_ms": 3.633737564086914,
+      "emb_ms": 0.38170814514160156,
+      "auc": 0.768817724257801
+    },
+    "config_C": {
+      "batch_ms": 3.574371337890625,
+      "emb_ms": 0.35762786865234375,
+      "auc": 0.7688176318569487
+    },
+    "decomposition": {
+      "speedup_A_to_B": 1.454,
+      "speedup_B_to_C": 1.017,
+      "speedup_A_to_C": 1.478,
+      "cpp_benefit_ms": 1.648,
+      "compression_benefit_ms": 0.059
+    }
+  },
+  "terabyte_exp4": {
+    "config_A": {
+      "counters": {
+        "L1-dcache-loads": 41551258821,
+        "L1-dcache-load-misses": 3752383138,
+        "LLC-loads": 139455263,
+        "LLC-load-misses": 50278183,
+        "instructions": 147390000892,
+        "cycles": 380404207046
+      },
+      "mean_lat_ms": 5.632696151733398,
+      "n_batches": 200,
+      "l1_miss_rate": 9.0307,
+      "llc_miss_rate": 36.0533,
+      "ipc": 0.387
+    },
+    "config_B": {
+      "counters": {
+        "L1-dcache-loads": 41062851562,
+        "L1-dcache-load-misses": 3818169833,
+        "LLC-loads": 181372311,
+        "LLC-load-misses": 87621035,
+        "instructions": 143005635259,
+        "cycles": 344159072403
+      },
+      "mean_lat_ms": 3.816967010498047,
+      "n_batches": 200,
+      "l1_miss_rate": 9.2984,
+      "llc_miss_rate": 48.31,
+      "ipc": 0.416
+    },
+    "config_C": {
+      "counters": {
+        "L1-dcache-loads": 40600863938,
+        "L1-dcache-load-misses": 3698056575,
+        "LLC-loads": 105186798,
+        "LLC-load-misses": 33278232,
+        "instructions": 142252772573,
+        "cycles": 347336499276
+      },
+      "mean_lat_ms": 4.12136435508728,
+      "n_batches": 200,
+      "l1_miss_rate": 9.1083,
+      "llc_miss_rate": 31.6373,
+      "ipc": 0.41
+    }
+  }
+}

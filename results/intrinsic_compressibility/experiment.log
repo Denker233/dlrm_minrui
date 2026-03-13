@@ -1,0 +1,730 @@
+[05:33:04] ======================================================================
+[05:33:04] INTRINSIC COMPRESSIBILITY EXPERIMENTS
+[05:33:04] ======================================================================
+[05:33:04] Frame: 1920x1080
+[05:33:04] CRF values: [0, 10, 18, 23, 28]
+[05:33:04] 
+######################################################################
+[05:33:04] # KAGGLE DATASET (D=16)
+[05:33:04] ######################################################################
+[05:33:04] Loading Kaggle model from ./models/dlrm_kaggle_correct.pt...
+[05:33:05]   26 tables, D=16, 8 large (>50000 rows)
+[05:33:05]     Table 2: 10,131,227 rows
+[05:33:05]     Table 3: 2,202,608 rows
+[05:33:05]     Table 9: 93,145 rows
+[05:33:05]     Table 11: 8,351,593 rows
+[05:33:05]     Table 15: 5,461,306 rows
+[05:33:05]     Table 20: 7,046,547 rows
+[05:33:05]     Table 23: 286,181 rows
+[05:33:05]     Table 25: 142,572 rows
+[05:33:05] 
+======================================================================
+[05:33:05] EXPERIMENT 3: Intrinsic Compressibility (Kaggle, D=16)
+[05:33:05] ======================================================================
+[05:33:08] 
+  Table 2: 10,131,227 rows, D=16
+[05:33:08]     Entropy: 0.17 bits/byte (max 8.0)
+[05:33:08]     uint8 distribution: mean=135.0, std=0.2, median=135, unique=153/256
+[05:33:08]     100.0% of values within ±16 of mean
+[05:33:08]     SVD effective rank: 13.4 / 16
+[05:33:08]     Dims for 90% var: 11, 95%: 13, 99%: 16 (of 16)
+[05:33:08]     Top-1 component: 53.4% of variance
+[05:33:08]     Row norms: mean=0.0010, std=0.0012
+[05:33:08]     Near-zero rows (norm<0.01): 99.8%
+[05:33:09] 
+  Table 3: 2,202,608 rows, D=16
+[05:33:09]     Entropy: 0.43 bits/byte (max 8.0)
+[05:33:09]     uint8 distribution: mean=156.0, std=0.6, median=156, unique=146/256
+[05:33:09]     100.0% of values within ±16 of mean
+[05:33:09]     SVD effective rank: 11.6 / 16
+[05:33:09]     Dims for 90% var: 6, 95%: 10, 99%: 15 (of 16)
+[05:33:09]     Top-1 component: 70.0% of variance
+[05:33:09]     Row norms: mean=0.0027, std=0.0049
+[05:33:09]     Near-zero rows (norm<0.01): 98.0%
+[05:33:09] 
+  Table 9: 93,145 rows, D=16
+[05:33:09]     Entropy: 2.52 bits/byte (max 8.0)
+[05:33:09]     uint8 distribution: mean=161.0, std=2.4, median=161, unique=168/256
+[05:33:09]     99.6% of values within ±16 of mean
+[05:33:09]     SVD effective rank: 12.8 / 16
+[05:33:09]     Dims for 90% var: 9, 95%: 12, 99%: 16 (of 16)
+[05:33:09]     Top-1 component: 61.3% of variance
+[05:33:09]     Row norms: mean=0.0113, std=0.0144
+[05:33:09]     Near-zero rows (norm<0.01): 80.7%
+[05:33:12] 
+  Table 11: 8,351,593 rows, D=16
+[05:33:12]     Entropy: 0.15 bits/byte (max 8.0)
+[05:33:12]     uint8 distribution: mean=157.0, std=0.2, median=157, unique=133/256
+[05:33:12]     100.0% of values within ±16 of mean
+[05:33:12]     SVD effective rank: 12.2 / 16
+[05:33:12]     Dims for 90% var: 8, 95%: 11, 99%: 15 (of 16)
+[05:33:12]     Top-1 component: 59.3% of variance
+[05:33:12]     Row norms: mean=0.0013, std=0.0019
+[05:33:12]     Near-zero rows (norm<0.01): 99.7%
+[05:33:14] 
+  Table 15: 5,461,306 rows, D=16
+[05:33:14]     Entropy: 0.48 bits/byte (max 8.0)
+[05:33:14]     uint8 distribution: mean=126.0, std=0.5, median=126, unique=181/256
+[05:33:14]     100.0% of values within ±16 of mean
+[05:33:14]     SVD effective rank: 12.1 / 16
+[05:33:14]     Dims for 90% var: 7, 95%: 11, 99%: 15 (of 16)
+[05:33:14]     Top-1 component: 62.9% of variance
+[05:33:14]     Row norms: mean=0.0017, std=0.0027
+[05:33:14]     Near-zero rows (norm<0.01): 99.3%
+[05:33:16] 
+  Table 20: 7,046,547 rows, D=16
+[05:33:16]     Entropy: 0.13 bits/byte (max 8.0)
+[05:33:16]     uint8 distribution: mean=144.0, std=0.2, median=144, unique=172/256
+[05:33:16]     100.0% of values within ±16 of mean
+[05:33:16]     SVD effective rank: 13.7 / 16
+[05:33:16]     Dims for 90% var: 11, 95%: 13, 99%: 16 (of 16)
+[05:33:16]     Top-1 component: 46.8% of variance
+[05:33:16]     Row norms: mean=0.0010, std=0.0011
+[05:33:16]     Near-zero rows (norm<0.01): 99.9%
+[05:33:16] 
+  Table 23: 286,181 rows, D=16
+[05:33:16]     Entropy: 0.69 bits/byte (max 8.0)
+[05:33:16]     uint8 distribution: mean=173.0, std=0.8, median=173, unique=113/256
+[05:33:16]     100.0% of values within ±16 of mean
+[05:33:16]     SVD effective rank: 12.6 / 16
+[05:33:16]     Dims for 90% var: 8, 95%: 12, 99%: 15 (of 16)
+[05:33:16]     Top-1 component: 62.3% of variance
+[05:33:16]     Row norms: mean=0.0068, std=0.0114
+[05:33:16]     Near-zero rows (norm<0.01): 92.2%
+[05:33:16] 
+  Table 25: 142,572 rows, D=16
+[05:33:16]     Entropy: 2.12 bits/byte (max 8.0)
+[05:33:16]     uint8 distribution: mean=138.0, std=1.9, median=138, unique=171/256
+[05:33:16]     99.8% of values within ±16 of mean
+[05:33:16]     SVD effective rank: 12.5 / 16
+[05:33:16]     Dims for 90% var: 8, 95%: 11, 99%: 15 (of 16)
+[05:33:16]     Top-1 component: 62.7% of variance
+[05:33:16]     Row norms: mean=0.0099, std=0.0143
+[05:33:16]     Near-zero rows (norm<0.01): 84.6%
+[05:33:16] 
+======================================================================
+[05:33:16] EXPERIMENT 2: Spatial Smoothness (Kaggle, D=16)
+[05:33:16] ======================================================================
+[05:33:16]   Table 2 [natural             ]: TV=0.9555, row-L2=11.01, col_std=3.57
+[05:33:17]   Table 2 [random              ]: TV=0.0791, row-L2=0.40, col_std=0.20
+[05:33:18]   Table 2 [frequency           ]: TV=1.8675, row-L2=22.93, col_std=5.54
+[05:33:19]   Table 2 [reverse_frequency   ]: TV=0.0000, row-L2=0.00, col_std=0.00
+[05:33:19]   Table 3 [natural             ]: TV=1.8803, row-L2=19.80, col_std=4.88
+[05:33:19]   Table 3 [random              ]: TV=0.2742, row-L2=1.19, col_std=0.55
+[05:33:19]   Table 3 [frequency           ]: TV=2.2794, row-L2=29.84, col_std=6.79
+[05:33:20]   Table 3 [reverse_frequency   ]: TV=0.0003, row-L2=0.00, col_std=0.00
+[05:33:20]   Table 9 [natural             ]: TV=2.4289, row-L2=25.62, col_std=6.13
+[05:33:20]   Table 9 [random              ]: TV=2.4828, row-L2=9.12, col_std=2.41
+[05:33:20]   Table 9 [frequency           ]: TV=2.3373, row-L2=24.83, col_std=6.52
+[05:33:20]   Table 9 [reverse_frequency   ]: TV=2.3283, row-L2=4.75, col_std=0.85
+[05:33:20]   Table 11 [natural             ]: TV=0.9535, row-L2=10.75, col_std=3.33
+[05:33:20]   Table 11 [random              ]: TV=0.0757, row-L2=0.39, col_std=0.20
+[05:33:21]   Table 11 [frequency           ]: TV=1.7148, row-L2=21.33, col_std=5.06
+[05:33:22]   Table 11 [reverse_frequency   ]: TV=0.0000, row-L2=0.00, col_std=0.00
+[05:33:22]   Table 15 [natural             ]: TV=2.1699, row-L2=21.97, col_std=5.94
+[05:33:22]   Table 15 [random              ]: TV=0.2956, row-L2=1.30, col_std=0.52
+[05:33:23]   Table 15 [frequency           ]: TV=3.2220, row-L2=38.64, col_std=8.86
+[05:33:23]   Table 15 [reverse_frequency   ]: TV=0.0002, row-L2=0.00, col_std=0.00
+[05:33:24]   Table 20 [natural             ]: TV=0.8936, row-L2=10.60, col_std=3.75
+[05:33:24]   Table 20 [random              ]: TV=0.0656, row-L2=0.32, col_std=0.29
+[05:33:25]   Table 20 [frequency           ]: TV=1.6091, row-L2=19.12, col_std=4.96
+[05:33:25]   Table 20 [reverse_frequency   ]: TV=0.0001, row-L2=0.00, col_std=0.00
+[05:33:26]   Table 23 [natural             ]: TV=0.9755, row-L2=14.12, col_std=3.48
+[05:33:26]   Table 23 [random              ]: TV=0.5332, row-L2=2.06, col_std=0.77
+[05:33:26]   Table 23 [frequency           ]: TV=0.9233, row-L2=16.32, col_std=4.02
+[05:33:26]   Table 23 [reverse_frequency   ]: TV=0.0594, row-L2=0.14, col_std=0.07
+[05:33:26]   Table 25 [natural             ]: TV=2.4693, row-L2=23.27, col_std=5.75
+[05:33:26]   Table 25 [random              ]: TV=2.4444, row-L2=7.01, col_std=1.96
+[05:33:26]   Table 25 [frequency           ]: TV=2.3849, row-L2=25.24, col_std=6.48
+[05:33:26]   Table 25 [reverse_frequency   ]: TV=1.7402, row-L2=3.45, col_std=0.62
+[05:33:26] 
+======================================================================
+[05:33:26] EXPERIMENT 4: Random Data Baseline (Kaggle, D=16)
+[05:33:26] ======================================================================
+[05:33:27]   Table 2 CRF= 0: real=249KB (8.1x), uniform=2701KB (0.7x), gaussian=724KB (2.8x), row_shuf=253KB (8.0x), col_shuf=269KB (7.5x)
+[05:33:27]   Table 2 CRF=10: real=256KB (7.9x), uniform=2338KB (0.9x), gaussian=542KB (3.7x), row_shuf=298KB (6.8x), col_shuf=471KB (4.3x)
+[05:33:28]   Table 2 CRF=18: real=82KB (24.6x), uniform=1821KB (1.1x), gaussian=176KB (11.5x), row_shuf=94KB (21.6x), col_shuf=132KB (15.3x)
+[05:33:28]   Table 2 CRF=23: real=33KB (61.5x), uniform=1551KB (1.3x), gaussian=19KB (104.2x), row_shuf=34KB (58.9x), col_shuf=25KB (80.9x)
+[05:33:29]   Table 2 CRF=28: real=12KB (170.0x), uniform=1296KB (1.6x), gaussian=6KB (322.4x), row_shuf=11KB (183.4x), col_shuf=4KB (499.4x)
+[05:33:30]   Table 3 CRF= 0: real=424KB (4.8x), uniform=2701KB (0.7x), gaussian=842KB (2.4x), row_shuf=437KB (4.6x), col_shuf=449KB (4.5x)
+[05:33:30]   Table 3 CRF=10: real=405KB (5.0x), uniform=2337KB (0.9x), gaussian=676KB (3.0x), row_shuf=492KB (4.1x), col_shuf=646KB (3.1x)
+[05:33:31]   Table 3 CRF=18: real=151KB (13.4x), uniform=1821KB (1.1x), gaussian=299KB (6.8x), row_shuf=190KB (10.6x), col_shuf=273KB (7.4x)
+[05:33:32]   Table 3 CRF=23: real=66KB (30.8x), uniform=1551KB (1.3x), gaussian=90KB (22.5x), row_shuf=76KB (26.7x), col_shuf=81KB (25.1x)
+[05:33:32]   Table 3 CRF=28: real=24KB (82.8x), uniform=1296KB (1.6x), gaussian=9KB (229.9x), row_shuf=23KB (86.7x), col_shuf=8KB (240.8x)
+[05:33:33]   Table 9 CRF= 0: real=470KB (4.3x), uniform=2701KB (0.7x), gaussian=900KB (2.2x), row_shuf=485KB (4.2x), col_shuf=491KB (4.1x)
+[05:33:34]   Table 9 CRF=10: real=364KB (5.6x), uniform=2338KB (0.9x), gaussian=742KB (2.7x), row_shuf=437KB (4.6x), col_shuf=511KB (4.0x)
+[05:33:34]   Table 9 CRF=18: real=112KB (18.0x), uniform=1821KB (1.1x), gaussian=362KB (5.6x), row_shuf=176KB (11.5x), col_shuf=239KB (8.5x)
+[05:33:35]   Table 9 CRF=23: real=42KB (48.3x), uniform=1551KB (1.3x), gaussian=144KB (14.1x), row_shuf=66KB (30.5x), col_shuf=89KB (22.7x)
+[05:33:35]   Table 9 CRF=28: real=20KB (101.7x), uniform=1295KB (1.6x), gaussian=13KB (156.5x), row_shuf=23KB (89.7x), col_shuf=13KB (153.4x)
+[05:33:36]   Table 11 CRF= 0: real=252KB (8.0x), uniform=2701KB (0.7x), gaussian=704KB (2.9x), row_shuf=256KB (7.9x), col_shuf=270KB (7.5x)
+[05:33:37]   Table 11 CRF=10: real=257KB (7.9x), uniform=2338KB (0.9x), gaussian=519KB (3.9x), row_shuf=300KB (6.7x), col_shuf=454KB (4.5x)
+[05:33:38]   Table 11 CRF=18: real=79KB (25.6x), uniform=1822KB (1.1x), gaussian=154KB (13.1x), row_shuf=91KB (22.2x), col_shuf=119KB (17.1x)
+[05:33:38]   Table 11 CRF=23: real=30KB (66.7x), uniform=1551KB (1.3x), gaussian=15KB (136.1x), row_shuf=32KB (64.2x), col_shuf=19KB (105.1x)
+[05:33:38]   Table 11 CRF=28: real=11KB (192.7x), uniform=1296KB (1.6x), gaussian=6KB (334.1x), row_shuf=9KB (219.0x), col_shuf=4KB (571.4x)
+[05:33:39]   Table 15 CRF= 0: real=433KB (4.7x), uniform=2701KB (0.7x), gaussian=916KB (2.2x), row_shuf=440KB (4.6x), col_shuf=453KB (4.5x)
+[05:33:40]   Table 15 CRF=10: real=490KB (4.1x), uniform=2338KB (0.9x), gaussian=761KB (2.7x), row_shuf=556KB (3.6x), col_shuf=724KB (2.8x)
+[05:33:41]   Table 15 CRF=18: real=200KB (10.1x), uniform=1821KB (1.1x), gaussian=379KB (5.3x), row_shuf=239KB (8.5x), col_shuf=349KB (5.8x)
+[05:33:41]   Table 15 CRF=23: real=91KB (22.3x), uniform=1552KB (1.3x), gaussian=160KB (12.7x), row_shuf=105KB (19.2x), col_shuf=138KB (14.7x)
+[05:33:42]   Table 15 CRF=28: real=35KB (58.1x), uniform=1296KB (1.6x), gaussian=15KB (131.9x), row_shuf=37KB (55.3x), col_shuf=21KB (97.6x)
+[05:33:43]   Table 20 CRF= 0: real=248KB (8.2x), uniform=2701KB (0.7x), gaussian=700KB (2.9x), row_shuf=253KB (8.0x), col_shuf=270KB (7.5x)
+[05:33:43]   Table 20 CRF=10: real=216KB (9.4x), uniform=2339KB (0.9x), gaussian=514KB (3.9x), row_shuf=255KB (7.9x), col_shuf=421KB (4.8x)
+[05:33:44]   Table 20 CRF=18: real=65KB (31.3x), uniform=1822KB (1.1x), gaussian=151KB (13.4x), row_shuf=76KB (26.8x), col_shuf=101KB (20.1x)
+[05:33:44]   Table 20 CRF=23: real=26KB (77.9x), uniform=1552KB (1.3x), gaussian=14KB (140.8x), row_shuf=28KB (72.5x), col_shuf=20KB (101.8x)
+[05:33:45]   Table 20 CRF=28: real=10KB (199.0x), uniform=1296KB (1.6x), gaussian=6KB (329.0x), row_shuf=9KB (214.9x), col_shuf=5KB (441.0x)
+[05:33:46]   Table 23 CRF= 0: real=268KB (7.6x), uniform=2701KB (0.7x), gaussian=661KB (3.1x), row_shuf=293KB (6.9x), col_shuf=302KB (6.7x)
+[05:33:46]   Table 23 CRF=10: real=174KB (11.6x), uniform=2338KB (0.9x), gaussian=467KB (4.3x), row_shuf=279KB (7.3x), col_shuf=409KB (4.9x)
+[05:33:47]   Table 23 CRF=18: real=55KB (36.6x), uniform=1822KB (1.1x), gaussian=109KB (18.6x), row_shuf=74KB (27.3x), col_shuf=85KB (23.7x)
+[05:33:47]   Table 23 CRF=23: real=24KB (84.9x), uniform=1551KB (1.3x), gaussian=12KB (170.8x), row_shuf=24KB (85.2x), col_shuf=11KB (186.9x)
+[05:33:48]   Table 23 CRF=28: real=10KB (208.5x), uniform=1296KB (1.6x), gaussian=6KB (367.3x), row_shuf=7KB (302.5x), col_shuf=3KB (636.5x)
+[05:33:49]   Table 25 CRF= 0: real=549KB (3.7x), uniform=2701KB (0.7x), gaussian=838KB (2.4x), row_shuf=575KB (3.5x), col_shuf=585KB (3.5x)
+[05:33:49]   Table 25 CRF=10: real=412KB (4.9x), uniform=2338KB (0.9x), gaussian=672KB (3.0x), row_shuf=510KB (4.0x), col_shuf=630KB (3.2x)
+[05:33:50]   Table 25 CRF=18: real=107KB (19.0x), uniform=1822KB (1.1x), gaussian=295KB (6.9x), row_shuf=173KB (11.7x), col_shuf=257KB (7.9x)
+[05:33:51]   Table 25 CRF=23: real=46KB (44.0x), uniform=1551KB (1.3x), gaussian=86KB (23.4x), row_shuf=63KB (32.0x), col_shuf=74KB (27.4x)
+[05:33:51]   Table 25 CRF=28: real=20KB (99.6x), uniform=1296KB (1.6x), gaussian=9KB (236.6x), row_shuf=21KB (95.8x), col_shuf=9KB (223.2x)
+[05:33:51] 
+======================================================================
+[05:33:51] EXPERIMENT 1: CRF x Reordering (Kaggle, D=16)
+[05:33:51] ======================================================================
+[05:33:51] 
+  Table 2: 10,131,227 rows, 154.6MB uint8, 618.4MB fp32
+[05:33:57]     natural              CRF= 0:   46.4x (uint8),   185.5x (fp32), MSE=0.00, MaxErr=0
+[05:34:01]     natural              CRF=10:  199.4x (uint8),   797.7x (fp32), MSE=0.02, MaxErr=7
+[05:34:05]     natural              CRF=18:  466.8x (uint8),  1867.3x (fp32), MSE=0.03, MaxErr=18
+[05:34:09]     natural              CRF=23:  602.5x (uint8),  2410.1x (fp32), MSE=0.04, MaxErr=33
+[05:34:13]     natural              CRF=28:  672.0x (uint8),  2688.2x (fp32), MSE=0.04, MaxErr=47
+[05:34:18]     random               CRF= 0:   44.5x (uint8),   178.1x (fp32), MSE=0.00, MaxErr=0
+[05:34:22]     random               CRF=10:  182.8x (uint8),   731.1x (fp32), MSE=0.02, MaxErr=7
+[05:34:27]     random               CRF=18:  473.5x (uint8),  1894.0x (fp32), MSE=0.03, MaxErr=18
+[05:34:31]     random               CRF=23:  623.1x (uint8),  2492.2x (fp32), MSE=0.04, MaxErr=33
+[05:34:35]     random               CRF=28:  683.4x (uint8),  2733.5x (fp32), MSE=0.05, MaxErr=60
+[05:34:42]     frequency            CRF= 0:   65.6x (uint8),   262.3x (fp32), MSE=0.00, MaxErr=0
+[05:34:46]     frequency            CRF=10:  213.7x (uint8),   854.7x (fp32), MSE=0.02, MaxErr=3
+[05:34:50]     frequency            CRF=18:  511.8x (uint8),  2047.3x (fp32), MSE=0.02, MaxErr=6
+[05:34:54]     frequency            CRF=23:  613.5x (uint8),  2454.1x (fp32), MSE=0.03, MaxErr=10
+[05:34:57]     frequency            CRF=28:  665.3x (uint8),  2661.0x (fp32), MSE=0.03, MaxErr=19
+[05:34:57] 
+  Table 3: 2,202,608 rows, 33.6MB uint8, 134.4MB fp32
+[05:34:58]     natural              CRF= 0:   19.8x (uint8),    79.2x (fp32), MSE=0.00, MaxErr=0
+[05:34:59]     natural              CRF=10:   49.7x (uint8),   198.6x (fp32), MSE=0.06, MaxErr=5
+[05:35:00]     natural              CRF=18:  157.1x (uint8),   628.4x (fp32), MSE=0.10, MaxErr=13
+[05:35:01]     natural              CRF=23:  297.2x (uint8),  1188.8x (fp32), MSE=0.15, MaxErr=24
+[05:35:02]     natural              CRF=28:  486.1x (uint8),  1944.3x (fp32), MSE=0.20, MaxErr=38
+[05:35:03]     random               CRF= 0:   18.1x (uint8),    72.5x (fp32), MSE=0.00, MaxErr=0
+[05:35:04]     random               CRF=10:   32.6x (uint8),   130.4x (fp32), MSE=0.08, MaxErr=6
+[05:35:05]     random               CRF=18:  133.8x (uint8),   535.2x (fp32), MSE=0.15, MaxErr=18
+[05:35:06]     random               CRF=23:  322.3x (uint8),  1289.2x (fp32), MSE=0.21, MaxErr=34
+[05:35:07]     random               CRF=28:  581.3x (uint8),  2325.2x (fp32), MSE=0.26, MaxErr=49
+[05:35:08]     frequency            CRF= 0:   26.1x (uint8),   104.4x (fp32), MSE=0.00, MaxErr=0
+[05:35:09]     frequency            CRF=10:   66.3x (uint8),   265.2x (fp32), MSE=0.04, MaxErr=2
+[05:35:10]     frequency            CRF=18:  220.4x (uint8),   881.7x (fp32), MSE=0.07, MaxErr=6
+[05:35:11]     frequency            CRF=23:  359.9x (uint8),  1439.6x (fp32), MSE=0.09, MaxErr=10
+[05:35:12]     frequency            CRF=28:  507.5x (uint8),  2029.8x (fp32), MSE=0.13, MaxErr=17
+[05:35:12] 
+  Table 9: 93,145 rows, 1.4MB uint8, 5.7MB fp32
+[05:35:12]     natural              CRF= 0:    3.1x (uint8),    12.4x (fp32), MSE=0.00, MaxErr=0
+[05:35:12]     natural              CRF=10:    4.0x (uint8),    16.0x (fp32), MSE=0.26, MaxErr=3
+[05:35:12]     natural              CRF=18:   13.0x (uint8),    51.9x (fp32), MSE=1.08, MaxErr=9
+[05:35:12]     natural              CRF=23:   34.7x (uint8),   139.0x (fp32), MSE=1.67, MaxErr=21
+[05:35:12]     natural              CRF=28:   73.1x (uint8),   292.4x (fp32), MSE=2.43, MaxErr=37
+[05:35:12]     random               CRF= 0:    3.0x (uint8),    12.0x (fp32), MSE=0.00, MaxErr=0
+[05:35:12]     random               CRF=10:    3.3x (uint8),    13.4x (fp32), MSE=0.26, MaxErr=3
+[05:35:13]     random               CRF=18:    8.3x (uint8),    33.2x (fp32), MSE=1.20, MaxErr=9
+[05:35:13]     random               CRF=23:   22.1x (uint8),    88.3x (fp32), MSE=2.33, MaxErr=22
+[05:35:13]     random               CRF=28:   64.2x (uint8),   256.7x (fp32), MSE=3.59, MaxErr=40
+[05:35:13]     frequency            CRF= 0:    3.2x (uint8),    12.8x (fp32), MSE=0.00, MaxErr=0
+[05:35:13]     frequency            CRF=10:    4.4x (uint8),    17.5x (fp32), MSE=0.26, MaxErr=2
+[05:35:13]     frequency            CRF=18:   16.4x (uint8),    65.6x (fp32), MSE=1.03, MaxErr=6
+[05:35:13]     frequency            CRF=23:   49.4x (uint8),   197.8x (fp32), MSE=1.46, MaxErr=12
+[05:35:13]     frequency            CRF=28:   94.8x (uint8),   379.4x (fp32), MSE=1.96, MaxErr=17
+[05:35:14] 
+  Table 11: 8,351,593 rows, 127.4MB uint8, 509.7MB fp32
+[05:35:17]     natural              CRF= 0:   49.9x (uint8),   199.5x (fp32), MSE=0.00, MaxErr=0
+[05:35:20]     natural              CRF=10:  190.1x (uint8),   760.5x (fp32), MSE=0.02, MaxErr=6
+[05:35:23]     natural              CRF=18:  456.2x (uint8),  1824.7x (fp32), MSE=0.03, MaxErr=15
+[05:35:26]     natural              CRF=23:  599.5x (uint8),  2398.2x (fp32), MSE=0.04, MaxErr=27
+[05:35:29]     natural              CRF=28:  673.7x (uint8),  2694.9x (fp32), MSE=0.04, MaxErr=45
+[05:35:33]     random               CRF= 0:   47.6x (uint8),   190.5x (fp32), MSE=0.00, MaxErr=0
+[05:35:37]     random               CRF=10:  171.4x (uint8),   685.7x (fp32), MSE=0.02, MaxErr=6
+[05:35:40]     random               CRF=18:  470.1x (uint8),  1880.5x (fp32), MSE=0.03, MaxErr=17
+[05:35:44]     random               CRF=23:  628.2x (uint8),  2512.9x (fp32), MSE=0.04, MaxErr=33
+[05:35:48]     random               CRF=28:  688.6x (uint8),  2754.5x (fp32), MSE=0.05, MaxErr=55
+[05:35:53]     frequency            CRF= 0:   74.8x (uint8),   299.1x (fp32), MSE=0.00, MaxErr=0
+[05:35:56]     frequency            CRF=10:  207.1x (uint8),   828.3x (fp32), MSE=0.01, MaxErr=2
+[05:36:00]     frequency            CRF=18:  496.2x (uint8),  1984.9x (fp32), MSE=0.02, MaxErr=6
+[05:36:03]     frequency            CRF=23:  605.3x (uint8),  2421.2x (fp32), MSE=0.02, MaxErr=9
+[05:36:07]     frequency            CRF=28:  664.3x (uint8),  2657.0x (fp32), MSE=0.03, MaxErr=18
+[05:36:07] 
+  Table 15: 5,461,306 rows, 83.3MB uint8, 333.3MB fp32
+[05:36:11]     natural              CRF= 0:   16.8x (uint8),    67.1x (fp32), MSE=0.00, MaxErr=0
+[05:36:15]     natural              CRF=10:   49.3x (uint8),   197.0x (fp32), MSE=0.07, MaxErr=5
+[05:36:17]     natural              CRF=18:  205.4x (uint8),   821.5x (fp32), MSE=0.11, MaxErr=12
+[05:36:19]     natural              CRF=23:  368.9x (uint8),  1475.7x (fp32), MSE=0.14, MaxErr=23
+[05:36:21]     natural              CRF=28:  539.2x (uint8),  2156.8x (fp32), MSE=0.18, MaxErr=48
+[05:36:25]     random               CRF= 0:   15.9x (uint8),    63.8x (fp32), MSE=0.00, MaxErr=0
+[05:36:29]     random               CRF=10:   39.1x (uint8),   156.5x (fp32), MSE=0.08, MaxErr=7
+[05:36:32]     random               CRF=18:  182.8x (uint8),   731.3x (fp32), MSE=0.13, MaxErr=16
+[05:36:34]     random               CRF=23:  379.4x (uint8),  1517.5x (fp32), MSE=0.17, MaxErr=31
+[05:36:37]     random               CRF=28:  586.0x (uint8),  2344.0x (fp32), MSE=0.21, MaxErr=48
+[05:36:41]     frequency            CRF= 0:   21.8x (uint8),    87.3x (fp32), MSE=0.00, MaxErr=0
+[05:36:44]     frequency            CRF=10:   59.5x (uint8),   237.9x (fp32), MSE=0.05, MaxErr=3
+[05:36:47]     frequency            CRF=18:  266.0x (uint8),  1064.2x (fp32), MSE=0.08, MaxErr=6
+[05:36:49]     frequency            CRF=23:  426.0x (uint8),  1703.9x (fp32), MSE=0.10, MaxErr=10
+[05:36:52]     frequency            CRF=28:  556.5x (uint8),  2225.8x (fp32), MSE=0.12, MaxErr=18
+[05:36:52] 
+  Table 20: 7,046,547 rows, 107.5MB uint8, 430.1MB fp32
+[05:36:55]     natural              CRF= 0:   58.9x (uint8),   235.8x (fp32), MSE=0.00, MaxErr=0
+[05:36:58]     natural              CRF=10:  213.8x (uint8),   855.4x (fp32), MSE=0.02, MaxErr=6
+[05:37:01]     natural              CRF=18:  472.0x (uint8),  1887.9x (fp32), MSE=0.02, MaxErr=14
+[05:37:04]     natural              CRF=23:  600.9x (uint8),  2403.8x (fp32), MSE=0.03, MaxErr=29
+[05:37:06]     natural              CRF=28:  668.2x (uint8),  2672.8x (fp32), MSE=0.04, MaxErr=59
+[05:37:10]     random               CRF= 0:   55.8x (uint8),   223.1x (fp32), MSE=0.00, MaxErr=0
+[05:37:13]     random               CRF=10:  195.3x (uint8),   781.3x (fp32), MSE=0.02, MaxErr=7
+[05:37:15]     random               CRF=18:  488.0x (uint8),  1951.8x (fp32), MSE=0.03, MaxErr=17
+[05:37:18]     random               CRF=23:  622.0x (uint8),  2488.1x (fp32), MSE=0.03, MaxErr=29
+[05:37:21]     random               CRF=28:  678.1x (uint8),  2712.4x (fp32), MSE=0.04, MaxErr=52
+[05:37:25]     frequency            CRF= 0:   81.3x (uint8),   325.3x (fp32), MSE=0.00, MaxErr=0
+[05:37:28]     frequency            CRF=10:  250.8x (uint8),  1003.4x (fp32), MSE=0.01, MaxErr=2
+[05:37:30]     frequency            CRF=18:  517.4x (uint8),  2069.5x (fp32), MSE=0.02, MaxErr=6
+[05:37:33]     frequency            CRF=23:  612.2x (uint8),  2448.7x (fp32), MSE=0.02, MaxErr=10
+[05:37:36]     frequency            CRF=28:  661.8x (uint8),  2647.2x (fp32), MSE=0.03, MaxErr=18
+[05:37:36] 
+  Table 23: 286,181 rows, 4.4MB uint8, 17.5MB fp32
+[05:37:37]     natural              CRF= 0:   12.9x (uint8),    51.4x (fp32), MSE=0.00, MaxErr=0
+[05:37:37]     natural              CRF=10:   24.6x (uint8),    98.3x (fp32), MSE=0.08, MaxErr=4
+[05:37:37]     natural              CRF=18:   73.0x (uint8),   292.1x (fp32), MSE=0.18, MaxErr=11
+[05:37:37]     natural              CRF=23:  150.9x (uint8),   603.5x (fp32), MSE=0.29, MaxErr=20
+[05:37:37]     natural              CRF=28:  288.3x (uint8),  1153.3x (fp32), MSE=0.44, MaxErr=28
+[05:37:38]     random               CRF= 0:   11.3x (uint8),    45.2x (fp32), MSE=0.00, MaxErr=0
+[05:37:38]     random               CRF=10:   14.1x (uint8),    56.5x (fp32), MSE=0.13, MaxErr=5
+[05:37:38]     random               CRF=18:   58.9x (uint8),   235.4x (fp32), MSE=0.31, MaxErr=13
+[05:37:38]     random               CRF=23:  171.0x (uint8),   684.0x (fp32), MSE=0.46, MaxErr=25
+[05:37:39]     random               CRF=28:  401.3x (uint8),  1605.2x (fp32), MSE=0.57, MaxErr=58
+[05:37:39]     frequency            CRF= 0:   14.8x (uint8),    59.1x (fp32), MSE=0.00, MaxErr=0
+[05:37:39]     frequency            CRF=10:   36.1x (uint8),   144.5x (fp32), MSE=0.07, MaxErr=2
+[05:37:39]     frequency            CRF=18:  104.1x (uint8),   416.3x (fp32), MSE=0.13, MaxErr=5
+[05:37:39]     frequency            CRF=23:  181.2x (uint8),   724.8x (fp32), MSE=0.19, MaxErr=10
+[05:37:40]     frequency            CRF=28:  290.3x (uint8),  1161.3x (fp32), MSE=0.30, MaxErr=17
+[05:37:40] 
+  Table 25: 142,572 rows, 2.2MB uint8, 8.7MB fp32
+[05:37:40]     natural              CRF= 0:    3.7x (uint8),    14.9x (fp32), MSE=0.00, MaxErr=0
+[05:37:40]     natural              CRF=10:    5.0x (uint8),    20.1x (fp32), MSE=0.26, MaxErr=3
+[05:37:40]     natural              CRF=18:   20.2x (uint8),    80.8x (fp32), MSE=0.80, MaxErr=10
+[05:37:40]     natural              CRF=23:   45.5x (uint8),   182.0x (fp32), MSE=1.19, MaxErr=19
+[05:37:40]     natural              CRF=28:   95.8x (uint8),   383.3x (fp32), MSE=1.75, MaxErr=33
+[05:37:41]     random               CRF= 0:    3.6x (uint8),    14.3x (fp32), MSE=0.00, MaxErr=0
+[05:37:41]     random               CRF=10:    4.1x (uint8),    16.3x (fp32), MSE=0.26, MaxErr=3
+[05:37:41]     random               CRF=18:   12.4x (uint8),    49.8x (fp32), MSE=1.00, MaxErr=10
+[05:37:41]     random               CRF=23:   33.7x (uint8),   134.6x (fp32), MSE=1.71, MaxErr=26
+[05:37:41]     random               CRF=28:   92.6x (uint8),   370.2x (fp32), MSE=2.47, MaxErr=42
+[05:37:42]     frequency            CRF= 0:    3.9x (uint8),    15.7x (fp32), MSE=0.00, MaxErr=0
+[05:37:42]     frequency            CRF=10:    5.8x (uint8),    23.0x (fp32), MSE=0.26, MaxErr=2
+[05:37:42]     frequency            CRF=18:   30.3x (uint8),   121.1x (fp32), MSE=0.71, MaxErr=6
+[05:37:42]     frequency            CRF=23:   65.8x (uint8),   263.3x (fp32), MSE=0.94, MaxErr=11
+[05:37:42]     frequency            CRF=28:  118.9x (uint8),   475.5x (fp32), MSE=1.30, MaxErr=18
+[05:37:42] 
+======================================================================
+[05:37:42] EXPERIMENT 1b: AUC Impact (kaggle, D=16)
+[05:37:42] ======================================================================
+[05:37:43]   Loading dataset...
+[05:39:49]   Profiling access frequencies...
+[05:40:28]   Running baseline inference...
+[05:41:23]   Baseline AUC: 0.802497
+[05:42:30]   CRF= 0 natural             : AUC=0.802481, delta=-0.000016
+[05:43:42]   CRF= 0 random              : AUC=0.802481, delta=-0.000016
+[05:45:03]   CRF= 0 frequency           : AUC=0.802481, delta=-0.000016
+[05:46:12]   CRF=10 natural             : AUC=0.802247, delta=-0.000250
+[05:47:20]   CRF=10 random              : AUC=0.802091, delta=-0.000406
+[05:48:28]   CRF=10 frequency           : AUC=0.802371, delta=-0.000126
+[05:49:34]   CRF=18 natural             : AUC=0.801797, delta=-0.000700
+[05:50:40]   CRF=18 random              : AUC=0.801052, delta=-0.001446
+[05:51:46]   CRF=18 frequency           : AUC=0.802125, delta=-0.000372
+[05:52:49]   CRF=23 natural             : AUC=0.800822, delta=-0.001676
+[05:53:55]   CRF=23 random              : AUC=0.798426, delta=-0.004071
+[05:55:01]   CRF=23 frequency           : AUC=0.801701, delta=-0.000796
+[05:56:04]   CRF=28 natural             : AUC=0.798853, delta=-0.003645
+[05:57:11]   CRF=28 random              : AUC=0.793054, delta=-0.009444
+[05:58:14]   CRF=28 frequency           : AUC=0.800739, delta=-0.001758
+[05:58:19] 
+======================================================================
+[05:58:19] EXPERIMENT 2: Spatial Smoothness (Kaggle (with freq), D=16)
+[05:58:19] ======================================================================
+[05:58:19]   Table 2 [natural             ]: TV=0.9555, row-L2=11.01, col_std=3.57
+[05:58:20]   Table 2 [random              ]: TV=0.0810, row-L2=0.43, col_std=0.22
+[05:58:20]   Table 2 [frequency           ]: TV=1.3083, row-L2=18.89, col_std=4.64
+[05:58:20]   Table 2 [reverse_frequency   ]: TV=0.1659, row-L2=1.23, col_std=0.88
+[05:58:20]   Table 3 [natural             ]: TV=1.8803, row-L2=19.80, col_std=4.88
+[05:58:20]   Table 3 [random              ]: TV=0.2764, row-L2=1.18, col_std=0.54
+[05:58:20]   Table 3 [frequency           ]: TV=1.8458, row-L2=27.50, col_std=6.04
+[05:58:20]   Table 3 [reverse_frequency   ]: TV=0.3330, row-L2=2.10, col_std=0.79
+[05:58:20]   Table 9 [natural             ]: TV=2.4289, row-L2=25.62, col_std=6.13
+[05:58:20]   Table 9 [random              ]: TV=2.4827, row-L2=9.08, col_std=2.40
+[05:58:20]   Table 9 [frequency           ]: TV=2.3934, row-L2=26.47, col_std=6.42
+[05:58:20]   Table 9 [reverse_frequency   ]: TV=2.3903, row-L2=5.99, col_std=1.09
+[05:58:20]   Table 11 [natural             ]: TV=0.9535, row-L2=10.75, col_std=3.33
+[05:58:20]   Table 11 [random              ]: TV=0.0726, row-L2=0.37, col_std=0.30
+[05:58:20]   Table 11 [frequency           ]: TV=1.2404, row-L2=18.29, col_std=4.36
+[05:58:20]   Table 11 [reverse_frequency   ]: TV=0.1547, row-L2=1.05, col_std=0.48
+[05:58:20]   Table 15 [natural             ]: TV=2.1699, row-L2=21.97, col_std=5.94
+[05:58:21]   Table 15 [random              ]: TV=0.2923, row-L2=1.30, col_std=0.51
+[05:58:21]   Table 15 [frequency           ]: TV=2.5547, row-L2=34.26, col_std=7.68
+[05:58:21]   Table 15 [reverse_frequency   ]: TV=0.4641, row-L2=2.49, col_std=0.97
+[05:58:21]   Table 20 [natural             ]: TV=0.8936, row-L2=10.60, col_std=3.75
+[05:58:21]   Table 20 [random              ]: TV=0.0623, row-L2=0.31, col_std=0.22
+[05:58:21]   Table 20 [frequency           ]: TV=1.1206, row-L2=16.47, col_std=4.47
+[05:58:21]   Table 20 [reverse_frequency   ]: TV=0.1274, row-L2=0.86, col_std=0.43
+[05:58:21]   Table 23 [natural             ]: TV=0.9755, row-L2=14.12, col_std=3.48
+[05:58:21]   Table 23 [random              ]: TV=0.5295, row-L2=2.06, col_std=0.77
+[05:58:21]   Table 23 [frequency           ]: TV=0.8529, row-L2=16.49, col_std=3.83
+[05:58:21]   Table 23 [reverse_frequency   ]: TV=0.2105, row-L2=1.75, col_std=0.42
+[05:58:21]   Table 25 [natural             ]: TV=2.4693, row-L2=23.27, col_std=5.75
+[05:58:21]   Table 25 [random              ]: TV=2.4481, row-L2=6.95, col_std=1.95
+[05:58:21]   Table 25 [frequency           ]: TV=2.4180, row-L2=26.28, col_std=6.25
+[05:58:21]   Table 25 [reverse_frequency   ]: TV=1.8258, row-L2=5.02, col_std=1.01
+[05:58:21] 
+######################################################################
+[05:58:21] # TERABYTE DATASET (D=64)
+[05:58:21] ######################################################################
+[05:58:21] Loading Terabyte model from ./models/dlrm_terabyte_4day.pt...
+[05:58:24]   26 tables, D=64, 8 large (>50000 rows)
+[05:58:24]     Table 0: 5,449,495 rows
+[05:58:24]     Table 9: 3,948,314 rows
+[05:58:24]     Table 10: 396,536 rows
+[05:58:24]     Table 11: 143,256 rows
+[05:58:24]     Table 19: 5,733,362 rows
+[05:58:24]     Table 20: 1,790,249 rows
+[05:58:24]     Table 21: 4,944,292 rows
+[05:58:24]     Table 22: 202,406 rows
+[05:58:24] 
+======================================================================
+[05:58:24] EXPERIMENT 3: Intrinsic Compressibility (Terabyte, D=64)
+[05:58:24] ======================================================================
+[05:58:31] 
+  Table 0: 5,449,495 rows, D=64
+[05:58:31]     Entropy: 1.49 bits/byte (max 8.0)
+[05:58:31]     uint8 distribution: mean=75.0, std=0.7, median=75, unique=148/256
+[05:58:31]     100.0% of values within ±16 of mean
+[05:58:31]     SVD effective rank: 63.9 / 64
+[05:58:31]     Dims for 90% var: 58, 95%: 61, 99%: 64 (of 64)
+[05:58:31]     Top-1 component: 2.7% of variance
+[05:58:31]     Row norms: mean=0.0020, std=0.0003
+[05:58:31]     Near-zero rows (norm<0.01): 100.0%
+[05:58:36] 
+  Table 9: 3,948,314 rows, D=64
+[05:58:36]     Entropy: 1.96 bits/byte (max 8.0)
+[05:58:36]     uint8 distribution: mean=128.0, std=1.0, median=128, unique=135/256
+[05:58:36]     100.0% of values within ±16 of mean
+[05:58:36]     SVD effective rank: 64.0 / 64
+[05:58:36]     Dims for 90% var: 58, 95%: 61, 99%: 64 (of 64)
+[05:58:36]     Top-1 component: 2.2% of variance
+[05:58:36]     Row norms: mean=0.0023, std=0.0002
+[05:58:36]     Near-zero rows (norm<0.01): 100.0%
+[05:58:37] 
+  Table 10: 396,536 rows, D=64
+[05:58:37]     Entropy: 3.40 bits/byte (max 8.0)
+[05:58:37]     uint8 distribution: mean=125.0, std=2.8, median=125, unique=154/256
+[05:58:37]     100.0% of values within ±16 of mean
+[05:58:37]     SVD effective rank: 63.9 / 64
+[05:58:37]     Dims for 90% var: 58, 95%: 61, 99%: 64 (of 64)
+[05:58:37]     Top-1 component: 2.7% of variance
+[05:58:37]     Row norms: mean=0.0073, std=0.0007
+[05:58:37]     Near-zero rows (norm<0.01): 99.8%
+[05:58:37] 
+  Table 11: 143,256 rows, D=64
+[05:58:37]     Entropy: 4.22 bits/byte (max 8.0)
+[05:58:37]     uint8 distribution: mean=112.0, std=5.2, median=112, unique=164/256
+[05:58:37]     100.0% of values within ±16 of mean
+[05:58:37]     SVD effective rank: 64.0 / 64
+[05:58:37]     Dims for 90% var: 58, 95%: 61, 99%: 64 (of 64)
+[05:58:37]     Top-1 component: 2.5% of variance
+[05:58:37]     Row norms: mean=0.0122, std=0.0011
+[05:58:37]     Near-zero rows (norm<0.01): 0.1%
+[05:58:49] 
+  Table 19: 5,733,362 rows, D=64
+[05:58:49]     Entropy: 2.75 bits/byte (max 8.0)
+[05:58:49]     uint8 distribution: mean=152.0, std=1.8, median=152, unique=149/256
+[05:58:49]     100.0% of values within ±16 of mean
+[05:58:49]     SVD effective rank: 64.0 / 64
+[05:58:49]     Dims for 90% var: 58, 95%: 61, 99%: 64 (of 64)
+[05:58:49]     Top-1 component: 1.7% of variance
+[05:58:49]     Row norms: mean=0.0019, std=0.0001
+[05:58:49]     Near-zero rows (norm<0.01): 100.0%
+[05:58:52] 
+  Table 20: 1,790,249 rows, D=64
+[05:58:52]     Entropy: 3.05 bits/byte (max 8.0)
+[05:58:52]     uint8 distribution: mean=103.0, std=2.2, median=103, unique=149/256
+[05:58:52]     100.0% of values within ±16 of mean
+[05:58:52]     SVD effective rank: 64.0 / 64
+[05:58:52]     Dims for 90% var: 58, 95%: 61, 99%: 64 (of 64)
+[05:58:52]     Top-1 component: 1.9% of variance
+[05:58:52]     Row norms: mean=0.0035, std=0.0003
+[05:58:52]     Near-zero rows (norm<0.01): 100.0%
+[05:58:58] 
+  Table 21: 4,944,292 rows, D=64
+[05:58:58]     Entropy: 1.58 bits/byte (max 8.0)
+[05:58:58]     uint8 distribution: mean=177.0, std=0.8, median=177, unique=150/256
+[05:58:58]     100.0% of values within ±16 of mean
+[05:58:58]     SVD effective rank: 63.8 / 64
+[05:58:58]     Dims for 90% var: 58, 95%: 61, 99%: 64 (of 64)
+[05:58:58]     Top-1 component: 3.9% of variance
+[05:58:58]     Row norms: mean=0.0021, std=0.0002
+[05:58:58]     Near-zero rows (norm<0.01): 100.0%
+[05:58:59] 
+  Table 22: 202,406 rows, D=64
+[05:58:59]     Entropy: 4.25 bits/byte (max 8.0)
+[05:58:59]     uint8 distribution: mean=173.0, std=5.4, median=173, unique=159/256
+[05:58:59]     100.0% of values within ±16 of mean
+[05:58:59]     SVD effective rank: 64.0 / 64
+[05:58:59]     Dims for 90% var: 58, 95%: 61, 99%: 64 (of 64)
+[05:58:59]     Top-1 component: 2.0% of variance
+[05:58:59]     Row norms: mean=0.0103, std=0.0008
+[05:58:59]     Near-zero rows (norm<0.01): 32.5%
+[05:58:59] 
+======================================================================
+[05:58:59] EXPERIMENT 2: Spatial Smoothness (Terabyte, D=64)
+[05:58:59] ======================================================================
+[05:58:59]   Table 0 [natural             ]: TV=1.7433, row-L2=12.44, col_std=1.71
+[05:58:59]   Table 0 [random              ]: TV=1.4774, row-L2=7.89, col_std=0.70
+[05:59:00]   Table 0 [frequency           ]: TV=1.9753, row-L2=13.67, col_std=2.06
+[05:59:01]   Table 0 [reverse_frequency   ]: TV=1.1212, row-L2=6.36, col_std=0.56
+[05:59:01]   Table 9 [natural             ]: TV=2.3965, row-L2=15.14, col_std=1.78
+[05:59:01]   Table 9 [random              ]: TV=2.1474, row-L2=11.04, col_std=0.98
+[05:59:02]   Table 9 [frequency           ]: TV=2.6496, row-L2=16.49, col_std=2.03
+[05:59:02]   Table 9 [reverse_frequency   ]: TV=1.8005, row-L2=9.22, col_std=0.82
+[05:59:02]   Table 10 [natural             ]: TV=6.6873, row-L2=35.57, col_std=3.40
+[05:59:02]   Table 10 [random              ]: TV=6.5091, row-L2=32.00, col_std=2.85
+[05:59:02]   Table 10 [frequency           ]: TV=7.2466, row-L2=38.19, col_std=3.69
+[05:59:02]   Table 10 [reverse_frequency   ]: TV=5.7994, row-L2=27.70, col_std=2.46
+[05:59:02]   Table 11 [natural             ]: TV=12.0020, row-L2=61.27, col_std=5.55
+[05:59:02]   Table 11 [random              ]: TV=11.8802, row-L2=58.24, col_std=5.17
+[05:59:02]   Table 11 [frequency           ]: TV=12.7774, row-L2=65.83, col_std=5.98
+[05:59:02]   Table 11 [reverse_frequency   ]: TV=10.9619, row-L2=51.77, col_std=4.59
+[05:59:03]   Table 19 [natural             ]: TV=4.1900, row-L2=22.45, col_std=2.26
+[05:59:03]   Table 19 [random              ]: TV=4.0332, row-L2=20.00, col_std=1.77
+[05:59:04]   Table 19 [frequency           ]: TV=4.7468, row-L2=25.19, col_std=2.62
+[05:59:04]   Table 19 [reverse_frequency   ]: TV=3.3424, row-L2=16.35, col_std=1.45
+[05:59:05]   Table 20 [natural             ]: TV=5.2601, row-L2=28.62, col_std=2.83
+[05:59:05]   Table 20 [random              ]: TV=5.0575, row-L2=24.95, col_std=2.21
+[05:59:05]   Table 20 [frequency           ]: TV=5.8265, row-L2=31.15, col_std=3.14
+[05:59:05]   Table 20 [reverse_frequency   ]: TV=4.3262, row-L2=20.94, col_std=1.86
+[05:59:06]   Table 21 [natural             ]: TV=1.9448, row-L2=13.18, col_std=1.75
+[05:59:06]   Table 21 [random              ]: TV=1.6810, row-L2=8.74, col_std=0.78
+[05:59:06]   Table 21 [frequency           ]: TV=2.0995, row-L2=14.26, col_std=2.06
+[05:59:07]   Table 21 [reverse_frequency   ]: TV=1.3976, row-L2=7.41, col_std=0.66
+[05:59:07]   Table 22 [natural             ]: TV=12.4992, row-L2=62.82, col_std=5.67
+[05:59:07]   Table 22 [random              ]: TV=12.4023, row-L2=60.68, col_std=5.38
+[05:59:07]   Table 22 [frequency           ]: TV=13.4316, row-L2=68.37, col_std=6.19
+[05:59:07]   Table 22 [reverse_frequency   ]: TV=11.3324, row-L2=53.60, col_std=4.76
+[05:59:07] 
+======================================================================
+[05:59:07] EXPERIMENT 4: Random Data Baseline (Terabyte, D=64)
+[05:59:07] ======================================================================
+[05:59:08]   Table 0 CRF= 0: real=450KB (4.5x), uniform=2701KB (0.7x), gaussian=665KB (3.0x), row_shuf=452KB (4.5x), col_shuf=455KB (4.5x)
+[05:59:09]   Table 0 CRF=10: real=325KB (6.2x), uniform=2338KB (0.9x), gaussian=472KB (4.3x), row_shuf=341KB (5.9x), col_shuf=397KB (5.1x)
+[05:59:10]   Table 0 CRF=18: real=51KB (40.1x), uniform=1821KB (1.1x), gaussian=113KB (17.9x), row_shuf=57KB (35.4x), col_shuf=75KB (26.9x)
+[05:59:10]   Table 0 CRF=23: real=18KB (113.3x), uniform=1552KB (1.3x), gaussian=12KB (169.8x), row_shuf=18KB (112.2x), col_shuf=13KB (154.0x)
+[05:59:10]   Table 0 CRF=28: real=8KB (269.1x), uniform=1296KB (1.6x), gaussian=6KB (345.4x), row_shuf=7KB (293.7x), col_shuf=4KB (542.1x)
+[05:59:12]   Table 9 CRF= 0: real=584KB (3.5x), uniform=2700KB (0.7x), gaussian=698KB (2.9x), row_shuf=587KB (3.5x), col_shuf=588KB (3.4x)
+[05:59:12]   Table 9 CRF=10: real=433KB (4.7x), uniform=2338KB (0.9x), gaussian=512KB (4.0x), row_shuf=445KB (4.5x), col_shuf=475KB (4.3x)
+[05:59:13]   Table 9 CRF=18: real=91KB (22.3x), uniform=1821KB (1.1x), gaussian=149KB (13.6x), row_shuf=99KB (20.5x), col_shuf=119KB (17.0x)
+[05:59:14]   Table 9 CRF=23: real=19KB (106.7x), uniform=1551KB (1.3x), gaussian=14KB (141.1x), row_shuf=20KB (103.1x), col_shuf=16KB (127.6x)
+[05:59:14]   Table 9 CRF=28: real=7KB (294.1x), uniform=1296KB (1.6x), gaussian=6KB (331.4x), row_shuf=6KB (325.2x), col_shuf=4KB (554.3x)
+[05:59:15]   Table 10 CRF= 0: real=968KB (2.1x), uniform=2700KB (0.7x), gaussian=989KB (2.0x), row_shuf=969KB (2.1x), col_shuf=969KB (2.1x)
+[05:59:16]   Table 10 CRF=10: real=825KB (2.5x), uniform=2337KB (0.9x), gaussian=840KB (2.4x), row_shuf=829KB (2.4x), col_shuf=835KB (2.4x)
+[05:59:17]   Table 10 CRF=18: real=442KB (4.6x), uniform=1821KB (1.1x), gaussian=458KB (4.4x), row_shuf=446KB (4.5x), col_shuf=453KB (4.5x)
+[05:59:17]   Table 10 CRF=23: real=217KB (9.3x), uniform=1551KB (1.3x), gaussian=231KB (8.8x), row_shuf=221KB (9.2x), col_shuf=226KB (9.0x)
+[05:59:18]   Table 10 CRF=28: real=39KB (51.9x), uniform=1296KB (1.6x), gaussian=42KB (48.2x), row_shuf=41KB (49.8x), col_shuf=41KB (49.1x)
+[05:59:19]   Table 11 CRF= 0: real=1211KB (1.7x), uniform=2701KB (0.7x), gaussian=1209KB (1.7x), row_shuf=1212KB (1.7x), col_shuf=1212KB (1.7x)
+[05:59:20]   Table 11 CRF=10: real=1059KB (1.9x), uniform=2338KB (0.9x), gaussian=1063KB (1.9x), row_shuf=1060KB (1.9x), col_shuf=1063KB (1.9x)
+[05:59:21]   Table 11 CRF=18: real=682KB (3.0x), uniform=1822KB (1.1x), gaussian=686KB (3.0x), row_shuf=683KB (3.0x), col_shuf=685KB (3.0x)
+[05:59:22]   Table 11 CRF=23: real=436KB (4.6x), uniform=1552KB (1.3x), gaussian=440KB (4.6x), row_shuf=438KB (4.6x), col_shuf=439KB (4.6x)
+[05:59:22]   Table 11 CRF=28: real=216KB (9.4x), uniform=1296KB (1.6x), gaussian=219KB (9.2x), row_shuf=217KB (9.3x), col_shuf=219KB (9.3x)
+[05:59:24]   Table 19 CRF= 0: real=783KB (2.6x), uniform=2701KB (0.7x), gaussian=836KB (2.4x), row_shuf=784KB (2.6x), col_shuf=785KB (2.6x)
+[05:59:25]   Table 19 CRF=10: real=639KB (3.2x), uniform=2339KB (0.9x), gaussian=669KB (3.0x), row_shuf=642KB (3.2x), col_shuf=655KB (3.1x)
+[05:59:25]   Table 19 CRF=18: real=265KB (7.6x), uniform=1821KB (1.1x), gaussian=292KB (6.9x), row_shuf=267KB (7.6x), col_shuf=278KB (7.3x)
+[05:59:26]   Table 19 CRF=23: real=67KB (30.1x), uniform=1552KB (1.3x), gaussian=84KB (24.1x), row_shuf=69KB (29.3x), col_shuf=75KB (26.9x)
+[05:59:26]   Table 19 CRF=28: real=8KB (241.5x), uniform=1296KB (1.6x), gaussian=9KB (237.7x), row_shuf=8KB (241.4x), col_shuf=6KB (313.4x)
+[05:59:28]   Table 20 CRF= 0: real=882KB (2.3x), uniform=2701KB (0.7x), gaussian=911KB (2.2x), row_shuf=882KB (2.3x), col_shuf=883KB (2.3x)
+[05:59:29]   Table 20 CRF=10: real=730KB (2.8x), uniform=2338KB (0.9x), gaussian=755KB (2.7x), row_shuf=734KB (2.8x), col_shuf=744KB (2.7x)
+[05:59:29]   Table 20 CRF=18: real=351KB (5.8x), uniform=1822KB (1.1x), gaussian=373KB (5.4x), row_shuf=355KB (5.7x), col_shuf=363KB (5.6x)
+[05:59:30]   Table 20 CRF=23: real=134KB (15.1x), uniform=1552KB (1.3x), gaussian=154KB (13.2x), row_shuf=138KB (14.7x), col_shuf=145KB (13.9x)
+[05:59:31]   Table 20 CRF=28: real=17KB (117.5x), uniform=1296KB (1.6x), gaussian=14KB (141.3x), row_shuf=18KB (115.6x), col_shuf=15KB (132.2x)
+[05:59:32]   Table 21 CRF= 0: real=491KB (4.1x), uniform=2701KB (0.7x), gaussian=676KB (3.0x), row_shuf=493KB (4.1x), col_shuf=496KB (4.1x)
+[05:59:33]   Table 21 CRF=10: real=360KB (5.6x), uniform=2338KB (0.9x), gaussian=485KB (4.2x), row_shuf=375KB (5.4x), col_shuf=420KB (4.8x)
+[05:59:33]   Table 21 CRF=18: real=58KB (34.9x), uniform=1821KB (1.1x), gaussian=125KB (16.2x), row_shuf=66KB (30.7x), col_shuf=85KB (23.8x)
+[05:59:34]   Table 21 CRF=23: real=18KB (113.2x), uniform=1552KB (1.3x), gaussian=13KB (161.4x), row_shuf=19KB (109.4x), col_shuf=14KB (145.0x)
+[05:59:34]   Table 21 CRF=28: real=7KB (278.6x), uniform=1296KB (1.6x), gaussian=6KB (340.0x), row_shuf=7KB (302.5x), col_shuf=4KB (530.7x)
+[05:59:35]   Table 22 CRF= 0: real=1228KB (1.6x), uniform=2701KB (0.7x), gaussian=1224KB (1.7x), row_shuf=1228KB (1.6x), col_shuf=1228KB (1.6x)
+[05:59:36]   Table 22 CRF=10: real=1075KB (1.9x), uniform=2338KB (0.9x), gaussian=1078KB (1.9x), row_shuf=1076KB (1.9x), col_shuf=1078KB (1.9x)
+[05:59:37]   Table 22 CRF=18: real=698KB (2.9x), uniform=1821KB (1.1x), gaussian=701KB (2.9x), row_shuf=699KB (2.9x), col_shuf=700KB (2.9x)
+[05:59:38]   Table 22 CRF=23: real=452KB (4.5x), uniform=1552KB (1.3x), gaussian=455KB (4.4x), row_shuf=453KB (4.5x), col_shuf=455KB (4.5x)
+[05:59:39]   Table 22 CRF=28: real=231KB (8.8x), uniform=1296KB (1.6x), gaussian=233KB (8.7x), row_shuf=231KB (8.8x), col_shuf=232KB (8.7x)
+[05:59:39] 
+======================================================================
+[05:59:39] EXPERIMENT 1: CRF x Reordering (Terabyte, D=64)
+[05:59:39] ======================================================================
+[05:59:39] 
+  Table 0: 5,449,495 rows, 332.6MB uint8, 1330.4MB fp32
+[06:00:06]     natural              CRF= 0:    5.0x (uint8),    20.0x (fp32), MSE=0.00, MaxErr=0
+[06:00:31]     natural              CRF=10:    8.2x (uint8),    33.0x (fp32), MSE=0.26, MaxErr=3
+[06:00:44]     natural              CRF=18:  352.4x (uint8),  1409.5x (fp32), MSE=0.49, MaxErr=14
+[06:00:54]     natural              CRF=23:  674.6x (uint8),  2698.3x (fp32), MSE=0.49, MaxErr=27
+[06:01:04]     natural              CRF=28:  698.4x (uint8),  2793.7x (fp32), MSE=0.49, MaxErr=50
+[06:01:30]     random               CRF= 0:    5.0x (uint8),    20.0x (fp32), MSE=0.00, MaxErr=0
+[06:01:53]     random               CRF=10:    8.2x (uint8),    33.0x (fp32), MSE=0.26, MaxErr=3
+[06:02:04]     random               CRF=18:  348.6x (uint8),  1394.6x (fp32), MSE=0.49, MaxErr=16
+[06:02:12]     random               CRF=23:  675.7x (uint8),  2703.0x (fp32), MSE=0.49, MaxErr=29
+[06:02:22]     random               CRF=28:  700.3x (uint8),  2801.4x (fp32), MSE=0.49, MaxErr=48
+[06:02:49]     frequency            CRF= 0:    5.0x (uint8),    20.1x (fp32), MSE=0.00, MaxErr=0
+[06:03:14]     frequency            CRF=10:    8.3x (uint8),    33.2x (fp32), MSE=0.26, MaxErr=3
+[06:03:23]     frequency            CRF=18:  332.1x (uint8),  1328.3x (fp32), MSE=0.49, MaxErr=7
+[06:03:32]     frequency            CRF=23:  681.4x (uint8),  2725.7x (fp32), MSE=0.49, MaxErr=13
+[06:03:42]     frequency            CRF=28:  698.5x (uint8),  2794.0x (fp32), MSE=0.49, MaxErr=26
+[06:03:42] 
+  Table 9: 3,948,314 rows, 241.0MB uint8, 963.9MB fp32
+[06:04:00]     natural              CRF= 0:    3.7x (uint8),    14.8x (fp32), MSE=0.00, MaxErr=0
+[06:04:19]     natural              CRF=10:    5.4x (uint8),    21.5x (fp32), MSE=0.26, MaxErr=4
+[06:04:29]     natural              CRF=18:   44.1x (uint8),   176.4x (fp32), MSE=0.92, MaxErr=12
+[06:04:36]     natural              CRF=23:  627.3x (uint8),  2509.4x (fp32), MSE=0.96, MaxErr=25
+[06:04:42]     natural              CRF=28:  701.1x (uint8),  2804.5x (fp32), MSE=0.96, MaxErr=44
+[06:05:04]     random               CRF= 0:    3.7x (uint8),    14.8x (fp32), MSE=0.00, MaxErr=0
+[06:05:26]     random               CRF=10:    5.4x (uint8),    21.5x (fp32), MSE=0.26, MaxErr=3
+[06:05:38]     random               CRF=18:   43.9x (uint8),   175.7x (fp32), MSE=0.92, MaxErr=12
+[06:05:45]     random               CRF=23:  627.5x (uint8),  2510.1x (fp32), MSE=0.96, MaxErr=26
+[06:05:52]     random               CRF=28:  703.9x (uint8),  2815.5x (fp32), MSE=0.96, MaxErr=47
+[06:06:13]     frequency            CRF= 0:    3.7x (uint8),    14.8x (fp32), MSE=0.00, MaxErr=0
+[06:06:35]     frequency            CRF=10:    5.4x (uint8),    21.6x (fp32), MSE=0.26, MaxErr=3
+[06:06:47]     frequency            CRF=18:   43.9x (uint8),   175.7x (fp32), MSE=0.91, MaxErr=8
+[06:06:55]     frequency            CRF=23:  630.1x (uint8),  2520.4x (fp32), MSE=0.96, MaxErr=13
+[06:07:01]     frequency            CRF=28:  700.0x (uint8),  2800.1x (fp32), MSE=0.96, MaxErr=24
+[06:07:01] 
+  Table 10: 396,536 rows, 24.2MB uint8, 96.8MB fp32
+[06:07:04]     natural              CRF= 0:    2.1x (uint8),     8.4x (fp32), MSE=0.00, MaxErr=0
+[06:07:06]     natural              CRF=10:    2.5x (uint8),    10.0x (fp32), MSE=0.26, MaxErr=4
+[06:07:08]     natural              CRF=18:    4.7x (uint8),    18.9x (fp32), MSE=1.36, MaxErr=7
+[06:07:10]     natural              CRF=23:    9.9x (uint8),    39.7x (fp32), MSE=3.98, MaxErr=13
+[06:07:11]     natural              CRF=28:   68.3x (uint8),   273.2x (fp32), MSE=7.61, MaxErr=33
+[06:07:13]     random               CRF= 0:    2.1x (uint8),     8.4x (fp32), MSE=0.00, MaxErr=0
+[06:07:16]     random               CRF=10:    2.5x (uint8),    10.0x (fp32), MSE=0.26, MaxErr=4
+[06:07:18]     random               CRF=18:    4.7x (uint8),    18.9x (fp32), MSE=1.36, MaxErr=8
+[06:07:19]     random               CRF=23:    9.9x (uint8),    39.6x (fp32), MSE=3.98, MaxErr=16
+[06:07:20]     random               CRF=28:   68.1x (uint8),   272.3x (fp32), MSE=7.62, MaxErr=37
+[06:07:22]     frequency            CRF= 0:    2.1x (uint8),     8.5x (fp32), MSE=0.00, MaxErr=0
+[06:07:25]     frequency            CRF=10:    2.5x (uint8),    10.0x (fp32), MSE=0.26, MaxErr=4
+[06:07:27]     frequency            CRF=18:    4.7x (uint8),    19.0x (fp32), MSE=1.36, MaxErr=7
+[06:07:28]     frequency            CRF=23:   10.0x (uint8),    40.0x (fp32), MSE=3.97, MaxErr=11
+[06:07:29]     frequency            CRF=28:   67.8x (uint8),   271.1x (fp32), MSE=7.57, MaxErr=20
+[06:07:29] 
+  Table 11: 143,256 rows, 8.7MB uint8, 35.0MB fp32
+[06:07:30]     natural              CRF= 0:    1.7x (uint8),     6.7x (fp32), MSE=0.00, MaxErr=0
+[06:07:31]     natural              CRF=10:    1.9x (uint8),     7.7x (fp32), MSE=0.26, MaxErr=3
+[06:07:32]     natural              CRF=18:    3.0x (uint8),    12.0x (fp32), MSE=1.37, MaxErr=7
+[06:07:33]     natural              CRF=23:    4.7x (uint8),    18.8x (fp32), MSE=4.21, MaxErr=13
+[06:07:33]     natural              CRF=28:    9.6x (uint8),    38.3x (fp32), MSE=12.52, MaxErr=24
+[06:07:34]     random               CRF= 0:    1.7x (uint8),     6.7x (fp32), MSE=0.00, MaxErr=0
+[06:07:35]     random               CRF=10:    1.9x (uint8),     7.7x (fp32), MSE=0.26, MaxErr=3
+[06:07:36]     random               CRF=18:    3.0x (uint8),    11.9x (fp32), MSE=1.37, MaxErr=6
+[06:07:37]     random               CRF=23:    4.7x (uint8),    18.8x (fp32), MSE=4.21, MaxErr=13
+[06:07:38]     random               CRF=28:    9.6x (uint8),    38.3x (fp32), MSE=12.53, MaxErr=26
+[06:07:39]     frequency            CRF= 0:    1.7x (uint8),     6.7x (fp32), MSE=0.00, MaxErr=0
+[06:07:40]     frequency            CRF=10:    1.9x (uint8),     7.7x (fp32), MSE=0.26, MaxErr=3
+[06:07:41]     frequency            CRF=18:    3.0x (uint8),    12.0x (fp32), MSE=1.37, MaxErr=6
+[06:07:42]     frequency            CRF=23:    4.7x (uint8),    18.9x (fp32), MSE=4.21, MaxErr=11
+[06:07:42]     frequency            CRF=28:    9.7x (uint8),    38.6x (fp32), MSE=12.50, MaxErr=18
+[06:07:43] 
+  Table 19: 5,733,362 rows, 349.9MB uint8, 1399.7MB fp32
+[06:08:17]     natural              CRF= 0:    2.6x (uint8),    10.5x (fp32), MSE=0.00, MaxErr=0
+[06:08:52]     natural              CRF=10:    3.3x (uint8),    13.1x (fp32), MSE=0.26, MaxErr=3
+[06:09:15]     natural              CRF=18:    8.3x (uint8),    33.2x (fp32), MSE=1.33, MaxErr=7
+[06:09:31]     natural              CRF=23:   39.9x (uint8),   159.4x (fp32), MSE=2.85, MaxErr=21
+[06:09:42]     natural              CRF=28:  584.6x (uint8),  2338.5x (fp32), MSE=3.16, MaxErr=39
+[06:10:16]     random               CRF= 0:    2.6x (uint8),    10.5x (fp32), MSE=0.00, MaxErr=0
+[06:10:53]     random               CRF=10:    3.3x (uint8),    13.1x (fp32), MSE=0.26, MaxErr=3
+[06:11:18]     random               CRF=18:    8.3x (uint8),    33.2x (fp32), MSE=1.33, MaxErr=8
+[06:11:35]     random               CRF=23:   39.8x (uint8),   159.3x (fp32), MSE=2.85, MaxErr=18
+[06:11:46]     random               CRF=28:  585.8x (uint8),  2343.2x (fp32), MSE=3.16, MaxErr=42
+[06:12:22]     frequency            CRF= 0:    2.6x (uint8),    10.6x (fp32), MSE=0.00, MaxErr=0
+[06:12:59]     frequency            CRF=10:    3.3x (uint8),    13.1x (fp32), MSE=0.26, MaxErr=3
+[06:13:25]     frequency            CRF=18:    8.3x (uint8),    33.3x (fp32), MSE=1.33, MaxErr=6
+[06:13:41]     frequency            CRF=23:   39.7x (uint8),   158.9x (fp32), MSE=2.83, MaxErr=12
+[06:13:53]     frequency            CRF=28:  566.2x (uint8),  2264.9x (fp32), MSE=3.16, MaxErr=26
+[06:13:53] 
+  Table 20: 1,790,249 rows, 109.3MB uint8, 437.1MB fp32
+[06:14:03]     natural              CRF= 0:    2.3x (uint8),     9.3x (fp32), MSE=0.00, MaxErr=0
+[06:14:14]     natural              CRF=10:    2.9x (uint8),    11.4x (fp32), MSE=0.26, MaxErr=3
+[06:14:21]     natural              CRF=18:    6.2x (uint8),    24.6x (fp32), MSE=1.35, MaxErr=8
+[06:14:27]     natural              CRF=23:   17.7x (uint8),    70.6x (fp32), MSE=3.53, MaxErr=19
+[06:14:31]     natural              CRF=28:  223.2x (uint8),   893.0x (fp32), MSE=4.92, MaxErr=41
+[06:14:42]     random               CRF= 0:    2.3x (uint8),     9.3x (fp32), MSE=0.00, MaxErr=0
+[06:14:54]     random               CRF=10:    2.9x (uint8),    11.4x (fp32), MSE=0.26, MaxErr=3
+[06:15:03]     random               CRF=18:    6.2x (uint8),    24.6x (fp32), MSE=1.35, MaxErr=8
+[06:15:10]     random               CRF=23:   17.6x (uint8),    70.6x (fp32), MSE=3.53, MaxErr=18
+[06:15:14]     random               CRF=28:  223.0x (uint8),   891.8x (fp32), MSE=4.93, MaxErr=44
+[06:15:24]     frequency            CRF= 0:    2.3x (uint8),     9.4x (fp32), MSE=0.00, MaxErr=0
+[06:15:35]     frequency            CRF=10:    2.9x (uint8),    11.5x (fp32), MSE=0.26, MaxErr=3
+[06:15:44]     frequency            CRF=18:    6.2x (uint8),    24.7x (fp32), MSE=1.35, MaxErr=6
+[06:15:50]     frequency            CRF=23:   17.8x (uint8),    71.1x (fp32), MSE=3.51, MaxErr=11
+[06:15:55]     frequency            CRF=28:  224.3x (uint8),   897.4x (fp32), MSE=4.91, MaxErr=20
+[06:15:56] 
+  Table 21: 4,944,292 rows, 301.8MB uint8, 1207.1MB fp32
+[06:16:20]     natural              CRF= 0:    4.6x (uint8),    18.2x (fp32), MSE=0.00, MaxErr=0
+[06:16:44]     natural              CRF=10:    7.1x (uint8),    28.3x (fp32), MSE=0.26, MaxErr=3
+[06:16:56]     natural              CRF=18:  161.2x (uint8),   645.0x (fp32), MSE=0.61, MaxErr=15
+[06:17:03]     natural              CRF=23:  667.4x (uint8),  2669.5x (fp32), MSE=0.60, MaxErr=26
+[06:17:12]     natural              CRF=28:  699.7x (uint8),  2798.6x (fp32), MSE=0.60, MaxErr=47
+[06:17:33]     random               CRF= 0:    4.6x (uint8),    18.2x (fp32), MSE=0.00, MaxErr=0
+[06:17:55]     random               CRF=10:    7.1x (uint8),    28.3x (fp32), MSE=0.26, MaxErr=3
+[06:18:05]     random               CRF=18:  160.3x (uint8),   641.0x (fp32), MSE=0.61, MaxErr=14
+[06:18:14]     random               CRF=23:  668.7x (uint8),  2674.7x (fp32), MSE=0.60, MaxErr=29
+[06:18:22]     random               CRF=28:  701.5x (uint8),  2805.8x (fp32), MSE=0.61, MaxErr=49
+[06:18:46]     frequency            CRF= 0:    4.6x (uint8),    18.3x (fp32), MSE=0.00, MaxErr=0
+[06:19:09]     frequency            CRF=10:    7.1x (uint8),    28.4x (fp32), MSE=0.26, MaxErr=3
+[06:19:20]     frequency            CRF=18:  159.3x (uint8),   637.3x (fp32), MSE=0.61, MaxErr=6
+[06:19:29]     frequency            CRF=23:  674.3x (uint8),  2697.1x (fp32), MSE=0.60, MaxErr=11
+[06:19:39]     frequency            CRF=28:  699.3x (uint8),  2797.1x (fp32), MSE=0.60, MaxErr=23
+[06:19:39] 
+  Table 22: 202,406 rows, 12.4MB uint8, 49.4MB fp32
+[06:19:41]     natural              CRF= 0:    1.7x (uint8),     6.6x (fp32), MSE=0.00, MaxErr=0
+[06:19:42]     natural              CRF=10:    1.9x (uint8),     7.6x (fp32), MSE=0.26, MaxErr=2
+[06:19:44]     natural              CRF=18:    2.9x (uint8),    11.7x (fp32), MSE=1.38, MaxErr=6
+[06:19:45]     natural              CRF=23:    4.5x (uint8),    18.1x (fp32), MSE=4.21, MaxErr=12
+[06:19:46]     natural              CRF=28:    8.9x (uint8),    35.7x (fp32), MSE=12.66, MaxErr=22
+[06:19:48]     random               CRF= 0:    1.7x (uint8),     6.6x (fp32), MSE=0.00, MaxErr=0
+[06:19:49]     random               CRF=10:    1.9x (uint8),     7.6x (fp32), MSE=0.26, MaxErr=3
+[06:19:51]     random               CRF=18:    2.9x (uint8),    11.7x (fp32), MSE=1.38, MaxErr=6
+[06:19:52]     random               CRF=23:    4.5x (uint8),    18.0x (fp32), MSE=4.21, MaxErr=11
+[06:19:53]     random               CRF=28:    8.9x (uint8),    35.6x (fp32), MSE=12.66, MaxErr=23
+[06:19:55]     frequency            CRF= 0:    1.7x (uint8),     6.6x (fp32), MSE=0.00, MaxErr=0
+[06:19:56]     frequency            CRF=10:    1.9x (uint8),     7.6x (fp32), MSE=0.26, MaxErr=3
+[06:19:58]     frequency            CRF=18:    2.9x (uint8),    11.7x (fp32), MSE=1.38, MaxErr=6
+[06:19:59]     frequency            CRF=23:    4.5x (uint8),    18.1x (fp32), MSE=4.21, MaxErr=10
+[06:20:00]     frequency            CRF=28:    9.0x (uint8),    35.9x (fp32), MSE=12.63, MaxErr=18
+[06:20:00] 
+======================================================================
+[06:20:00] EXPERIMENT 1b: AUC Impact (terabyte, D=64)
+[06:20:00] ======================================================================
+[06:20:00]   Loading dataset...
+[06:23:52]   Profiling access frequencies...
+[06:26:22]   Running baseline inference...
+[06:29:22]   Baseline AUC: 0.768818
+[06:35:20]   CRF= 0 natural             : AUC=0.768812, delta=-0.000006
+[06:40:35]   CRF= 0 random              : AUC=0.768812, delta=-0.000006
+[06:45:52]   CRF= 0 frequency           : AUC=0.768812, delta=-0.000006
+[06:51:21]   CRF=10 natural             : AUC=0.768583, delta=-0.000235
+[06:56:59]   CRF=10 random              : AUC=0.768522, delta=-0.000296
+[07:02:02]   CRF=10 frequency           : AUC=0.768666, delta=-0.000152
+[07:06:38]   CRF=18 natural             : AUC=0.767883, delta=-0.000934
+[07:11:23]   CRF=18 random              : AUC=0.767560, delta=-0.001258
+[07:15:51]   CRF=18 frequency           : AUC=0.768315, delta=-0.000503
+[07:20:22]   CRF=23 natural             : AUC=0.767037, delta=-0.001781
+[07:24:41]   CRF=23 random              : AUC=0.766273, delta=-0.002544
+[07:28:48]   CRF=23 frequency           : AUC=0.767815, delta=-0.001003
+[07:32:48]   CRF=28 natural             : AUC=0.765447, delta=-0.003371
+[07:36:45]   CRF=28 random              : AUC=0.763761, delta=-0.005057
+[07:40:45]   CRF=28 frequency           : AUC=0.766676, delta=-0.002142
+[07:40:55] 
+All results saved to results/intrinsic_compressibility/all_experiments.json
+[07:40:55] Summary saved to results/intrinsic_compressibility/intrinsic_compressibility.md
+[07:40:55] 
+======================================================================
+[07:40:55] ALL EXPERIMENTS COMPLETE
+[07:40:55] ======================================================================

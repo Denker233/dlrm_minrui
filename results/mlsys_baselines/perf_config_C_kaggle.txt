@@ -1,0 +1,8 @@
+# started on Wed Mar 11 20:33:33 2026
+
+32421260929,,L1-dcache-loads,126624591291,100.00,,
+2653621821,,L1-dcache-load-misses,126623897980,100.00,8.18,of all L1-dcache accesses
+82391656,,LLC-loads,126623244289,100.00,,
+32609090,,LLC-load-misses,126622575805,100.00,39.58,of all LL-cache accesses
+118925399485,,instructions,126621933708,100.00,0.38,insn per cycle
+316941382775,,cycles,126621306303,100.00,,
