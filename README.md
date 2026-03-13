@@ -254,40 +254,44 @@ at::parallel_for(0, K, 128, [&](int64_t begin, int64_t end) {
 
 ### Measured Inference Overhead (Kaggle, 1080p)
 
-With LRU frame cache (default `--cache-size 20`), frequency reordering ensures >99% cache hit rate — H.265 decodes are rare after warmup:
+**Cache sweep** (`benchmark_full_comparison.py`, 1599 batches, CRF=0 lossless):
+
+With LRU frame cache, frequency reordering ensures >99% cache hit rate — H.265 decodes are rare after warmup:
 
 ```
 Experiment              Latency     vs Baseline    AUC        Cache Hit
-Baseline (fp32)          4.29 ms       —           0.804736      —
-C++ + LRU cache=16       2.36 ms      -45%         0.804736    99.8%
-C++ + LRU cache=8        2.45 ms      -43%         0.804736    92%
-Full C++ fast_forward    2.48 ms      -42%         0.804736      —
+Baseline (fp32)          4.29 ms       —           0.802497      —
+C++ + LRU cache=16       2.36 ms      -45%         0.802496    99.8%
+C++ + LRU cache=8        2.45 ms      -43%         0.802486    92.5%
+Full C++ (pre-decoded)   2.48 ms      -42%         0.802496      —
 ```
 
-Without cache (`--cache-size 0`), every cold batch decodes H.265 from RAM:
+**Python vs C++ raw overhead** (`benchmark_python_vs_cpp_inference.py`, 500 batches, CRF=0 lossless):
+
+Python and C++ compressed experiments decode all frames every batch (no cache) to measure raw per-operation cost. Full C++ uses LRU cache (default 20).
 
 ```
-Experiment              Latency     vs Baseline    AUC
-Baseline (fp32)          5.67 ms       —           0.804736
-Python compressed      762.16 ms    +13,338%       0.804733
-C++ compressed          14.94 ms      +163%        0.804733
-Full C++ fast_forward    3.01 ms       -47%        0.804733
+Experiment              Latency     vs Baseline    AUC        Cache Hit
+Baseline (fp32)          4.53 ms       —           0.804736      —
+Python compressed       94.84 ms    +1,993%        0.803778      —
+C++ compressed          64.83 ms    +1,331%        0.803778      —
+Full C++ + cache=20      2.35 ms      -48%         0.803778    99.7%
 ```
 
-Per-operation breakdown without cache (ms/batch):
+Per-operation breakdown, Python vs C++ compressed (ms/batch, decode all frames):
 
 ```
-Operation                    Python       C++     Speedup
-Mapping + hot/cold split      1.31      0.69        1.9x
-H.265 decode (memory)          —          —      (on cache miss only)
-Frame untiling              722.93      0.00    (fused in C++)
-Row gather                    2.80      0.00    (fused in C++)
-Dequantization               11.15      0.00    (fused in C++)
-Fused gather+dequant           —        7.09       104x
-Sum pooling                   4.61      0.00    (fused in C++)
+Operation                    Python       C++
+H.265 decode (in-memory)     53.93      55.44      ~1x (both use libavcodec)
+Frame untile + gather        24.38        —        (fused in C++)
+Dequantization                1.16        —        (fused in C++)
+Fused gather+dequant           —         ~6.1      ~4x faster than untile path
+Mapping + hot/cold split      1.28       0.67       1.9x
+Scatter + pooling             4.19       0.40      10.5x
+Total embedding              91.54      61.57       1.5x
 ```
 
-The full C++ path (`fast_forward`) is actually **45% faster than the uncompressed baseline** because it uses compact hot tensors + merged int32 mapping instead of full `nn.EmbeddingBag`. With LRU cache, the on-demand C++ path achieves similar latency since frequency reordering concentrates >95% of cold accesses into a few frames that stay cached.
+H.265 decode dominates when decoding all frames every batch (~55ms, same cost for Python and C++). The C++ advantage comes from fused gather+dequant directly from tiled frames (O(K) vs Python's O(N) full untile). With LRU cache (>99% hit rate), H.265 decodes are rare and the full C++ path is **48% faster than the uncompressed baseline** because it uses compact hot tensors + merged int32 mapping instead of full `nn.EmbeddingBag`.
 
 ## File Guide
 
@@ -356,7 +360,7 @@ The full C++ path (`fast_forward`) is actually **45% faster than the uncompresse
 | Mapping tables (int32) | 134.6 MB | 51% |
 | **Total** | **263 MB** | — |
 
-The mapping overhead dominates and can be reduced to ~7 MB with bitmap rank indexing.
+The mapping overhead dominates and can be reduced to ~38 MB with uint8 frame ID + bitmap rank indexing (72% savings).
 
 ## Results Directory
 
