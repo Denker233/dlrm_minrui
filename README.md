@@ -116,7 +116,7 @@ Benchmarks individual operations (tiling, untiling, gather, encode) in isolation
 ```
 Trained DLRM Model (26 embedding tables, 2GB fp32)
   │
-  ├── Phase 1: Profile access patterns (200 training batches)
+  ├── Phase 1: Profile access patterns (all training batches)
   │     → count per-row access frequency
   │
   ├── Phase 2: Hot/Cold split

@@ -55,7 +55,7 @@ TILE_H, TILE_W = 4, 4
 
 HOT_COVERAGE = 0.80
 LARGE_TABLE_THRESHOLD = 50000
-PROFILE_BATCHES = 200
+PROFILE_BATCHES = 0  # 0 = profile ALL training batches (recommended for accuracy)
 
 RESOLUTIONS = {
     '1080p': (1920, 1080),
@@ -150,7 +150,8 @@ def profile_and_split(train_ld, ln_emb, state_dict, emb_keys):
     """Profile access patterns and build hot/cold split."""
     num_tables = len(ln_emb)
     large_tables = [t for t in range(num_tables) if ln_emb[t] >= LARGE_TABLE_THRESHOLD]
-    log(f"Profiling {PROFILE_BATCHES} batches for {len(large_tables)} large tables...")
+    profile_limit = "ALL" if PROFILE_BATCHES == 0 else str(PROFILE_BATCHES)
+    log(f"Profiling {profile_limit} batches for {len(large_tables)} large tables...")
 
     access_counts = {t: Counter() for t in large_tables}
     n_batches = 0
@@ -159,7 +160,7 @@ def profile_and_split(train_ld, ln_emb, state_dict, emb_keys):
             for idx in lS_i[t].numpy():
                 access_counts[t][idx] += 1
         n_batches += 1
-        if n_batches >= PROFILE_BATCHES:
+        if PROFILE_BATCHES > 0 and n_batches >= PROFILE_BATCHES:
             break
 
     is_hot = {}

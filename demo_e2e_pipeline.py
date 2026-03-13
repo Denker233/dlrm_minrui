@@ -57,7 +57,7 @@ TILE_H, TILE_W = 4, 4
 
 HOT_COVERAGE = 0.80           # top 80% accesses → hot
 LARGE_TABLE_THRESHOLD = 50000  # only compress tables with >50K rows
-PROFILE_BATCHES = 200          # batches to profile for access frequency
+PROFILE_BATCHES = 0            # 0 = profile ALL training batches (recommended for accuracy)
 
 RESOLUTIONS = {
     '1080p': (1920, 1080),
@@ -149,7 +149,7 @@ def profile_and_split(train_ld, ln_emb, state_dict, emb_keys):
             for idx in indices:
                 access_counts[t][idx] += 1
         n_batches += 1
-        if n_batches >= PROFILE_BATCHES:
+        if PROFILE_BATCHES > 0 and n_batches >= PROFILE_BATCHES:
             break
     log(f"  Profiled {n_batches} batches")
 
