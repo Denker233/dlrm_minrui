@@ -15,7 +15,7 @@ Usage:
     python3 benchmark_python_vs_cpp_inference.py [--num-batches 500] [--resolution 1080p]
 """
 
-import os, sys, time, json, gc, argparse, copy
+import os, sys, time, json, gc, argparse, copy, io, tempfile
 import numpy as np
 import torch
 import torch.nn as nn
@@ -225,9 +225,10 @@ def profile_and_split(train_ld, ln_emb, state_dict, emb_keys):
 # Compressed EmbeddingBag: PYTHON-ONLY path
 # ============================================================
 class PythonCompressedEmbeddingBag(nn.Module):
-    """Pure Python implementation — NO C++ calls."""
+    """Pure Python implementation — NO C++ calls.
+    Decodes H.265 compressed bytes on cache miss using PyAV."""
     def __init__(self, hot_weight, is_hot, orig_to_hot, orig_to_cold_reordered,
-                 cold_frames, rows_per_frame, width, height, quant_scale, quant_zp,
+                 compressed_bytes_list, rows_per_frame, width, height, quant_scale, quant_zp,
                  n_cold, num_embeddings):
         super().__init__()
         self.embedding_dim = EMB_DIM
@@ -244,7 +245,7 @@ class PythonCompressedEmbeddingBag(nn.Module):
         mapping[cold_mask] = (-(orig_to_cold_reordered[cold_mask] + 1)).to(torch.int32)
         self.mapping = mapping
 
-        self.cold_frames = cold_frames  # list of (H, W) numpy arrays
+        self.compressed_bytes_list = compressed_bytes_list  # list of bytes objects (H.265)
         self.rows_per_frame = rows_per_frame
         self.width = width
         self.height = height
@@ -258,6 +259,7 @@ class PythonCompressedEmbeddingBag(nn.Module):
         # Fine-grained operation timers (seconds)
         self.t_mapping = 0.0       # mapping lookup + hot/cold split
         self.t_hot_gather = 0.0    # hot embedding gather
+        self.t_decode = 0.0        # H.265 in-memory decode time
         self.t_untile = 0.0        # frame untiling (reshape+transpose)
         self.t_gather = 0.0        # row indexing from untiled frame
         self.t_dequant = 0.0       # uint8 → fp32 dequantization
@@ -283,7 +285,7 @@ class PythonCompressedEmbeddingBag(nn.Module):
         t2 = time.time()
         self.t_hot_gather += t2 - t1
 
-        # Cold lookup: untile full frame, index, dequantize (Python only)
+        # Cold lookup: decode H.265 from memory, untile, index, dequantize
         INT32_MIN = -2147483648
         cold_mask = (map_vals < 0) & (map_vals != INT32_MIN)
         if cold_mask.any():
@@ -303,9 +305,18 @@ class PythonCompressedEmbeddingBag(nn.Module):
                     mask = frame_ids == fid
                     offsets_in_frame = row_offsets[mask].numpy()
 
+                    # DECODE H.265 from in-memory bytes (PyAV)
+                    td0 = time.time()
+                    data = self.compressed_bytes_list[fid]
+                    container = av.open(io.BytesIO(data))
+                    frame_av = next(container.decode(video=0))
+                    frame_np = frame_av.to_ndarray(format='gray')
+                    container.close()
+                    td1 = time.time()
+                    self.t_decode += td1 - td0
+
                     # PYTHON untile: reshape + transpose
                     tu0 = time.time()
-                    frame_np = self.cold_frames[fid]
                     all_rows = tiled_frame_to_rows_py(frame_np, self.width, self.height)
                     tu1 = time.time()
                     self.t_untile += tu1 - tu0
@@ -350,9 +361,10 @@ class PythonCompressedEmbeddingBag(nn.Module):
 # Compressed EmbeddingBag: C++ path
 # ============================================================
 class CppCompressedEmbeddingBag(nn.Module):
-    """C++ optimized path — merged mapping, fused gather+dequant."""
+    """C++ optimized path — merged mapping, fused gather+dequant.
+    Decodes H.265 compressed bytes on cache miss using C++ decode_h265_frame_from_bytes."""
     def __init__(self, hot_weight, is_hot, orig_to_hot, orig_to_cold_reordered,
-                 cold_frames, rows_per_frame, width, height, quant_scale, quant_zp,
+                 compressed_bytes_list, rows_per_frame, width, height, quant_scale, quant_zp,
                  n_cold, num_embeddings):
         super().__init__()
         self.embedding_dim = EMB_DIM
@@ -368,10 +380,7 @@ class CppCompressedEmbeddingBag(nn.Module):
         mapping[cold_mask] = (-(orig_to_cold_reordered[cold_mask] + 1)).to(torch.int32)
         self.mapping = mapping
 
-        # Store cold frames as torch tensors (tiled layout for C++ gather)
-        self.cold_frames = []
-        for f in cold_frames:
-            self.cold_frames.append(torch.from_numpy(f) if isinstance(f, np.ndarray) else f)
+        self.compressed_bytes_list = compressed_bytes_list  # list of bytes objects (H.265)
         self.rows_per_frame = rows_per_frame
         self.tiles_per_row = width // TILE_W
         self.width = width
@@ -389,6 +398,7 @@ class CppCompressedEmbeddingBag(nn.Module):
         # Fine-grained operation timers (seconds)
         self.t_mapping = 0.0           # C++ merged mapping + hot forward + pooling
         self.t_hot_gather = 0.0        # (included in t_mapping for C++)
+        self.t_decode = 0.0            # H.265 in-memory decode time
         self.t_gather_dequant = 0.0    # C++ fused gather+dequant from tiled frame
         self.t_cold_fixup = 0.0        # C++ cold_fixup (scatter into output)
         self.t_cold_index = 0.0        # cold index extraction from mapping
@@ -429,14 +439,21 @@ class CppCompressedEmbeddingBag(nn.Module):
                 row_offsets = (valid_idx % self.rows_per_frame).long()
                 unique_frames = torch.unique(frame_ids).tolist()
 
-                # C++ fused gather + dequant from tiled frames (no separate untile)
+                # Decode H.265 from in-memory bytes + C++ fused gather+dequant
                 tgd0 = time.time()
                 result = torch.zeros(valid.sum(), EMB_DIM)
                 for fid in unique_frames:
                     mask = frame_ids == fid
                     offsets_in_frame = row_offsets[mask]
+                    # Decode from in-memory bytes
+                    data = self.compressed_bytes_list[fid]
+                    compressed_t = torch.frombuffer(bytearray(data), dtype=torch.uint8)
+                    tiled_frame = _C.decode_h265_frame_from_bytes(compressed_t)
+                    td1 = time.time()
+                    self.t_decode += td1 - tgd0
+                    # C++ fused gather+dequant from tiled frame
                     rows = _C.gather_dequant_from_tiled_frame(
-                        self.cold_frames[fid], offsets_in_frame,
+                        tiled_frame, offsets_in_frame,
                         self.tiles_per_row, self.quant_scale, self.quant_zp)
                     result[mask] = rows
                 self.t_gather_dequant += time.time() - tgd0
@@ -490,6 +507,7 @@ def run_inference(dlrm, test_batches, label, num_batches, large_tables):
     emb_time_total = 0
     op_timers = {
         't_mapping': 0.0, 't_hot_gather': 0.0,
+        't_decode': 0.0,
         't_untile': 0.0, 't_gather': 0.0, 't_dequant': 0.0,
         't_scatter': 0.0, 't_pooling': 0.0,
         't_gather_dequant': 0.0, 't_cold_fixup': 0.0, 't_cold_index': 0.0,
@@ -542,6 +560,8 @@ def run_inference(dlrm, test_batches, label, num_batches, large_tables):
         log(f"    ---- Per-operation timing (ms/batch, summed across all large tables) ----")
         log(f"    Mapping + hot/cold split: {result['op_t_mapping_ms']:.4f} ms")
         log(f"    Hot gather:               {result['op_t_hot_gather_ms']:.4f} ms")
+        if result['op_t_decode_ms'] > 0:
+            log(f"    H.265 decode (memory):    {result['op_t_decode_ms']:.4f} ms")
         log(f"    Frame untiling:           {result['op_t_untile_ms']:.4f} ms")
         log(f"    Row gather (indexing):    {result['op_t_gather_ms']:.4f} ms")
         log(f"    Dequantization:           {result['op_t_dequant_ms']:.4f} ms")
@@ -558,6 +578,28 @@ def run_inference(dlrm, test_batches, label, num_batches, large_tables):
     return result
 
 
+def _find_existing_compressed(compressed_dir, large_tables, rows_per_frame):
+    """Check if compressed frames already exist on disk. Returns dict or None."""
+    if not compressed_dir or not os.path.isdir(compressed_dir):
+        return None
+    result = {}
+    for t in large_tables:
+        table_dir = os.path.join(compressed_dir, f'table_{t}')
+        if not os.path.isdir(table_dir):
+            continue
+        frame_files = sorted([f for f in os.listdir(table_dir)
+                              if f.startswith('frame_') and
+                              (f.endswith('.h265') or f.endswith('.h264') or f.endswith('.mkv'))])
+        if not frame_files:
+            continue
+        frame_bytes = []
+        for ff in frame_files:
+            with open(os.path.join(table_dir, ff), 'rb') as fh:
+                frame_bytes.append(fh.read())
+        result[t] = (frame_bytes, rows_per_frame)
+    return result if result else None
+
+
 # ============================================================
 # Main
 # ============================================================
@@ -567,6 +609,8 @@ def main():
                         help='Number of test batches (0=all)')
     parser.add_argument('--resolution', type=str, default='1080p', choices=['1080p', '4K'])
     parser.add_argument('--crf', type=int, default=0, help='H.265 CRF (0=lossless)')
+    parser.add_argument('--compressed-dir', type=str, default=None,
+                        help='Load pre-compressed frames from this dir (skip encoding)')
     args = parser.parse_args()
 
     width, height = RESOLUTIONS[args.resolution]
@@ -590,30 +634,79 @@ def main():
      orig_to_cold_reordered, cold_weights_q, cold_quant_params) = \
         profile_and_split(train_ld, ln_emb, state_dict, emb_keys)
 
-    # Pre-tile cold frames into memory (skip H.265 for fair comparison —
-    # we want to isolate the embedding lookup overhead, not codec speed)
-    log("\nPre-tiling cold frames into memory (bypass H.265 for overhead isolation)...")
-    cold_frames_per_table = {}
-    for t in large_tables:
-        q = cold_weights_q[t].numpy()
-        n_cold = len(q)
-        num_frames = max(1, (n_cold + rows_per_frame - 1) // rows_per_frame)
-        padded = np.zeros((num_frames * rows_per_frame, EMB_DIM), dtype=np.uint8)
-        padded[:n_cold] = q
+    # Load or encode compressed frames into RAM.
+    # During inference, cache misses decode from these in-memory bytes (no disk I/O).
+    cold_compressed_bytes_per_table = {}  # table -> list of bytes objects
+    cold_num_frames_per_table = {}
 
-        frames = []
-        if HAS_CPP:
-            q_t = torch.from_numpy(padded)
-            tiled = _C.fused_quantize_tile_multiframe(q_t, width, height)
-            for i in range(num_frames):
-                frames.append(tiled[i].numpy())
-        else:
-            for i in range(num_frames):
-                chunk = padded[i * rows_per_frame:(i + 1) * rows_per_frame]
-                frames.append(rows_to_tiled_frame_py(chunk, width, height))
+    existing = _find_existing_compressed(args.compressed_dir, large_tables, rows_per_frame) \
+        if args.compressed_dir else None
 
-        cold_frames_per_table[t] = frames
-        log(f"  Table {t}: {num_frames} frames ({n_cold:,} cold rows)")
+    if existing:
+        log(f"\nLoading pre-compressed frames from {args.compressed_dir}...")
+        for t, (frame_bytes, rpf) in existing.items():
+            cold_compressed_bytes_per_table[t] = frame_bytes
+            cold_num_frames_per_table[t] = len(frame_bytes)
+            comp_bytes = sum(len(b) for b in frame_bytes)
+            n_cold = len(cold_indices[t])
+            log(f"  Table {t}: loaded {len(frame_bytes)} frames "
+                f"({comp_bytes/1024:.1f}KB) for {n_cold:,} cold rows")
+    else:
+        log("\nEncoding cold frames to H.265 and storing compressed bytes in RAM...")
+        for t in large_tables:
+            q = cold_weights_q[t].numpy()
+            n_cold = len(q)
+            num_frames = max(1, (n_cold + rows_per_frame - 1) // rows_per_frame)
+            padded = np.zeros((num_frames * rows_per_frame, EMB_DIM), dtype=np.uint8)
+            padded[:n_cold] = q
+
+            # Tile frames
+            if HAS_CPP:
+                q_t = torch.from_numpy(padded)
+                tiled = _C.fused_quantize_tile_multiframe(q_t, width, height)
+            else:
+                tiled = []
+                for i in range(num_frames):
+                    chunk = padded[i * rows_per_frame:(i + 1) * rows_per_frame]
+                    tiled.append(torch.from_numpy(rows_to_tiled_frame_py(chunk, width, height)))
+
+            # Encode each tiled frame to H.265 and store compressed bytes in memory
+            compressed_list = []
+            total_compressed = 0
+            for i in range(num_frames):
+                frame_t = tiled[i] if isinstance(tiled, list) else tiled[i]
+                if not isinstance(frame_t, torch.Tensor):
+                    frame_t = torch.from_numpy(frame_t)
+                frame_t = frame_t.to(torch.uint8).contiguous()
+                if HAS_CPP and hasattr(_C, 'encode_h265_frame'):
+                    compressed_t = _C.encode_h265_frame(frame_t, "", True, 0)
+                    compressed_bytes = bytes(compressed_t.numpy().tobytes())
+                else:
+                    with tempfile.NamedTemporaryFile(suffix='.h265', delete=True) as tmp:
+                        tmp_path = tmp.name
+                        container = av.open(tmp_path, mode='w', format='matroska')
+                        stream = container.add_stream('libx265', rate=1)
+                        stream.width = width; stream.height = height
+                        stream.pix_fmt = 'gray'
+                        stream.options = {'preset': 'ultrafast',
+                                          'x265-params': 'lossless=1:log-level=error'}
+                        avframe = av.VideoFrame.from_ndarray(frame_t.numpy(), format='gray')
+                        for pkt in stream.encode(avframe):
+                            container.mux(pkt)
+                        for pkt in stream.encode():
+                            container.mux(pkt)
+                        container.close()
+                        with open(tmp_path, 'rb') as f:
+                            compressed_bytes = f.read()
+                compressed_list.append(compressed_bytes)
+                total_compressed += len(compressed_bytes)
+
+            cold_compressed_bytes_per_table[t] = compressed_list
+            cold_num_frames_per_table[t] = num_frames
+            raw_bytes = n_cold * EMB_DIM
+            ratio = raw_bytes / total_compressed if total_compressed > 0 else 0
+            log(f"  Table {t}: {num_frames} frames ({n_cold:,} cold rows), "
+                f"{raw_bytes/1024:.0f}KB → {total_compressed/1024:.0f}KB H.265 ({ratio:.1f}x)")
 
     # Helper to build compressed emb for each table
     def build_hot_data(t):
@@ -649,6 +742,7 @@ def main():
     # ---- Experiment 2: Python-only compressed ----
     log("\n" + "=" * 70)
     log("EXPERIMENT 2: Compressed (PYTHON-ONLY path)")
+    log("  - H.265 in-memory decode via PyAV on cache miss")
     log("  - Python reshape+transpose untiling")
     log("  - Python numpy dequantization")
     log("  - Python scatter_add pooling")
@@ -661,7 +755,7 @@ def main():
             hot_weight=hot_weight, is_hot=is_hot[t],
             orig_to_hot=orig_to_hot,
             orig_to_cold_reordered=orig_to_cold_reordered[t],
-            cold_frames=cold_frames_per_table[t],
+            compressed_bytes_list=cold_compressed_bytes_per_table[t],
             rows_per_frame=rows_per_frame,
             width=width, height=height,
             quant_scale=s, quant_zp=zp,
@@ -676,6 +770,7 @@ def main():
     if HAS_CPP:
         log("\n" + "=" * 70)
         log("EXPERIMENT 3: Compressed (C++ path)")
+        log("  - H.265 in-memory decode via C++ on cache miss")
         log("  - C++ merged mapping forward")
         log("  - C++ fused gather+dequant from tiled frame")
         log("  - C++ cold_fixup (in-place)")
@@ -688,7 +783,7 @@ def main():
                 hot_weight=hot_weight, is_hot=is_hot[t],
                 orig_to_hot=orig_to_hot,
                 orig_to_cold_reordered=orig_to_cold_reordered[t],
-                cold_frames=cold_frames_per_table[t],
+                compressed_bytes_list=cold_compressed_bytes_per_table[t],
                 rows_per_frame=rows_per_frame,
                 width=width, height=height,
                 quant_scale=s, quant_zp=zp,
@@ -705,7 +800,7 @@ def main():
         log("EXPERIMENT 4: Compressed (Full C++ fast_forward)")
         log("  - All tables registered in C++")
         log("  - Single C++ call per batch (zero Python loop)")
-        log("  - Cold frames pre-registered for O(1) lookup")
+        log("  - Cold frames pre-decoded from H.265 bytes and registered for O(1) lookup")
         log("=" * 70)
         restore_weights()
 
@@ -720,7 +815,7 @@ def main():
         _mapping_tensors = {}
 
         for k in range(num_tabs):
-            if k in large_tables and k in cold_frames_per_table:
+            if k in large_tables and k in cold_compressed_bytes_per_table:
                 hot_weight, orig_to_hot = build_hot_data(k)
                 INT32_MIN = -2147483648
                 mapping = torch.full((ln_emb[k],), INT32_MIN, dtype=torch.int32)
@@ -736,11 +831,14 @@ def main():
                 zero_points.append(0)
                 _mapping_tensors[k] = mapping
 
-                # Store cold cache info for fixup
+                # Pre-decode all H.265 frames from in-memory bytes for fast_forward registration
                 s, zp = cold_quant_params[k]
+                decoded_frames = []
+                for data in cold_compressed_bytes_per_table[k]:
+                    compressed_t = torch.frombuffer(bytearray(data), dtype=torch.uint8)
+                    decoded_frames.append(_C.decode_h265_frame_from_bytes(compressed_t))
                 _cold_data[k] = {
-                    'frames': [torch.from_numpy(f) if isinstance(f, np.ndarray) else f
-                               for f in cold_frames_per_table[k]],
+                    'frames': decoded_frames,
                     'scale': s, 'zp': zp,
                     'tiles_per_row': width // TILE_W,
                 }
@@ -887,6 +985,7 @@ def main():
         ops = [
             ('Mapping + hot/cold split', 'op_t_mapping_ms'),
             ('Hot gather',               'op_t_hot_gather_ms'),
+            ('H.265 decode (memory)',    'op_t_decode_ms'),
             ('Frame untiling',           'op_t_untile_ms'),
             ('Row gather (indexing)',     'op_t_gather_ms'),
             ('Dequantization',           'op_t_dequant_ms'),

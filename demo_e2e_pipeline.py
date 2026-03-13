@@ -587,6 +587,28 @@ def run_inference(dlrm, test_batches, label, num_batches=0):
     }
 
 
+def _find_existing_compressed(compressed_dir, large_tables, rows_per_frame):
+    """Check if compressed frames already exist on disk. Returns dict or None."""
+    if not os.path.isdir(compressed_dir):
+        return None
+    result = {}
+    for t in large_tables:
+        table_dir = os.path.join(compressed_dir, f'table_{t}')
+        if not os.path.isdir(table_dir):
+            continue
+        frame_files = sorted([f for f in os.listdir(table_dir)
+                              if f.startswith('frame_') and
+                              (f.endswith('.h265') or f.endswith('.h264') or f.endswith('.mkv'))])
+        if not frame_files:
+            continue
+        frame_bytes = []
+        for ff in frame_files:
+            with open(os.path.join(table_dir, ff), 'rb') as fh:
+                frame_bytes.append(fh.read())
+        result[t] = (frame_bytes, rows_per_frame)
+    return result if result else None
+
+
 # ============================================================
 # Main
 # ============================================================
@@ -596,6 +618,8 @@ def main():
     parser.add_argument('--resolution', type=str, default='1080p', choices=['1080p', '4K'])
     parser.add_argument('--num-batches', type=int, default=0, help='Limit test batches (0=all)')
     parser.add_argument('--cache-size', type=int, default=20, help='LRU cache frames')
+    parser.add_argument('--compressed-dir', type=str, default=None,
+                        help='Load pre-compressed frames from this dir (skip encoding)')
     args = parser.parse_args()
 
     width, height = RESOLUTIONS[args.resolution]
@@ -632,36 +656,53 @@ def main():
      orig_to_cold_reordered, cold_weights_q, cold_quant_params) = \
         profile_and_split(train_ld, ln_emb, state_dict, emb_keys)
 
-    # Step 2: Encode
+    # Step 2: Encode (or load existing compressed frames)
     log("\n" + "=" * 70)
-    log("STEP 2: Tile + H.265 Encode Cold Embeddings")
-    log("=" * 70)
     compressed_frames_per_table = {}  # table_id → list of bytes (in-memory)
     rpf_per_table = {}
     total_raw_bytes = 0
     total_compressed_bytes = 0
 
-    for t in large_tables:
-        n_cold = len(cold_indices[t])
-        if n_cold == 0:
-            continue
-        log(f"  Table {t}: {n_cold:,} cold rows")
-        num_frames, frame_dir, comp_bytes, rpf = encode_h265_frames(
-            cold_weights_q[t], width, height, args.crf, output_dir, t)
+    # Check for existing compressed frames
+    compressed_dir = args.compressed_dir or output_dir
+    existing = _find_existing_compressed(compressed_dir, large_tables, rows_per_frame)
 
-        # Load compressed frames into RAM (total ~0.8 MB for Kaggle)
-        frame_files = sorted([f for f in os.listdir(frame_dir)
-                              if f.startswith('frame_') and
-                              (f.endswith('.h265') or f.endswith('.h264') or f.endswith('.mkv'))])
-        frame_bytes = []
-        for ff in frame_files:
-            with open(os.path.join(frame_dir, ff), 'rb') as fh:
-                frame_bytes.append(fh.read())
-        compressed_frames_per_table[t] = frame_bytes
+    if existing and args.compressed_dir:
+        log("STEP 2: Loading Pre-Compressed Frames from Disk → RAM")
+        log("=" * 70)
+        for t, (frame_bytes, rpf) in existing.items():
+            compressed_frames_per_table[t] = frame_bytes
+            rpf_per_table[t] = rpf
+            comp_bytes = sum(len(b) for b in frame_bytes)
+            n_cold = len(cold_indices[t])
+            total_raw_bytes += n_cold * EMB_DIM
+            total_compressed_bytes += comp_bytes
+            log(f"  Table {t}: loaded {len(frame_bytes)} frames "
+                f"({comp_bytes/1024:.1f}KB) for {n_cold:,} cold rows")
+    else:
+        log("STEP 2: Tile + H.265 Encode Cold Embeddings")
+        log("=" * 70)
+        for t in large_tables:
+            n_cold = len(cold_indices[t])
+            if n_cold == 0:
+                continue
+            log(f"  Table {t}: {n_cold:,} cold rows")
+            num_frames, frame_dir, comp_bytes, rpf = encode_h265_frames(
+                cold_weights_q[t], width, height, args.crf, output_dir, t)
 
-        rpf_per_table[t] = rpf
-        total_raw_bytes += n_cold * EMB_DIM
-        total_compressed_bytes += comp_bytes
+            # Load compressed frames into RAM (total ~0.8 MB for Kaggle)
+            frame_files = sorted([f for f in os.listdir(frame_dir)
+                                  if f.startswith('frame_') and
+                                  (f.endswith('.h265') or f.endswith('.h264') or f.endswith('.mkv'))])
+            frame_bytes = []
+            for ff in frame_files:
+                with open(os.path.join(frame_dir, ff), 'rb') as fh:
+                    frame_bytes.append(fh.read())
+            compressed_frames_per_table[t] = frame_bytes
+
+            rpf_per_table[t] = rpf
+            total_raw_bytes += n_cold * EMB_DIM
+            total_compressed_bytes += comp_bytes
 
     if total_compressed_bytes > 0:
         overall_ratio = total_raw_bytes / total_compressed_bytes

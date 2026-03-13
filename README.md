@@ -59,21 +59,25 @@ python3 dlrm_s_pytorch.py --arch-sparse-feature-size=16 \
 
 ### Option A: Full E2E Demo (single script)
 
-Walks through the entire pipeline: load model → profile → hot/cold split → quantize → tile → H.265 encode → compressed inference → compare with baseline.
+Walks through the entire pipeline: load model → profile → hot/cold split → quantize → tile → H.265 encode → store compressed frames in RAM → on-demand decode during inference → compare with baseline.
 
 ```bash
-# Lossless compression
+# Lossless compression (first run encodes from scratch)
 python3 demo_e2e_pipeline.py --crf 0 --resolution 1080p
 
 # Lossy (sweet spot: 1360x compression, 0.037% AUC loss)
 python3 demo_e2e_pipeline.py --crf 18 --resolution 1080p
 
-# Options
+# Skip encoding on subsequent runs (load existing compressed frames)
+python3 demo_e2e_pipeline.py --crf 18 --compressed-dir results/demo_crf18_1080p
+
+# All options
 python3 demo_e2e_pipeline.py --help
-#   --crf         H.265 quality (0=lossless, 18=lossy sweet spot)
-#   --resolution  1080p or 4K
-#   --num-batches Limit test batches (0=all)
-#   --cache-size  LRU frame cache size (default 20)
+#   --crf             H.265 quality (0=lossless, 18=lossy sweet spot)
+#   --resolution      1080p or 4K
+#   --num-batches     Limit test batches (0=all)
+#   --cache-size      LRU frame cache size (default 20)
+#   --compressed-dir  Load pre-compressed frames from this dir (skip encoding)
 ```
 
 ### Option B: Step-by-Step (separate scripts)
@@ -84,12 +88,16 @@ python3 demo_e2e_pipeline.py --help
 python3 codec_ondemand_benchmark.py
 ```
 
-This runs the full pipeline with on-demand H.265 decode, LRU frame cache, Markov prefetching, and measures AUC/latency at multiple resolutions.
+This runs the full pipeline with in-memory H.265 decode, LRU frame cache, Markov prefetching, and measures AUC/latency at multiple resolutions.
 
 **Step 2: Compare Python vs C++ overhead during inference**
 
 ```bash
+# First run (encodes H.265 from scratch)
 python3 benchmark_python_vs_cpp_inference.py --num-batches 500 --resolution 1080p
+
+# Subsequent runs (load existing compressed frames, skip encoding)
+python3 benchmark_python_vs_cpp_inference.py --num-batches 500 --compressed-dir results/demo_crf0_1080p
 ```
 
 Runs 4 experiments on the same compressed model:
@@ -97,9 +105,9 @@ Runs 4 experiments on the same compressed model:
 | Experiment | What it tests |
 |-----------|---------------|
 | Baseline | Full fp32, no compression (reference) |
-| Python compressed | Pure Python: reshape+transpose untiling, numpy dequant |
-| C++ compressed | C++ fused gather+dequant from tiled frame, merged mapping |
-| Full C++ fast_forward | Single C++ call per batch, all 26 tables, zero Python loop |
+| Python compressed | Pure Python: PyAV in-memory H.265 decode, reshape+transpose untiling, numpy dequant |
+| C++ compressed | C++ in-memory H.265 decode, fused gather+dequant from tiled frame, merged mapping |
+| Full C++ fast_forward | Single C++ call per batch, all 26 tables, pre-decoded frames, zero Python loop |
 
 **Step 3: Standalone microbenchmark (tiling operations only)**
 
@@ -107,7 +115,7 @@ Runs 4 experiments on the same compressed model:
 python3 benchmark_frame_packing.py
 ```
 
-Benchmarks individual operations (tiling, untiling, gather, encode) in isolation without running the full model.
+Benchmarks individual operations (tiling, untiling, gather, fused encode) per frame in isolation without running the full model.
 
 ## How It Works
 
@@ -127,11 +135,12 @@ Trained DLRM Model (26 embedding tables, 2GB fp32)
   │     → Quantize fp32 → uint8 (global min/max per table)
   │     → Tile each 16-element row into a 4×4 pixel block
   │     → Pack tiles into 1080p video frames (129,600 rows/frame)
-  │     → Encode frames with H.265 (CRF=0 lossless or CRF=18 lossy)
+  │     → Encode each frame independently with H.265 (CRF=0 lossless or CRF=18 lossy)
+  │     → Store all compressed frames in RAM (~0.8 MB for Kaggle)
   │
   └── Phase 4: Inference with compressed model
         → Hot lookup: direct fp32 gather from compact tensor
-        → Cold lookup: decode H.265 frame → gather from tiled frame → dequantize
+        → Cold lookup: decode single H.265 frame from RAM → gather rows → dequantize
         → LRU frame cache: most-accessed frames stay decoded in memory
         → Frequency reordering ensures cache hit rate >95%
 ```
@@ -155,6 +164,10 @@ Many H.265 decodes per batch      Rare H.265 decodes
 
 Reordering doesn't change compression ratio (same data, just reordered), but it concentrates most-accessed cold rows into fewer frames, making the LRU cache much more effective. This also steers H.265 compression errors away from frequently-accessed rows (3.9x less AUC loss vs random ordering).
 
+### In-Memory Compressed Storage
+
+All compressed H.265 frames are held in RAM as raw bytes (~0.8 MB total for Kaggle). On a cache miss, the needed frame is decoded directly from these in-memory bytes — no disk I/O during inference. Each frame is encoded as a standalone ALL-INTRA H.265 bitstream (no inter-frame dependencies), so any single frame can be decoded independently without touching the others.
+
 ### Python vs C++ Implementation
 
 The key difference is how cold embeddings are gathered from tiled video frames during inference.
@@ -163,20 +176,27 @@ The key difference is how cold embeddings are gathered from tiled video frames d
 
 ```python
 # To get K=100 rows from a 129,600-row frame:
-# Step 1: untile ENTIRE frame — O(N), 2MB copy
+# Step 1: decode H.265 from in-memory bytes
+container = av.open(io.BytesIO(compressed_bytes))
+frame_np = next(container.decode(video=0)).to_ndarray(format='gray')
+
+# Step 2: untile ENTIRE frame — O(N), 2MB copy
 grid = frame.reshape(tiles_col, 4, tiles_per_row, 4)
 all_rows = grid.transpose(0, 2, 1, 3).reshape(-1, 16)  # forces full copy
 
-# Step 2: index K rows
+# Step 3: index K rows
 selected = all_rows[row_indices]
 
-# Step 3: dequantize (3 intermediate allocations)
+# Step 4: dequantize (3 intermediate allocations)
 result = (selected.astype(np.float32) - zp) * scale
 ```
 
-**C++** computes tile coordinates and reads only the needed rows:
+**C++** decodes from memory and computes tile coordinates to read only the needed rows:
 
 ```cpp
+// Decode H.265 from in-memory bytes (libavcodec, zero-copy)
+torch::Tensor frame = decode_h265_frame_from_bytes(compressed_tensor);
+
 // O(K) work, not O(N). No untile, no intermediate buffers.
 at::parallel_for(0, K, 128, [&](int64_t begin, int64_t end) {
     for (int64_t i = begin; i < end; i++) {
@@ -197,6 +217,7 @@ at::parallel_for(0, K, 128, [&](int64_t begin, int64_t end) {
 
 | Factor | Python | C++ |
 |--------|--------|-----|
+| H.265 decode | PyAV (Python wrapper) | libavcodec direct (C) |
 | Gather K from N rows | Untile all N (O(N)) | Read only K (O(K)) |
 | Transpose in tiling | Forces full-array copy | No transpose needed |
 | Dequantization | 3 passes, 5 allocations | 1 pass, 0 allocations |
@@ -218,6 +239,7 @@ Per-operation breakdown (ms/batch):
 ```
 Operation                    Python       C++     Speedup
 Mapping + hot/cold split      1.31      0.69        1.9x
+H.265 decode (memory)          —          —      (cached, rare)
 Frame untiling              722.93      0.00    (fused in C++)
 Row gather                    2.80      0.00    (fused in C++)
 Dequantization               11.15      0.00    (fused in C++)
@@ -233,17 +255,17 @@ The full C++ path (`fast_forward`) is actually **47% faster than the uncompresse
 
 | File | Description |
 |------|-------------|
-| `csrc/compressed_emb.cpp` | C++ PyTorch extension (3,846 lines). Frame tiling/untiling, fused gather+quantize+tile, AVX-512 SIMD, hot/cold embedding lookup, H.265 decode via libavcodec |
+| `csrc/compressed_emb.cpp` | C++ PyTorch extension (3,846 lines). Frame tiling/untiling, fused gather+quantize+tile, AVX-512 SIMD, hot/cold embedding lookup, H.265 encode/decode via libavcodec |
 | `setup_compressed_emb.py` | Build config for the C++ extension, links FFmpeg libraries |
-| `codec_ondemand_benchmark.py` | Full pipeline: profiling, hot/cold split, H.265 encode, on-demand decode with LRU cache + Markov prefetching |
+| `codec_ondemand_benchmark.py` | Full pipeline: profiling, hot/cold split, H.265 encode, in-memory on-demand decode with LRU cache + Markov prefetching |
 
 ### Demo & Benchmarks
 
 | File | Description |
 |------|-------------|
-| `demo_e2e_pipeline.py` | **End-to-end demo.** Load model → profile → compress → inference → compare with baseline. Single script, configurable CRF/resolution |
-| `benchmark_python_vs_cpp_inference.py` | **Python vs C++ during inference.** Measures per-operation overhead (untiling, gather, dequant, pooling) across 4 experiment configurations |
-| `benchmark_frame_packing.py` | **Standalone microbenchmark.** Tests tiling, untiling, selective gather, fused encode in isolation (no model needed) |
+| `demo_e2e_pipeline.py` | **End-to-end demo.** Load model → profile → compress → inference → compare with baseline. Supports `--compressed-dir` to skip encoding on repeat runs |
+| `benchmark_python_vs_cpp_inference.py` | **Python vs C++ during inference.** Measures per-operation overhead (H.265 decode, untiling, gather, dequant, pooling) across 4 experiments. Supports `--compressed-dir` |
+| `benchmark_frame_packing.py` | **Standalone microbenchmark.** Tests tiling, untiling, selective gather, fused encode per frame in isolation (no model needed) |
 
 ### Experiment Scripts
 
@@ -289,8 +311,8 @@ The full C++ path (`fast_forward`) is actually **47% faster than the uncompresse
 | Component | Size | % |
 |-----------|------|---|
 | Hot embeddings (fp32) | 88.5 MB | 34% |
-| Compressed cold (H.265) | 0.8 MB | 0% |
-| Decoded cache (20 frames) | 39.6 MB | 15% |
+| Compressed cold (H.265, in RAM) | 0.8 MB | 0% |
+| Decoded frame cache (20 frames) | 39.6 MB | 15% |
 | Mapping tables (int32) | 134.6 MB | 51% |
 | **Total** | **263 MB** | — |
 
