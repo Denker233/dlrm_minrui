@@ -49,26 +49,6 @@ python3 setup_compressed_emb.py build_ext --inplace
 
 This builds `compressed_emb.cpython-310-x86_64-linux-gnu.so` with FFmpeg + AVX-512 support.
 
-### Dataset
-
-Download the Kaggle Criteo dataset and place in `input/`:
-
-```bash
-cd input/
-wget https://go.criteo.net/criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz
-tar -xzvf criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz
-cd ..
-```
-
-Or symlink from an existing location:
-
-```bash
-ln -sf /path/to/train.txt input/train.txt
-ln -sf /path/to/kaggleAdDisplayChallenge_processed.npz input/kaggleAdDisplayChallenge_processed.npz
-```
-
-The `.npz` preprocessed file is created automatically on first run (~15 min) and reused on subsequent runs (~30s).
-
 ### Trained Model
 
 Place the trained checkpoint at `models/dlrm_kaggle_correct.pt`. To train from scratch:
