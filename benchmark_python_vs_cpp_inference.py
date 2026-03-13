@@ -254,18 +254,33 @@ class PythonCompressedEmbeddingBag(nn.Module):
         self.emb_time = 0.0
         self.cold_time = 0.0
 
+        # Fine-grained operation timers (seconds)
+        self.t_mapping = 0.0       # mapping lookup + hot/cold split
+        self.t_hot_gather = 0.0    # hot embedding gather
+        self.t_untile = 0.0        # frame untiling (reshape+transpose)
+        self.t_gather = 0.0        # row indexing from untiled frame
+        self.t_dequant = 0.0       # uint8 → fp32 dequantization
+        self.t_scatter = 0.0       # cold result scatter back
+        self.t_pooling = 0.0       # sum pooling (scatter_add)
+        self.n_cold_rows = 0       # total cold rows looked up
+        self.n_cold_batches = 0    # batches that had cold lookups
+
     def forward(self, indices, offsets, per_sample_weights=None):
         t0 = time.time()
+
+        # Mapping lookup + hot/cold split
         map_vals = self.mapping[indices]
         hot_mask = map_vals >= 0
         all_embeds = torch.zeros(len(indices), EMB_DIM)
+        t1 = time.time()
+        self.t_mapping += t1 - t0
 
-        # Hot lookup
+        # Hot gather
         if hot_mask.any():
             hot_idx = map_vals[hot_mask].long()
             all_embeds[hot_mask] = self.hot_weight[hot_idx]
-
-        t_hot = time.time()
+        t2 = time.time()
+        self.t_hot_gather += t2 - t1
 
         # Cold lookup: untile full frame, index, dequantize (Python only)
         INT32_MIN = -2147483648
@@ -275,6 +290,8 @@ class PythonCompressedEmbeddingBag(nn.Module):
             cold_reordered = -(cold_map.long() + 1)
             valid = cold_reordered >= 0
             if valid.any():
+                self.n_cold_batches += 1
+                self.n_cold_rows += valid.sum().item()
                 valid_idx = cold_reordered[valid]
                 frame_ids = (valid_idx // self.rows_per_frame).long()
                 row_offsets = (valid_idx % self.rows_per_frame).long()
@@ -284,29 +301,45 @@ class PythonCompressedEmbeddingBag(nn.Module):
                 for fid in unique_frames:
                     mask = frame_ids == fid
                     offsets_in_frame = row_offsets[mask].numpy()
+
                     # PYTHON untile: reshape + transpose
+                    tu0 = time.time()
                     frame_np = self.cold_frames[fid]
                     all_rows = tiled_frame_to_rows_py(frame_np, self.width, self.height)
+                    tu1 = time.time()
+                    self.t_untile += tu1 - tu0
+
+                    # Row gather (indexing)
                     selected = all_rows[offsets_in_frame]
+                    tg1 = time.time()
+                    self.t_gather += tg1 - tu1
+
                     # PYTHON dequantize: numpy arithmetic
                     fp32 = (selected.astype(np.float32) - self.quant_zp) * self.quant_scale
                     result[mask] = torch.from_numpy(fp32)
+                    td1 = time.time()
+                    self.t_dequant += td1 - tg1
 
+                # Scatter cold results back
+                ts0 = time.time()
                 cold_positions = torch.where(cold_mask)[0]
                 all_embeds[cold_positions[valid]] = result
+                self.t_scatter += time.time() - ts0
 
         t_cold = time.time()
-        self.cold_time += t_cold - t_hot
+        self.cold_time += t_cold - t2
 
         if per_sample_weights is not None:
             all_embeds = all_embeds * per_sample_weights.unsqueeze(1)
 
-        # Sum pooling (Python)
+        # Sum pooling (Python scatter_add)
+        tp0 = time.time()
         num_bags = len(offsets)
         output = torch.zeros(num_bags, EMB_DIM)
         bag_ids = torch.bucketize(torch.arange(len(indices)), offsets, right=True) - 1
         bag_ids = bag_ids.clamp(min=0)
         output.scatter_add_(0, bag_ids.unsqueeze(1).expand_as(all_embeds), all_embeds)
+        self.t_pooling += time.time() - tp0
 
         self.emb_time += time.time() - t0
         return output
@@ -352,29 +385,51 @@ class CppCompressedEmbeddingBag(nn.Module):
         self.emb_time = 0.0
         self.cold_time = 0.0
 
+        # Fine-grained operation timers (seconds)
+        self.t_mapping = 0.0           # C++ merged mapping + hot forward + pooling
+        self.t_hot_gather = 0.0        # (included in t_mapping for C++)
+        self.t_gather_dequant = 0.0    # C++ fused gather+dequant from tiled frame
+        self.t_cold_fixup = 0.0        # C++ cold_fixup (scatter into output)
+        self.t_cold_index = 0.0        # cold index extraction from mapping
+        self.t_pooling = 0.0           # (included in t_mapping for C++)
+        # Note: C++ has no separate untile, gather, dequant — they are fused
+        self.t_untile = 0.0            # always 0 for C++ (fused)
+        self.t_gather = 0.0            # always 0 for C++ (fused)
+        self.t_dequant = 0.0           # always 0 for C++ (fused)
+        self.t_scatter = 0.0           # alias for cold_fixup
+        self.n_cold_rows = 0
+        self.n_cold_batches = 0
+
     def forward(self, indices, offsets, per_sample_weights=None):
         t0 = time.time()
         psw = per_sample_weights if per_sample_weights is not None else self._empty_psw
 
-        # C++ hot forward with merged mapping
+        # C++ hot forward with merged mapping (includes mapping + hot gather + pooling)
         output, cold_mask, cold_count = _C.compressed_emb_bag_forward_merged(
             indices, offsets, self.hot_weight, self.mapping, psw)
-
         t_hot = time.time()
+        self.t_mapping += t_hot - t0
 
         if cold_count.item() > 0:
+            # Cold index extraction
+            tc0 = time.time()
             cold_positions = torch.where(cold_mask)[0]
             cold_orig = indices[cold_positions]
             cold_map_vals = self.mapping[cold_orig]
             cold_reordered = -(cold_map_vals.long() + 1)
             valid = cold_reordered >= 0
+            self.t_cold_index += time.time() - tc0
+
             if valid.any():
+                self.n_cold_batches += 1
+                self.n_cold_rows += valid.sum().item()
                 valid_idx = cold_reordered[valid]
                 frame_ids = (valid_idx // self.rows_per_frame).long()
                 row_offsets = (valid_idx % self.rows_per_frame).long()
                 unique_frames = torch.unique(frame_ids).tolist()
 
-                # C++ fused gather + dequant from tiled frames
+                # C++ fused gather + dequant from tiled frames (no separate untile)
+                tgd0 = time.time()
                 result = torch.zeros(valid.sum(), EMB_DIM)
                 for fid in unique_frames:
                     mask = frame_ids == fid
@@ -383,9 +438,14 @@ class CppCompressedEmbeddingBag(nn.Module):
                         self.cold_frames[fid], offsets_in_frame,
                         self.tiles_per_row, self.quant_scale, self.quant_zp)
                     result[mask] = rows
+                self.t_gather_dequant += time.time() - tgd0
 
+                # C++ cold_fixup: scatter cold results into output
+                tf0 = time.time()
                 _C.cold_fixup(output, indices, offsets, cold_mask,
                               result, cold_positions[valid], psw)
+                self.t_cold_fixup += time.time() - tf0
+                self.t_scatter += time.time() - tf0
 
         t_cold = time.time()
         self.cold_time += t_cold - t_hot
@@ -424,14 +484,29 @@ def run_inference(dlrm, test_batches, label, num_batches, large_tables):
     auc = roc_auc_score(all_targets[:sample_idx], all_scores[:sample_idx])
     mem = rss_mb()
 
-    # Collect per-table cold timing
+    # Collect per-table timing (aggregate across all large tables)
     cold_time_total = 0
     emb_time_total = 0
+    op_timers = {
+        't_mapping': 0.0, 't_hot_gather': 0.0,
+        't_untile': 0.0, 't_gather': 0.0, 't_dequant': 0.0,
+        't_scatter': 0.0, 't_pooling': 0.0,
+        't_gather_dequant': 0.0, 't_cold_fixup': 0.0, 't_cold_index': 0.0,
+    }
+    total_cold_rows = 0
+    total_cold_batches = 0
+
     for t in large_tables:
         E = dlrm.emb_l[t]
         if hasattr(E, 'cold_time'):
             cold_time_total += E.cold_time
             emb_time_total += E.emb_time
+        for key in op_timers:
+            if hasattr(E, key):
+                op_timers[key] += getattr(E, key)
+        if hasattr(E, 'n_cold_rows'):
+            total_cold_rows += E.n_cold_rows
+            total_cold_batches += E.n_cold_batches
 
     result = {
         'auc': auc,
@@ -447,17 +522,36 @@ def run_inference(dlrm, test_batches, label, num_batches, large_tables):
         'cold_per_batch_ms': cold_time_total / n * 1000,
         'emb_total_ms': emb_time_total * 1000,
         'emb_per_batch_ms': emb_time_total / n * 1000,
+        'total_cold_rows': total_cold_rows,
+        'total_cold_batches': total_cold_batches,
     }
+    # Per-operation timing (ms per batch)
+    for key, val in op_timers.items():
+        result[f'op_{key}_ms'] = val / n * 1000
 
     log(f"\n  [{label}] Results:")
     log(f"    AUC = {auc:.6f}")
     log(f"    Latency: mean={result['mean_lat_ms']:.2f}ms, "
         f"p50={result['p50_lat_ms']:.2f}ms, p99={result['p99_lat_ms']:.2f}ms")
-    log(f"    Breakdown: emb={result['emb_lookup_ms']:.2f}ms, "
+    log(f"    Forward breakdown: emb={result['emb_lookup_ms']:.2f}ms, "
         f"interact={result['interact_ms']:.2f}ms, mlp={result['mlp_ms']:.2f}ms")
-    if cold_time_total > 0:
-        log(f"    Cold decode per batch: {result['cold_per_batch_ms']:.3f}ms "
-            f"(total {cold_time_total*1000:.0f}ms)")
+    if emb_time_total > 0:
+        log(f"    Cold lookups: {total_cold_rows:,} rows across "
+            f"{total_cold_batches} batches ({total_cold_rows/n:.1f} cold rows/batch)")
+        log(f"    ---- Per-operation timing (ms/batch, summed across all large tables) ----")
+        log(f"    Mapping + hot/cold split: {result['op_t_mapping_ms']:.4f} ms")
+        log(f"    Hot gather:               {result['op_t_hot_gather_ms']:.4f} ms")
+        log(f"    Frame untiling:           {result['op_t_untile_ms']:.4f} ms")
+        log(f"    Row gather (indexing):    {result['op_t_gather_ms']:.4f} ms")
+        log(f"    Dequantization:           {result['op_t_dequant_ms']:.4f} ms")
+        if result['op_t_gather_dequant_ms'] > 0:
+            log(f"    Fused gather+dequant:     {result['op_t_gather_dequant_ms']:.4f} ms")
+        if result['op_t_cold_fixup_ms'] > 0:
+            log(f"    Cold fixup (scatter):     {result['op_t_cold_fixup_ms']:.4f} ms")
+        if result['op_t_cold_index_ms'] > 0:
+            log(f"    Cold index extraction:    {result['op_t_cold_index_ms']:.4f} ms")
+        log(f"    Result scatter:           {result['op_t_scatter_ms']:.4f} ms")
+        log(f"    Sum pooling:              {result['op_t_pooling_ms']:.4f} ms")
     log(f"    RSS = {mem:.0f}MB")
 
     return result
@@ -771,26 +865,70 @@ def main():
             f"{r['emb_lookup_ms']:>10.2f} {r['cold_per_batch_ms']:>10.3f} "
             f"{r['rss_mb']:>10.0f}")
 
-    # Speedup
+    # Per-operation comparison: Python vs C++
     if 'python' in all_results and 'cpp' in all_results:
-        py_lat = all_results['python']['mean_lat_ms']
-        cpp_lat = all_results['cpp']['mean_lat_ms']
-        log(f"\n  C++ vs Python speedup: {py_lat/cpp_lat:.2f}x faster per batch")
-        log(f"    Python emb lookup: {all_results['python']['emb_per_batch_ms']:.2f} ms/batch")
-        log(f"    C++ emb lookup:    {all_results['cpp']['emb_per_batch_ms']:.2f} ms/batch")
-        emb_speedup = all_results['python']['emb_per_batch_ms'] / max(0.001, all_results['cpp']['emb_per_batch_ms'])
+        py = all_results['python']
+        cpp = all_results['cpp']
+
+        log(f"\n  Overall speedup: C++ is "
+            f"{py['mean_lat_ms']/cpp['mean_lat_ms']:.2f}x faster per batch")
+        log(f"    Python total emb: {py['emb_per_batch_ms']:.3f} ms/batch")
+        log(f"    C++    total emb: {cpp['emb_per_batch_ms']:.3f} ms/batch")
+        emb_speedup = py['emb_per_batch_ms'] / max(0.001, cpp['emb_per_batch_ms'])
         log(f"    Embedding speedup: {emb_speedup:.1f}x")
 
-        py_cold = all_results['python']['cold_per_batch_ms']
-        cpp_cold = all_results['cpp']['cold_per_batch_ms']
-        if cpp_cold > 0:
-            log(f"    Cold decode speedup: {py_cold/cpp_cold:.1f}x "
-                f"({py_cold:.3f}ms → {cpp_cold:.3f}ms)")
+        log(f"\n  ---- Per-Operation Comparison (ms/batch) ----")
+        ops = [
+            ('Mapping + hot/cold split', 'op_t_mapping_ms'),
+            ('Hot gather',               'op_t_hot_gather_ms'),
+            ('Frame untiling',           'op_t_untile_ms'),
+            ('Row gather (indexing)',     'op_t_gather_ms'),
+            ('Dequantization',           'op_t_dequant_ms'),
+            ('Fused gather+dequant',     'op_t_gather_dequant_ms'),
+            ('Cold fixup / scatter',     'op_t_scatter_ms'),
+            ('Sum pooling',              'op_t_pooling_ms'),
+        ]
+        log(f"  {'Operation':<28} {'Python':>10} {'C++':>10} {'Speedup':>10}")
+        log(f"  {'-'*28} {'-'*10} {'-'*10} {'-'*10}")
+        for op_label, key in ops:
+            py_val = py.get(key, 0)
+            cpp_val = cpp.get(key, 0)
+            # Skip rows where both are zero
+            if py_val < 0.0001 and cpp_val < 0.0001:
+                continue
+            if cpp_val > 0.0001:
+                speedup = f"{py_val/cpp_val:.1f}x"
+            elif py_val > 0:
+                speedup = "inf"
+            else:
+                speedup = "-"
+            # For C++ fused ops, annotate
+            note = ""
+            if key == 'op_t_gather_dequant_ms' and cpp_val > 0 and py_val == 0:
+                note = " (C++ fused)"
+            if key in ('op_t_untile_ms', 'op_t_gather_ms', 'op_t_dequant_ms') and cpp_val == 0 and py_val > 0:
+                note = " (fused in C++)"
+            log(f"  {op_label + note:<28} {py_val:>10.4f} {cpp_val:>10.4f} {speedup:>10}")
+
+        # Show what the C++ fused operation replaces
+        py_cold_ops = py.get('op_t_untile_ms', 0) + py.get('op_t_gather_ms', 0) + py.get('op_t_dequant_ms', 0)
+        cpp_fused = cpp.get('op_t_gather_dequant_ms', 0)
+        if py_cold_ops > 0 and cpp_fused > 0:
+            log(f"\n  Key insight: Python untile+gather+dequant = {py_cold_ops:.4f} ms/batch")
+            log(f"               C++ fused gather_dequant     = {cpp_fused:.4f} ms/batch")
+            log(f"               Speedup: {py_cold_ops/cpp_fused:.1f}x")
+
+        # Mapping comparison
+        py_map = py.get('op_t_mapping_ms', 0)
+        cpp_map = cpp.get('op_t_mapping_ms', 0)
+        if py_map > 0 and cpp_map > 0:
+            log(f"\n  Mapping+hot+pool: Python={py_map:.4f} ms, "
+                f"C++ merged={cpp_map:.4f} ms ({py_map/cpp_map:.1f}x)")
 
     if 'full_cpp' in all_results:
         full_lat = all_results['full_cpp']['mean_lat_ms']
-        log(f"\n  Full C++ vs Baseline overhead: "
-            f"{(full_lat/baseline_lat - 1)*100:+.1f}%")
+        log(f"\n  Full C++ (fast_forward) vs Baseline: "
+            f"{(full_lat/baseline_lat - 1)*100:+.1f}% overhead")
 
     # AUC comparison
     log(f"\n  AUC preservation:")
