@@ -740,8 +740,8 @@ def main():
     test_batches = [(X, lS_o, lS_i, T) for X, lS_o, lS_i, T in test_ld]
     log(f"  {len(test_batches)} batches cached")
 
-    # Profile — use saved data when loading pre-compressed frames to avoid mapping mismatch
-    saved = load_saved_profile(ln_emb, state_dict, emb_keys) if args.compressed_dir else None
+    # Profile — prefer saved batch-affinity reordering for consistent cache locality
+    saved = load_saved_profile(ln_emb, state_dict, emb_keys)
     if saved:
         (large_tables, is_hot, hot_indices, cold_indices,
          orig_to_cold_reordered, cold_weights_q, cold_quant_params) = saved
@@ -770,7 +770,18 @@ def main():
     else:
         log("\nEncoding cold frames to H.265 and storing compressed bytes in RAM...")
         for t in large_tables:
-            q = cold_weights_q[t].numpy()
+            if cold_weights_q[t].numel() == 0:
+                # Saved profile didn't include quantized weights — recompute
+                cold_order_path = os.path.join(REORDER_DIR, f'cold_order_{t}.npy')
+                if os.path.exists(cold_order_path):
+                    cold_order = np.load(cold_order_path)
+                    cold_w = state_dict[emb_keys[t]][torch.from_numpy(cold_order)]
+                else:
+                    cold_w = state_dict[emb_keys[t]][cold_indices[t]]
+                s, zp = cold_quant_params[t]
+                q = ((cold_w / s).round() + zp).clamp(0, 255).to(torch.uint8).numpy()
+            else:
+                q = cold_weights_q[t].numpy()
             n_cold = len(q)
             num_frames = max(1, (n_cold + rows_per_frame - 1) // rows_per_frame)
             padded = np.zeros((num_frames * rows_per_frame, EMB_DIM), dtype=np.uint8)
