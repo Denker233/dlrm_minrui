@@ -2,61 +2,230 @@
 
 Post-training compression of DLRM embedding tables using H.265 video codecs. Achieves 1360x compression on cold embeddings with only 0.037% AUC loss on Kaggle — no retraining required.
 
-## Quick Start
+## Setup
 
-```bash
-cd ~/expr/dlrm_minrui
+### Prerequisites
 
-# Run the Python vs C++ frame packing comparison
-python3 benchmark_frame_packing.py
-
-# Generate all figures
-python3 generate_pareto_plots.py
-python3 generate_interesting_figures.py
-python3 generate_reordering_figures.py
-```
-
-## Prerequisites
-
-- Python 3.10+, PyTorch 2.x (with CUDA optional)
-- FFmpeg libraries: `libavcodec`, `libavformat`, `libavutil`, `libswscale`
+- Python 3.10+, PyTorch 2.x
+- FFmpeg libraries: `sudo apt install -y libavcodec-dev libavformat-dev libavutil-dev libswscale-dev pkg-config`
 - PyAV: `pip install av`
-- The C++ extension is pre-built (`compressed_emb.cpython-310-x86_64-linux-gnu.so`). To rebuild:
+- scikit-learn, psutil, matplotlib: `pip install scikit-learn psutil matplotlib`
+
+### Build C++ Extension
 
 ```bash
+cd ~/dlrm_minrui
 python3 setup_compressed_emb.py build_ext --inplace
 ```
 
+This builds `compressed_emb.cpython-310-x86_64-linux-gnu.so` with FFmpeg + AVX-512 support.
+
+### Dataset
+
+Download the Kaggle Criteo dataset and place in `input/`:
+
+```bash
+cd input/
+wget https://go.criteo.net/criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz
+tar -xzvf criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz
+cd ..
+```
+
+Or symlink from an existing location:
+
+```bash
+ln -sf /path/to/train.txt input/train.txt
+ln -sf /path/to/kaggleAdDisplayChallenge_processed.npz input/kaggleAdDisplayChallenge_processed.npz
+```
+
+The `.npz` preprocessed file is created automatically on first run (~15 min) and reused on subsequent runs (~30s).
+
+### Trained Model
+
+Place the trained checkpoint at `models/dlrm_kaggle_correct.pt`. To train from scratch:
+
+```bash
+python3 dlrm_s_pytorch.py --arch-sparse-feature-size=16 \
+  --arch-mlp-bot="13-512-256-64-16" --arch-mlp-top="512-256-1" \
+  --data-generation=dataset --data-set=kaggle \
+  --raw-data-file=./input/train.txt \
+  --processed-data-file=./input/kaggleAdDisplayChallenge_processed.npz \
+  --loss-function=bce --round-targets=True \
+  --mini-batch-size=128 --nepochs=1 \
+  --save-model=models/dlrm_kaggle_correct.pt
+```
+
+## Running: Compression → Inference (End-to-End)
+
+### Option A: Full E2E Demo (single script)
+
+Walks through the entire pipeline: load model → profile → hot/cold split → quantize → tile → H.265 encode → compressed inference → compare with baseline.
+
+```bash
+# Lossless compression
+python3 demo_e2e_pipeline.py --crf 0 --resolution 1080p
+
+# Lossy (sweet spot: 1360x compression, 0.037% AUC loss)
+python3 demo_e2e_pipeline.py --crf 18 --resolution 1080p
+
+# Options
+python3 demo_e2e_pipeline.py --help
+#   --crf         H.265 quality (0=lossless, 18=lossy sweet spot)
+#   --resolution  1080p or 4K
+#   --num-batches Limit test batches (0=all)
+#   --cache-size  LRU frame cache size (default 20)
+```
+
+### Option B: Step-by-Step (separate scripts)
+
+**Step 1: Profile + Compress + Run on-demand inference**
+
+```bash
+python3 codec_ondemand_benchmark.py
+```
+
+This runs the full pipeline with on-demand H.265 decode, LRU frame cache, Markov prefetching, and measures AUC/latency at multiple resolutions.
+
+**Step 2: Compare Python vs C++ overhead during inference**
+
+```bash
+python3 benchmark_python_vs_cpp_inference.py --num-batches 500 --resolution 1080p
+```
+
+Runs 4 experiments on the same compressed model:
+
+| Experiment | What it tests |
+|-----------|---------------|
+| Baseline | Full fp32, no compression (reference) |
+| Python compressed | Pure Python: reshape+transpose untiling, numpy dequant |
+| C++ compressed | C++ fused gather+dequant from tiled frame, merged mapping |
+| Full C++ fast_forward | Single C++ call per batch, all 26 tables, zero Python loop |
+
+**Step 3: Standalone microbenchmark (tiling operations only)**
+
+```bash
+python3 benchmark_frame_packing.py
+```
+
+Benchmarks individual operations (tiling, untiling, gather, encode) in isolation without running the full model.
+
 ## How It Works
 
-### Pipeline
+### Pipeline Overview
 
 ```
-Embedding Table (N, 16) fp32
-  → Quantize to uint8 (global min/max)
-  → Reshape into 4×4 tiles packed into 1080p/4K video frames
-  → Encode with H.265 (CRF=0 lossless or CRF=18 lossy)
-  → Store compressed bitstream
-
-At inference:
-  → Decode frame (PyAV / libavcodec)
-  → Gather specific rows from tiled frame
-  → Dequantize to fp32
+Trained DLRM Model (26 embedding tables, 2GB fp32)
+  │
+  ├── Phase 1: Profile access patterns (200 training batches)
+  │     → count per-row access frequency
+  │
+  ├── Phase 2: Hot/Cold split
+  │     → Hot: top rows covering 80% accesses → keep as fp32
+  │     → Cold: remaining rows → sort by frequency (most accessed first)
+  │
+  ├── Phase 3: Compress cold embeddings
+  │     → Quantize fp32 → uint8 (global min/max per table)
+  │     → Tile each 16-element row into a 4×4 pixel block
+  │     → Pack tiles into 1080p video frames (129,600 rows/frame)
+  │     → Encode frames with H.265 (CRF=0 lossless or CRF=18 lossy)
+  │
+  └── Phase 4: Inference with compressed model
+        → Hot lookup: direct fp32 gather from compact tensor
+        → Cold lookup: decode H.265 frame → gather from tiled frame → dequantize
+        → LRU frame cache: most-accessed frames stay decoded in memory
+        → Frequency reordering ensures cache hit rate >95%
 ```
 
-### Hot/Cold Split
+### Why Frequency Reordering + Cache Work Together
 
-- Profile access frequencies across batches
-- Top rows covering 80% of accesses → **hot** (kept in fp32)
-- Remaining rows → **cold** (quantized to uint8, H.265 compressed)
-- Frequency sorting: cold rows ordered by access frequency before packing into frames
+```
+Without reordering:              With frequency reordering:
 
-### Why Video Codecs?
+Cold rows randomly spread        Cold rows sorted by frequency
+across 20 frames                 across 20 frames
 
-Embedding tables quantized to uint8 are low-entropy "images":
-- Kaggle (D=16): 0.13–2.5 bits/byte entropy, 99.7–99.9% near-zero rows
-- H.265's DCT handles near-zero blocks extremely well
-- Random data baseline: only 1.1x compression (proves it's the data structure, not codec magic)
+  frame 0: [rare, rare, ...]      frame 0: [freq=500, freq=480, ...]  ← always cached
+  frame 1: [hot, rare, ...]       frame 1: [freq=200, freq=190, ...]  ← usually cached
+  ...                             ...
+  frame 19: [hot, rare, ...]      frame 19: [freq=0, freq=0, ...]     ← never needed
+
+Cache hit rate: ~60%              Cache hit rate: ~95%+
+Many H.265 decodes per batch      Rare H.265 decodes
+```
+
+Reordering doesn't change compression ratio (same data, just reordered), but it concentrates most-accessed cold rows into fewer frames, making the LRU cache much more effective. This also steers H.265 compression errors away from frequently-accessed rows (3.9x less AUC loss vs random ordering).
+
+### Python vs C++ Implementation
+
+The key difference is how cold embeddings are gathered from tiled video frames during inference.
+
+**Python** must untile the entire frame to get any rows:
+
+```python
+# To get K=100 rows from a 129,600-row frame:
+# Step 1: untile ENTIRE frame — O(N), 2MB copy
+grid = frame.reshape(tiles_col, 4, tiles_per_row, 4)
+all_rows = grid.transpose(0, 2, 1, 3).reshape(-1, 16)  # forces full copy
+
+# Step 2: index K rows
+selected = all_rows[row_indices]
+
+# Step 3: dequantize (3 intermediate allocations)
+result = (selected.astype(np.float32) - zp) * scale
+```
+
+**C++** computes tile coordinates and reads only the needed rows:
+
+```cpp
+// O(K) work, not O(N). No untile, no intermediate buffers.
+at::parallel_for(0, K, 128, [&](int64_t begin, int64_t end) {
+    for (int64_t i = begin; i < end; i++) {
+        int64_t r = indices[i];
+        int64_t ty = r / tiles_per_row;  // compute tile position
+        int64_t tx = r % tiles_per_row;
+        for (int ly = 0; ly < 4; ly++) {
+            const uint8_t* pixel = src + (ty*4+ly) * width + tx*4;
+            float* out = dst + i*16 + ly*4;
+            for (int lx = 0; lx < 4; lx++)
+                out[lx] = (float(pixel[lx]) - zero_point) * scale;  // fused
+        }
+    }
+});
+```
+
+**Why C++ is faster:**
+
+| Factor | Python | C++ |
+|--------|--------|-----|
+| Gather K from N rows | Untile all N (O(N)) | Read only K (O(K)) |
+| Transpose in tiling | Forces full-array copy | No transpose needed |
+| Dequantization | 3 passes, 5 allocations | 1 pass, 0 allocations |
+| Hot forward + pooling | Separate gather, then scatter_add | Fused accumulate in one loop |
+| Parallelism | Single-threaded (GIL) | `at::parallel_for` across cores |
+
+### Measured Inference Overhead (Kaggle, 1080p, 500 batches)
+
+```
+Experiment              Latency     vs Baseline    AUC
+Baseline (fp32)          5.67 ms       —           0.804736
+Python compressed      762.16 ms    +13,338%       0.804733
+C++ compressed          14.94 ms      +163%        0.804733
+Full C++ fast_forward    3.01 ms       -47%        0.804733
+```
+
+Per-operation breakdown (ms/batch):
+
+```
+Operation                    Python       C++     Speedup
+Mapping + hot/cold split      1.31      0.69        1.9x
+Frame untiling              722.93      0.00    (fused in C++)
+Row gather                    2.80      0.00    (fused in C++)
+Dequantization               11.15      0.00    (fused in C++)
+Fused gather+dequant           —        7.09       104x
+Sum pooling                   4.61      0.00    (fused in C++)
+```
+
+The full C++ path (`fast_forward`) is actually **47% faster than the uncompressed baseline** because it uses compact hot tensors + merged int32 mapping instead of full `nn.EmbeddingBag`.
 
 ## File Guide
 
@@ -66,51 +235,15 @@ Embedding tables quantized to uint8 are low-entropy "images":
 |------|-------------|
 | `csrc/compressed_emb.cpp` | C++ PyTorch extension (3,846 lines). Frame tiling/untiling, fused gather+quantize+tile, AVX-512 SIMD, hot/cold embedding lookup, H.265 decode via libavcodec |
 | `setup_compressed_emb.py` | Build config for the C++ extension, links FFmpeg libraries |
-| `prefetch_benchmark_v10_h265.py` | H.265 encode/decode pipeline with hot/cold split |
-| `codec_ondemand_benchmark.py` | On-demand frame-by-frame decode with LRU cache |
+| `codec_ondemand_benchmark.py` | Full pipeline: profiling, hot/cold split, H.265 encode, on-demand decode with LRU cache + Markov prefetching |
 
-### Python vs C++ Comparison
+### Demo & Benchmarks
 
 | File | Description |
 |------|-------------|
-| `benchmark_frame_packing.py` | **Main comparison benchmark.** Tests tiling, untiling, selective gather, fused encode, decode pipeline, memory analysis. C++ achieves 9–80x speedup on tiling, 100–1400x on selective gather |
-
-The Python implementation uses `reshape + transpose + reshape` (which forces a memory copy due to non-contiguous layout). The C++ implementation writes tiles directly via `memcpy` in a single parallel pass with `at::parallel_for`.
-
-**Python (reshape + transpose):**
-```python
-# Tile: (N, 16) → (H, W)
-tiles = rows.reshape(tiles_col, tiles_row, 4, 4)
-frame = tiles.transpose(0, 2, 1, 3).reshape(H, W)
-
-# Untile: (H, W) → (N, 16)
-grid = frame.reshape(tiles_col, 4, tiles_row, 4)
-rows = grid.transpose(0, 2, 1, 3).reshape(N, 16)
-```
-
-**C++ (direct memcpy, parallel):**
-```cpp
-// Tile: each row r → tile at (ty, tx) in frame
-at::parallel_for(0, N, 512, [&](int64_t begin, int64_t end) {
-    for (int64_t r = begin; r < end; r++) {
-        int64_t ty = r / tiles_per_row;
-        int64_t tx = r % tiles_per_row;
-        for (int ly = 0; ly < 4; ly++)
-            memcpy(dst + (ty*4+ly)*width + tx*4, src + r*16 + ly*4, 4);
-    }
-});
-```
-
-**Benchmark results (1080p, 129K rows):**
-
-| Operation | Python | C++ | Speedup |
-|-----------|--------|-----|---------|
-| Tile (rows → frame) | 2.70 ms | 0.30 ms | 9x |
-| Untile (frame → rows) | 2.92 ms | 0.04 ms | 73x |
-| Gather K=100 rows | 2.95 ms | 0.003 ms | 1,122x |
-| Gather K=1000 rows | 2.96 ms | 0.021 ms | 138x |
-| Fused encode pipeline | 3.92 ms | 0.098 ms | 40x |
-| Memory allocations | 16 MB | 2 MB | 8x less |
+| `demo_e2e_pipeline.py` | **End-to-end demo.** Load model → profile → compress → inference → compare with baseline. Single script, configurable CRF/resolution |
+| `benchmark_python_vs_cpp_inference.py` | **Python vs C++ during inference.** Measures per-operation overhead (untiling, gather, dequant, pooling) across 4 experiment configurations |
+| `benchmark_frame_packing.py` | **Standalone microbenchmark.** Tests tiling, untiling, selective gather, fused encode in isolation (no model needed) |
 
 ### Experiment Scripts
 
@@ -121,15 +254,13 @@ at::parallel_for(0, N, 512, [&](int64_t begin, int64_t end) {
 | `experiment_crf_cache_memory.py` | Memory breakdown + cache sizing for Kaggle & Terabyte | ~1 hour |
 | `experiment_intrinsic_compressibility.py` | Why embeddings compress well: entropy, sparsity, ordering effects | ~3 hours |
 
-All experiments require the trained model (`models/dlrm_kaggle_correct.pt`) and dataset (`~/input/`).
-
 ### Figure Generation
 
 | File | Output Directory | Figures |
 |------|-----------------|---------|
-| `generate_pareto_plots.py` | `results/paper_figures/` | Pareto frontiers, CRF tradeoffs, memory breakdown, error steering, speedup attribution |
-| `generate_interesting_figures.py` | `results/interesting_figures/` | Compression paradox, entropy vs compression, frame concentration, mapping optimization, deployment scaling |
-| `generate_reordering_figures.py` | `results/interesting_figures/` | Reordering AUC benefit, ratio no-effect, punchline triptych, advantage scaling, Pareto shift |
+| `generate_pareto_plots.py` | `results/paper_figures/` | Pareto frontiers, CRF tradeoffs, memory breakdown, error steering |
+| `generate_interesting_figures.py` | `results/interesting_figures/` | Compression paradox, entropy vs compression, frame concentration, mapping optimization |
+| `generate_reordering_figures.py` | `results/interesting_figures/` | Reordering AUC benefit, ratio no-effect, punchline triptych, Pareto shift |
 
 ## Key Results
 
@@ -152,13 +283,6 @@ All experiments require the trained model (`models/dlrm_kaggle_correct.pt`) and 
 | Zstd-19+uint8 | 133x | 0.002% | No |
 | CAFE+ (~1000x) | ~1000x | ~0.750% | **Yes** |
 | **H.265 CRF=18+freq (ours)** | **1360x** | **0.037%** | **No** |
-
-### Frequency Sorting (Error Steering)
-
-Reordering cold rows by access frequency before frame packing:
-- Does NOT change compression ratio (~same data, just reordered)
-- Reduces AUC loss by 3.9x vs random ordering (Kaggle CRF=18)
-- Mechanism: most-accessed cold rows placed in first frames where H.265 quality is highest
 
 ### Runtime Memory Breakdown (Kaggle CRF=18)
 
