@@ -180,11 +180,15 @@ def benchmark_tiling(res_name, width, height, num_rows=None):
         label="Python (reshape+transpose+reshape)"
     )
 
+    results = {}
+    results['tile_py'] = py_time
+
     if HAS_CPP:
         cpp_time, cpp_frame_t = bench(
             lambda: _C.tile_rows_to_frame(emb_uint8_t, width, height),
             label="C++ tile_rows_to_frame"
         )
+        results['tile_cpp'] = cpp_time
         # Verify correctness
         cpp_frame_np = cpp_frame_t.numpy()
         if np.array_equal(py_frame, cpp_frame_np):
@@ -203,12 +207,14 @@ def benchmark_tiling(res_name, width, height, num_rows=None):
         lambda: py_tiled_frame_to_rows(frame_np, width, height),
         label="Python (reshape+transpose+reshape)"
     )
+    results['untile_py'] = py_time
 
     if HAS_CPP:
         cpp_time, cpp_rows_t = bench(
             lambda: _C.untile_frame_to_rows(frame_t, num_rows),
             label="C++ untile_frame_to_rows"
         )
+        results['untile_cpp'] = cpp_time
         cpp_rows_np = cpp_rows_t.numpy()
         if np.array_equal(py_rows[:num_rows], cpp_rows_np):
             print(f"  ✓ C++ matches Python. Speedup: {py_time/cpp_time:.2f}x")
@@ -216,7 +222,7 @@ def benchmark_tiling(res_name, width, height, num_rows=None):
             diff = np.sum(py_rows[:num_rows] != cpp_rows_np)
             print(f"  ✗ MISMATCH: {diff} values differ!")
 
-    return py_frame
+    return py_frame, results
 
 
 def benchmark_selective_gather(res_name, width, height, frame_np, gather_sizes=[10, 100, 1000, 10000]):
@@ -229,6 +235,7 @@ def benchmark_selective_gather(res_name, width, height, frame_np, gather_sizes=[
     print(f"SELECTIVE GATHER from tiled frame: {res_name}")
     print(f"{'='*80}")
 
+    results = {}
     for K in gather_sizes:
         if K > rows_per_frame:
             continue
@@ -242,6 +249,7 @@ def benchmark_selective_gather(res_name, width, height, frame_np, gather_sizes=[
             lambda: py_full_untile_then_gather(frame_np, indices, width, height),
             label="Python: full untile + index"
         )
+        results[f'gather_K{K}_py'] = full_time
 
         # Method 2: Python per-row gather from tiled
         if K <= 1000:
@@ -264,6 +272,7 @@ def benchmark_selective_gather(res_name, width, height, frame_np, gather_sizes=[
                 lambda: _C.gather_from_tiled_frame(frame_t, indices_t, tiles_per_row),
                 label="C++ gather_from_tiled_frame"
             )
+            results[f'gather_K{K}_cpp'] = cpp_gather_time
 
             # Method 5: C++ gather + dequantize fused
             scale, zp = 0.01, 128
@@ -272,6 +281,7 @@ def benchmark_selective_gather(res_name, width, height, frame_np, gather_sizes=[
                     frame_t, indices_t, tiles_per_row, scale, zp),
                 label="C++ gather_dequant_from_tiled_frame"
             )
+            results[f'gather_dequant_K{K}_cpp'] = cpp_gd_time
 
             # Verify
             cpp_np = cpp_gathered.numpy()
@@ -280,6 +290,8 @@ def benchmark_selective_gather(res_name, width, height, frame_np, gather_sizes=[
             else:
                 diff = np.sum(full_result != cpp_np)
                 print(f"  ✗ MISMATCH: {diff} values differ!")
+
+    return results
 
 
 def benchmark_fused_encode(res_name, width, height, weight_fp32, cold_indices):
@@ -312,6 +324,7 @@ def benchmark_fused_encode(res_name, width, height, weight_fp32, cold_indices):
         return frame, s, zp
 
     py_time, (py_frame, py_s, py_zp) = bench(py_stepwise, label="Python: gather + quantize + pad + tile")
+    results = {'fused_encode_py': py_time}
 
     # === Python: gather then quantize then tile (skip pad for timing) ===
     def py_no_pad():
@@ -378,6 +391,9 @@ def benchmark_fused_encode(res_name, width, height, weight_fp32, cold_indices):
         print(f"\n--- Quantization quality ---")
         print(f"  Python mean abs error:  {py_err:.6f}")
         print(f"  C++ mean abs error:     {cpp_err:.6f}")
+        results['fused_encode_cpp'] = cpp_fused_time
+
+    return results
 
 
 def benchmark_decode_pipeline(res_name, width, height, frame_np):
@@ -623,6 +639,58 @@ def benchmark_end_to_end_with_codec(res_name, width, height, frame_np):
 # ============================================================
 # Main
 # ============================================================
+def print_summary(all_results):
+    """Print a consolidated summary table of all benchmark results."""
+    print(f"\n{'='*80}")
+    print("SUMMARY: Python vs C++ Per-Frame Overhead")
+    print(f"{'='*80}")
+
+    for res_name, res in all_results.items():
+        width, height = RESOLUTIONS[res_name]
+        tiles_per_row = width // TILE_W
+        tiles_per_col = height // TILE_H
+        rows_per_frame = tiles_per_row * tiles_per_col
+
+        print(f"\n--- {res_name} ({width}x{height}, {rows_per_frame:,} rows/frame) ---")
+        print(f"  {'Operation':<40s} {'Python':>10s} {'C++':>10s} {'Speedup':>10s}")
+        print(f"  {'-'*40} {'-'*10} {'-'*10} {'-'*10}")
+
+        rows = []
+
+        # Tiling
+        if 'tile_py' in res and 'tile_cpp' in res:
+            rows.append(('Tile (rows -> frame)',
+                         res['tile_py'], res['tile_cpp']))
+        # Untiling
+        if 'untile_py' in res and 'untile_cpp' in res:
+            rows.append(('Untile (frame -> rows)',
+                         res['untile_py'], res['untile_cpp']))
+        # Selective gather for various K
+        for K in [10, 100, 1000, 10000, 50000]:
+            py_key = f'gather_K{K}_py'
+            cpp_key = f'gather_K{K}_cpp'
+            if py_key in res and cpp_key in res:
+                rows.append((f'Gather K={K:,}',
+                             res[py_key], res[cpp_key]))
+        # Gather+dequant
+        for K in [100, 1000]:
+            cpp_key = f'gather_dequant_K{K}_cpp'
+            py_key = f'gather_K{K}_py'
+            if cpp_key in res and py_key in res:
+                rows.append((f'Gather+dequant K={K:,}',
+                             res[py_key], res[cpp_key]))
+        # Fused encode
+        if 'fused_encode_py' in res and 'fused_encode_cpp' in res:
+            rows.append(('Fused encode pipeline',
+                         res['fused_encode_py'], res['fused_encode_cpp']))
+
+        for label, py_ms, cpp_ms in rows:
+            speedup = py_ms / cpp_ms if cpp_ms > 0 else float('inf')
+            print(f"  {label:<40s} {py_ms:>9.3f}ms {cpp_ms:>9.3f}ms {speedup:>9.1f}x")
+
+    print()
+
+
 if __name__ == "__main__":
     print("=" * 80)
     print("Frame Packing/Unpacking Benchmark: Python vs C++")
@@ -632,33 +700,45 @@ if __name__ == "__main__":
     # Load real data if available
     weight_fp32, cold_indices = load_real_data()
 
+    all_results = {}
     for res_name, (width, height) in RESOLUTIONS.items():
+        res = {}
+
         # Basic tiling
-        frame_np = benchmark_tiling(res_name, width, height)
+        frame_np, tile_res = benchmark_tiling(res_name, width, height)
+        res.update(tile_res)
 
         # Selective gather
-        benchmark_selective_gather(res_name, width, height, frame_np,
+        gather_res = benchmark_selective_gather(res_name, width, height, frame_np,
                                    gather_sizes=[10, 100, 1000, 10000, 50000])
+        res.update(gather_res)
 
         # Decode pipeline
         benchmark_decode_pipeline(res_name, width, height, frame_np)
 
         # Fused encode
         if weight_fp32 is not None and cold_indices is not None:
-            benchmark_fused_encode(res_name, width, height, weight_fp32, cold_indices)
+            encode_res = benchmark_fused_encode(res_name, width, height, weight_fp32, cold_indices)
         else:
             # Use synthetic data
             rows_per_frame = (width // TILE_W) * (height // TILE_H)
             synth_weight = torch.randn(rows_per_frame + 10000, 16)
             synth_cold = torch.arange(10000, 10000 + rows_per_frame).long()
-            benchmark_fused_encode(res_name, width, height, synth_weight, synth_cold)
+            encode_res = benchmark_fused_encode(res_name, width, height, synth_weight, synth_cold)
+        if encode_res:
+            res.update(encode_res)
 
         # End-to-end with codec
         benchmark_end_to_end_with_codec(res_name, width, height, frame_np)
 
+        all_results[res_name] = res
+
     # Memory analysis
     benchmark_memory_copies()
 
-    print(f"\n{'='*80}")
+    # Print consolidated summary
+    print_summary(all_results)
+
+    print(f"{'='*80}")
     print("BENCHMARK COMPLETE")
     print("=" * 80)
