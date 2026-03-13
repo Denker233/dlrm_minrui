@@ -623,8 +623,13 @@ def main():
         orig_to_hot[h_idx] = torch.arange(len(h_idx))
         return hot_weight, orig_to_hot
 
+    # Save original EmbeddingBag modules so we can restore between experiments
+    original_emb_modules = {t: dlrm.emb_l[t] for t in range(len(dlrm.emb_l))}
+
     def restore_weights():
         with torch.no_grad():
+            for t_idx, orig_mod in original_emb_modules.items():
+                dlrm.emb_l[t_idx] = orig_mod
             for k in emb_keys:
                 t_idx = int(k.split('.')[1])
                 dlrm.emb_l[t_idx].weight.data = state_dict[k].clone()
