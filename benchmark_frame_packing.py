@@ -688,6 +688,17 @@ def print_summary(all_results):
             speedup = py_ms / cpp_ms if cpp_ms > 0 else float('inf')
             print(f"  {label:<40s} {py_ms:>9.3f}ms {cpp_ms:>9.3f}ms {speedup:>9.1f}x")
 
+        # Total per-frame overhead: encode (quantize+tile) + decode (untile+gather+dequant)
+        # Encode = fused_encode, Decode = gather+dequant for K=100 (typical cold rows per frame)
+        has_encode = 'fused_encode_py' in res and 'fused_encode_cpp' in res
+        has_decode = f'gather_K100_py' in res and f'gather_dequant_K100_cpp' in res
+        if has_encode and has_decode:
+            py_total = res['fused_encode_py'] + res['gather_K100_py']
+            cpp_total = res['fused_encode_cpp'] + res['gather_dequant_K100_cpp']
+            total_speedup = py_total / cpp_total if cpp_total > 0 else float('inf')
+            print(f"  {'-'*40} {'-'*10} {'-'*10} {'-'*10}")
+            print(f"  {'TOTAL per frame (encode + decode K=100)':<40s} {py_total:>9.3f}ms {cpp_total:>9.3f}ms {total_speedup:>9.1f}x")
+
     print()
 
 
