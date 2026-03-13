@@ -74,6 +74,19 @@ def rss_mb():
     return psutil.Process().memory_info().rss / 1024 / 1024
 
 
+def drop_caches():
+    """Drop OS page cache, dentries, and inodes between experiments."""
+    gc.collect()
+    torch.cuda.empty_cache() if torch.cuda.is_available() else None
+    try:
+        os.system('sync')
+        with open('/proc/sys/vm/drop_caches', 'w') as f:
+            f.write('3\n')
+        log("  [dropped OS page cache]")
+    except (PermissionError, OSError):
+        log("  [WARNING: cannot drop OS page cache (no root)]")
+
+
 # ============================================================
 # Tiling: Python implementations
 # ============================================================
@@ -838,7 +851,7 @@ def main():
     log("EXPERIMENT 1: Baseline (fp32, no compression)")
     log("=" * 70)
     restore_weights()
-    gc.collect()
+    drop_caches()
     all_results['baseline'] = run_inference(
         dlrm, test_batches, "Baseline", args.num_batches, large_tables)
 
@@ -851,6 +864,7 @@ def main():
     log("  - Python scatter_add pooling")
     log("=" * 70)
     restore_weights()
+    drop_caches()
     for t in large_tables:
         hot_weight, orig_to_hot = build_hot_data(t)
         s, zp = cold_quant_params[t]
@@ -865,7 +879,6 @@ def main():
             n_cold=len(cold_indices[t]),
             num_embeddings=ln_emb[t],
         )
-    gc.collect()
     all_results['python'] = run_inference(
         dlrm, test_batches, "Python", args.num_batches, large_tables)
 
@@ -879,6 +892,7 @@ def main():
         log("  - C++ cold_fixup (in-place)")
         log("=" * 70)
         restore_weights()
+        drop_caches()
         for t in large_tables:
             hot_weight, orig_to_hot = build_hot_data(t)
             s, zp = cold_quant_params[t]
@@ -893,7 +907,6 @@ def main():
                 n_cold=len(cold_indices[t]),
                 num_embeddings=ln_emb[t],
             )
-        gc.collect()
         all_results['cpp'] = run_inference(
             dlrm, test_batches, "C++", args.num_batches, large_tables)
 
@@ -911,6 +924,7 @@ def main():
             log("  - All cold frames pre-decoded from H.265 bytes and registered")
         log("=" * 70)
         restore_weights()
+        drop_caches()
 
         # Register tables (hot weights + mappings)
         num_tabs = len(dlrm.emb_l)
@@ -991,7 +1005,6 @@ def main():
             decode_times = []
             dlrm.time_look_up = 0; dlrm.time_interact = 0; dlrm.time_mlp = 0
 
-            gc.collect()
             t0 = time.time()
             with torch.no_grad():
                 for batch_idx in range(n):
