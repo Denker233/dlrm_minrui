@@ -4,6 +4,33 @@ Post-training compression of DLRM embedding tables using H.265 video codecs. Ach
 
 ## Setup
 
+### GitHub Codespaces Setup
+
+```bash
+git clone https://github.com/Denker233/dlrm_minrui
+cd dlrm_minrui
+chmod +x *.sh
+./set_env.sh
+source dlrm_env/bin/activate
+export TMPDIR=$PWD/dlrm_env
+./install_req.sh
+```
+
+Download and prepare the Criteo Kaggle Display Advertising dataset:
+
+```bash
+wget https://go.criteo.net/criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz \
+  && tar -xzvf criteo-research-kaggle-display-advertising-challenge-dataset.tar.gz \
+  && mv train.txt train_original.txt \
+  && mv test.txt test_original.txt
+```
+
+Split the training data (required):
+
+```bash
+python3 input/train_split.py 1
+```
+
 ### Prerequisites
 
 - Python 3.10+, PyTorch 2.x
