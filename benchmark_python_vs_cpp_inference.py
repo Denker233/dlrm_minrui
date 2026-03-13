@@ -8,18 +8,20 @@ lookup paths during actual inference with compressed embeddings.
 Measures:
   1. Baseline (fp32, no compression)
   2. Compressed + Python-only path (reshape/transpose tiling, numpy dequant)
-  3. Compressed + C++ path (fused gather+dequant, merged mapping, fast_forward)
-  4. Compressed + Full C++ path (all cold frames pre-registered in C++)
+  3. Compressed + C++ path (fused gather+dequant, merged mapping)
+  4. Compressed + Full C++ fast_forward with LRU frame cache
 
 Usage:
     python3 benchmark_python_vs_cpp_inference.py [--num-batches 500] [--resolution 1080p]
+    python3 benchmark_python_vs_cpp_inference.py --cache-size 20  # LRU cache for fast_forward (default)
+    python3 benchmark_python_vs_cpp_inference.py --cache-size 0   # pre-decode all frames (no LRU)
 """
 
 import os, sys, time, json, gc, argparse, copy, io, tempfile
 import numpy as np
 import torch
 import torch.nn as nn
-from collections import Counter
+from collections import Counter, OrderedDict
 from sklearn.metrics import roc_auc_score
 import psutil
 
@@ -216,6 +218,84 @@ def profile_and_split(train_ld, ln_emb, state_dict, emb_keys):
         n_hot = len(hot_indices[t])
         n_cold = len(cold_indices[t])
         log(f"  Table {t}: {n_hot:,} hot + {n_cold:,} cold")
+
+    return (large_tables, is_hot, hot_indices, cold_indices,
+            orig_to_cold_reordered, cold_weights_q, cold_quant_params)
+
+
+HOTCOLD_DIR = os.path.join("results", "hotcold")
+REORDER_DIR = os.path.join("results", "reorder")
+
+
+def load_saved_profile(ln_emb, state_dict, emb_keys):
+    """Load saved profiling data from results/hotcold/ and results/reorder/.
+    Returns the same tuple as profile_and_split, or None if files don't exist."""
+    num_tables = len(ln_emb)
+    large_tables = [t for t in range(num_tables) if ln_emb[t] >= LARGE_TABLE_THRESHOLD]
+
+    # Check if saved data exists for all large tables
+    for t in large_tables:
+        if not os.path.exists(os.path.join(HOTCOLD_DIR, f'is_hot_{t}.pt')):
+            return None
+        if not (os.path.exists(os.path.join(REORDER_DIR, f'orig_to_cold_reordered_{t}.pt')) or
+                os.path.exists(os.path.join(REORDER_DIR, f'orig_to_cold_reordered_{t}.npy'))):
+            return None
+
+    log(f"Loading saved profiling data for {len(large_tables)} large tables...")
+    is_hot = {}
+    hot_indices = {}
+    cold_indices = {}
+    orig_to_cold_reordered = {}
+    cold_weights_q = {}
+    cold_quant_params = {}
+
+    for t in large_tables:
+        is_hot[t] = torch.load(os.path.join(HOTCOLD_DIR, f'is_hot_{t}.pt'),
+                               map_location='cpu', weights_only=True)
+        hot_indices[t] = torch.load(os.path.join(HOTCOLD_DIR, f'hot_indices_{t}.pt'),
+                                    map_location='cpu', weights_only=True)
+        cold_indices[t] = torch.load(os.path.join(HOTCOLD_DIR, f'cold_indices_{t}.pt'),
+                                     map_location='cpu', weights_only=True)
+
+        # Load frequency-reordered cold mapping
+        npy_path = os.path.join(REORDER_DIR, f'orig_to_cold_reordered_{t}.npy')
+        pt_path = os.path.join(REORDER_DIR, f'orig_to_cold_reordered_{t}.pt')
+        if os.path.exists(npy_path):
+            orig_to_cold_reordered[t] = torch.from_numpy(np.load(npy_path).copy()).long()
+        else:
+            orig_to_cold_reordered[t] = torch.load(pt_path, map_location='cpu',
+                                                    weights_only=True).long()
+
+        # Load quantization params (global min/max across all cold rows)
+        mins_path = os.path.join(REORDER_DIR, f'quant_mins_{t}.pt')
+        maxs_path = os.path.join(REORDER_DIR, f'quant_maxs_{t}.pt')
+        if os.path.exists(mins_path) and os.path.exists(maxs_path):
+            mins_t = torch.load(mins_path, map_location='cpu', weights_only=True)
+            maxs_t = torch.load(maxs_path, map_location='cpu', weights_only=True)
+            mn = mins_t.min().item()
+            mx = maxs_t.max().item()
+        else:
+            # Fallback: recompute from cold weights
+            cold_order_path = os.path.join(REORDER_DIR, f'cold_order_{t}.npy')
+            if os.path.exists(cold_order_path):
+                cold_order = np.load(cold_order_path)
+                cold_w = state_dict[emb_keys[t]][torch.from_numpy(cold_order)]
+            else:
+                cold_w = state_dict[emb_keys[t]][cold_indices[t]]
+            mn = cold_w.min().item()
+            mx = cold_w.max().item()
+
+        s = (mx - mn) / 255.0
+        if s == 0: s = 1.0
+        zp = round(-mn / s)
+        cold_quant_params[t] = (s, zp)
+
+        # cold_weights_q not needed when loading pre-compressed frames
+        cold_weights_q[t] = torch.empty(0)
+
+        n_hot = len(hot_indices[t])
+        n_cold = len(cold_indices[t])
+        log(f"  Table {t}: {n_hot:,} hot + {n_cold:,} cold (loaded from disk)")
 
     return (large_tables, is_hot, hot_indices, cold_indices,
             orig_to_cold_reordered, cold_weights_q, cold_quant_params)
@@ -515,6 +595,9 @@ def run_inference(dlrm, test_batches, label, num_batches, large_tables):
     total_cold_rows = 0
     total_cold_batches = 0
 
+    total_cache_hits = 0
+    total_cache_misses = 0
+
     for t in large_tables:
         E = dlrm.emb_l[t]
         if hasattr(E, 'cold_time'):
@@ -526,6 +609,11 @@ def run_inference(dlrm, test_batches, label, num_batches, large_tables):
         if hasattr(E, 'n_cold_rows'):
             total_cold_rows += E.n_cold_rows
             total_cold_batches += E.n_cold_batches
+        if hasattr(E, 'cache_hits'):
+            total_cache_hits += E.cache_hits
+            total_cache_misses += E.cache_misses
+
+    total_cache_accesses = total_cache_hits + total_cache_misses
 
     result = {
         'auc': auc,
@@ -543,6 +631,9 @@ def run_inference(dlrm, test_batches, label, num_batches, large_tables):
         'emb_per_batch_ms': emb_time_total / n * 1000,
         'total_cold_rows': total_cold_rows,
         'total_cold_batches': total_cold_batches,
+        'cache_hits': total_cache_hits,
+        'cache_misses': total_cache_misses,
+        'cache_hit_rate': total_cache_hits / total_cache_accesses if total_cache_accesses > 0 else 0.0,
     }
     # Per-operation timing (ms per batch)
     for key, val in op_timers.items():
@@ -557,6 +648,10 @@ def run_inference(dlrm, test_batches, label, num_batches, large_tables):
     if emb_time_total > 0:
         log(f"    Cold lookups: {total_cold_rows:,} rows across "
             f"{total_cold_batches} batches ({total_cold_rows/n:.1f} cold rows/batch)")
+        if total_cache_accesses > 0:
+            log(f"    Frame cache: {total_cache_hits}/{total_cache_accesses} hits "
+                f"({result['cache_hit_rate']*100:.1f}%), "
+                f"{total_cache_misses} decodes")
         log(f"    ---- Per-operation timing (ms/batch, summed across all large tables) ----")
         log(f"    Mapping + hot/cold split: {result['op_t_mapping_ms']:.4f} ms")
         log(f"    Hot gather:               {result['op_t_hot_gather_ms']:.4f} ms")
@@ -611,6 +706,8 @@ def main():
     parser.add_argument('--crf', type=int, default=0, help='H.265 CRF (0=lossless)')
     parser.add_argument('--compressed-dir', type=str, default=None,
                         help='Load pre-compressed frames from this dir (skip encoding)')
+    parser.add_argument('--cache-size', type=int, default=20,
+                        help='LRU frame cache size per table (0=no cache, default 20)')
     args = parser.parse_args()
 
     width, height = RESOLUTIONS[args.resolution]
@@ -620,7 +717,8 @@ def main():
     log("PYTHON vs C++ INFERENCE OVERHEAD BENCHMARK")
     log(f"Resolution={args.resolution} ({width}x{height}), "
         f"Rows/frame={rows_per_frame:,}, Batches={args.num_batches}")
-    log(f"C++ extension: {'YES' if HAS_CPP else 'NO'}")
+    log(f"C++ extension: {'YES' if HAS_CPP else 'NO'}, "
+        f"LRU cache: {args.cache_size} frames/table")
     log("=" * 70)
 
     # Load
@@ -629,10 +727,15 @@ def main():
     test_batches = [(X, lS_o, lS_i, T) for X, lS_o, lS_i, T in test_ld]
     log(f"  {len(test_batches)} batches cached")
 
-    # Profile
-    (large_tables, is_hot, hot_indices, cold_indices,
-     orig_to_cold_reordered, cold_weights_q, cold_quant_params) = \
-        profile_and_split(train_ld, ln_emb, state_dict, emb_keys)
+    # Profile — use saved data when loading pre-compressed frames to avoid mapping mismatch
+    saved = load_saved_profile(ln_emb, state_dict, emb_keys) if args.compressed_dir else None
+    if saved:
+        (large_tables, is_hot, hot_indices, cold_indices,
+         orig_to_cold_reordered, cold_weights_q, cold_quant_params) = saved
+    else:
+        (large_tables, is_hot, hot_indices, cold_indices,
+         orig_to_cold_reordered, cold_weights_q, cold_quant_params) = \
+            profile_and_split(train_ld, ln_emb, state_dict, emb_keys)
 
     # Load or encode compressed frames into RAM.
     # During inference, cache misses decode from these in-memory bytes (no disk I/O).
@@ -742,7 +845,7 @@ def main():
     # ---- Experiment 2: Python-only compressed ----
     log("\n" + "=" * 70)
     log("EXPERIMENT 2: Compressed (PYTHON-ONLY path)")
-    log("  - H.265 in-memory decode via PyAV on cache miss")
+    log("  - H.265 in-memory decode via PyAV")
     log("  - Python reshape+transpose untiling")
     log("  - Python numpy dequantization")
     log("  - Python scatter_add pooling")
@@ -794,25 +897,29 @@ def main():
         all_results['cpp'] = run_inference(
             dlrm, test_batches, "C++", args.num_batches, large_tables)
 
-    # ---- Experiment 4: Full C++ (fast_forward) ----
+    # ---- Experiment 4: Full C++ (fast_forward + LRU cache) ----
     if HAS_CPP and hasattr(_C, 'fast_forward') and hasattr(_C, 'register_tables'):
         log("\n" + "=" * 70)
-        log("EXPERIMENT 4: Compressed (Full C++ fast_forward)")
+        cache_label = f"LRU cache={args.cache_size}" if args.cache_size > 0 else "all frames pre-decoded"
+        log(f"EXPERIMENT 4: Compressed (Full C++ fast_forward, {cache_label})")
         log("  - All tables registered in C++")
-        log("  - Single C++ call per batch (zero Python loop)")
-        log("  - Cold frames pre-decoded from H.265 bytes and registered for O(1) lookup")
+        log("  - Single C++ fast_forward call per batch")
+        if args.cache_size > 0:
+            log(f"  - LRU frame cache ({args.cache_size} frames), on-demand H.265 decode on miss")
+            log("  - Re-registers dirty tables in C++ when cache changes")
+        else:
+            log("  - All cold frames pre-decoded from H.265 bytes and registered")
         log("=" * 70)
         restore_weights()
 
-        # Build compressed embedding bags first
+        # Register tables (hot weights + mappings)
         num_tabs = len(dlrm.emb_l)
         table_kinds = []
-        weights = []
-        mappings = []
-        scales = []
-        zero_points = []
-        _cold_data = {}  # for cold fixup
-        _mapping_tensors = {}
+        weights_list = []
+        mappings_list = []
+        scales_list = []
+        zp_list = []
+        compressed_tables = set()
 
         for k in range(num_tabs):
             if k in large_tables and k in cold_compressed_bytes_per_table:
@@ -824,65 +931,30 @@ def main():
                 cold_mask = o2c >= 0
                 mapping[cold_mask] = (-(o2c[cold_mask] + 1)).to(torch.int32)
 
-                table_kinds.append(1)  # COMPRESSED_FP32
-                weights.append(hot_weight)
-                mappings.append(mapping)
-                scales.append(0.0)
-                zero_points.append(0)
-                _mapping_tensors[k] = mapping
-
-                # Pre-decode all H.265 frames from in-memory bytes for fast_forward registration
+                table_kinds.append(1)
+                weights_list.append(hot_weight)
+                mappings_list.append(mapping)
                 s, zp = cold_quant_params[k]
-                decoded_frames = []
-                for data in cold_compressed_bytes_per_table[k]:
-                    compressed_t = torch.frombuffer(bytearray(data), dtype=torch.uint8)
-                    decoded_frames.append(_C.decode_h265_frame_from_bytes(compressed_t))
-                _cold_data[k] = {
-                    'frames': decoded_frames,
-                    'scale': s, 'zp': zp,
-                    'tiles_per_row': width // TILE_W,
-                }
+                scales_list.append(float(s))
+                zp_list.append(int(zp))
+                compressed_tables.add(k)
 
-                # Set a simple passthrough on the model's emb_l
                 dlrm.emb_l[k] = nn.EmbeddingBag(ln_emb[k], EMB_DIM, mode='sum',
                                                   _weight=torch.zeros(ln_emb[k], EMB_DIM))
                 dlrm.emb_l[k].mode = 'sum'
             else:
-                table_kinds.append(0)  # STANDARD
-                weights.append(dlrm.emb_l[k].weight)
-                mappings.append(torch.empty(0, dtype=torch.int32))
-                scales.append(0.0)
-                zero_points.append(0)
+                table_kinds.append(0)
+                weights_list.append(dlrm.emb_l[k].weight)
+                mappings_list.append(torch.empty(0, dtype=torch.int32))
+                scales_list.append(0.0)
+                zp_list.append(0)
 
-        _C.register_tables(table_kinds, weights, mappings, scales, zero_points)
+        _C.register_tables(table_kinds, weights_list, mappings_list, scales_list, zp_list)
 
-        # Register cold frames
-        for t in _cold_data:
-            frames = _cold_data[t]['frames']
-            if not frames:
-                continue
-            sorted_fids = list(range(len(frames)))
-            frame_data_list = []
-            for f in frames:
-                if f.dim() == 2:
-                    # Tiled frame → untile to rows for registration
-                    rows = _C.untile_frame_to_rows(f, rows_per_frame)
-                    frame_data_list.append(rows)
-                else:
-                    frame_data_list.append(f)
-            all_data = torch.cat(frame_data_list, dim=0)
-            frame_ids = torch.tensor(sorted_fids, dtype=torch.long)
-            _C.register_cold_frames_for_table(
-                t, frame_ids, all_data,
-                float(_cold_data[t]['scale']),
-                float(_cold_data[t]['zp']),
-                rows_per_frame,
-                torch.empty(0, dtype=torch.long))
-
-        _empty_psw = torch.empty(0)
-
-        # Override apply_emb with fast_forward
+        # Override apply_emb with fast_forward (no cold fixup needed —
+        # all needed frames are registered before each forward call)
         _orig_apply_emb = dlrm.apply_emb
+
         def _fast_apply_emb(lS_o, lS_i, emb_l, v_W_l):
             start_time = time.time()
             if isinstance(lS_i, (list, tuple)):
@@ -897,47 +969,191 @@ def main():
                 lS_o_2d = lS_o
             else:
                 lS_o_2d = lS_o.view(num_tabs, -1)
-
             results = _C.fast_forward(lS_i_2d, lS_o_2d)
-            outputs = results[:num_tabs]
-            cold_masks = results[num_tabs:2*num_tabs]
-            cold_counts = results[2*num_tabs:]
-
-            # Cold fixup (rare)
-            for k in _cold_data:
-                cc = cold_counts[k].item()
-                if cc > 0:
-                    cold_mask = cold_masks[k]
-                    idx = lS_i_2d[k]
-                    off = lS_o_2d[k]
-                    cold_positions = torch.where(cold_mask)[0]
-                    cold_map_vals = _mapping_tensors[k][idx[cold_positions]]
-                    cold_reordered = -(cold_map_vals.long() + 1)
-                    valid = cold_reordered >= 0
-                    if valid.any():
-                        valid_idx = cold_reordered[valid]
-                        frame_ids_v = (valid_idx // rows_per_frame).long()
-                        row_offsets_v = (valid_idx % rows_per_frame).long()
-                        unique_fids = torch.unique(frame_ids_v).tolist()
-                        cd = _cold_data[k]
-                        cold_result = torch.zeros(valid.sum(), EMB_DIM)
-                        for fid in unique_fids:
-                            mask = frame_ids_v == fid
-                            offs = row_offsets_v[mask]
-                            rows = _C.gather_dequant_from_tiled_frame(
-                                cd['frames'][fid], offs, cd['tiles_per_row'],
-                                cd['scale'], cd['zp'])
-                            cold_result[mask] = rows
-                        _C.cold_fixup(outputs[k], idx, off, cold_mask,
-                                      cold_result, cold_positions[valid], _empty_psw)
-
             dlrm.time_look_up += time.time() - start_time
-            return list(outputs)
+            return results[-1]
 
         dlrm.apply_emb = _fast_apply_emb
-        gc.collect()
-        all_results['full_cpp'] = run_inference(
-            dlrm, test_batches, "Full C++", args.num_batches, large_tables)
+
+        if args.cache_size > 0:
+            # ---- LRU cache mode: decode on-demand, register per batch ----
+            frame_cache = OrderedDict()  # (table_id, frame_id) -> decoded rows (uint8)
+            cache_hits = 0
+            cache_misses = 0
+            total_frames_decoded = 0
+
+            n = len(test_batches) if args.num_batches == 0 else min(args.num_batches, len(test_batches))
+            max_samples = n * TEST_BATCH_SIZE + TEST_BATCH_SIZE
+            all_scores = np.empty(max_samples, dtype=np.float32)
+            all_targets = np.empty(max_samples, dtype=np.float32)
+            sample_idx = 0
+            latencies = []
+            decode_times = []
+            dlrm.time_look_up = 0; dlrm.time_interact = 0; dlrm.time_mlp = 0
+
+            gc.collect()
+            t0 = time.time()
+            with torch.no_grad():
+                for batch_idx in range(n):
+                    X, lS_o, lS_i, T = test_batches[batch_idx]
+
+                    # Scan for needed frames + manage LRU cache
+                    t_dec = time.time()
+                    dirty_tables = set()
+                    for t_idx in compressed_tables:
+                        if isinstance(lS_i, (list, tuple)):
+                            indices = lS_i[t_idx]
+                        elif lS_i.dim() == 2:
+                            indices = lS_i[t_idx]
+                        else:
+                            indices = lS_i
+                        cold_mask_t = ~is_hot[t_idx][indices]
+                        if not cold_mask_t.any():
+                            continue
+                        cold_orig = indices[cold_mask_t]
+                        cold_mapped = orig_to_cold_reordered[t_idx][cold_orig]
+                        valid = cold_mapped >= 0
+                        if not valid.any():
+                            continue
+                        fids = (cold_mapped[valid] // rows_per_frame).unique().tolist()
+                        for fid in fids:
+                            key = (t_idx, fid)
+                            if key in frame_cache:
+                                frame_cache.move_to_end(key)
+                                cache_hits += 1
+                            else:
+                                cache_misses += 1
+                                total_frames_decoded += 1
+                                # Decode from in-memory bytes
+                                data = cold_compressed_bytes_per_table[t_idx][fid]
+                                compressed_t = torch.frombuffer(bytearray(data), dtype=torch.uint8)
+                                tiled_frame = _C.decode_h265_frame_from_bytes(compressed_t)
+                                rows = _C.untile_frame_to_rows(tiled_frame, rows_per_frame)
+                                if rows.shape[0] < rows_per_frame:
+                                    rows = torch.cat([rows, torch.zeros(
+                                        rows_per_frame - rows.shape[0], EMB_DIM, dtype=torch.uint8)])
+                                frame_cache[key] = rows
+                                dirty_tables.add(t_idx)
+
+                    # Evict if over capacity
+                    while len(frame_cache) > args.cache_size:
+                        evicted_key, _ = frame_cache.popitem(last=False)
+                        dirty_tables.add(evicted_key[0])
+
+                    # Re-register dirty tables in C++
+                    for t_idx in dirty_tables:
+                        table_frames = [(fid, data) for (tid, fid), data
+                                        in frame_cache.items() if tid == t_idx]
+                        if table_frames:
+                            table_frames.sort(key=lambda x: x[0])
+                            fids_t = torch.tensor([f[0] for f in table_frames], dtype=torch.long)
+                            all_data = torch.cat([f[1] for f in table_frames], dim=0)
+                            s, zp = cold_quant_params[t_idx]
+                            _C.register_cold_frames_for_table(
+                                t_idx, fids_t, all_data,
+                                float(s), int(zp),
+                                rows_per_frame, torch.empty(0, dtype=torch.long))
+
+                    decode_times.append((time.time() - t_dec) * 1000)
+
+                    # Forward
+                    bt0 = time.time()
+                    Z = dlrm(X, lS_o, lS_i)
+                    latencies.append(time.time() - bt0)
+
+                    z_np = Z.detach().cpu().numpy().ravel()
+                    t_np = T.detach().cpu().numpy().ravel()
+                    bs = z_np.shape[0]
+                    all_scores[sample_idx:sample_idx + bs] = z_np
+                    all_targets[sample_idx:sample_idx + bs] = t_np
+                    sample_idx += bs
+
+            total_time = time.time() - t0
+            auc = roc_auc_score(all_targets[:sample_idx], all_scores[:sample_idx])
+            total_cache_accesses = cache_hits + cache_misses
+
+            all_results['full_cpp'] = {
+                'auc': auc,
+                'total_time': total_time,
+                'mean_lat_ms': np.mean(latencies) * 1000,
+                'p50_lat_ms': np.percentile(latencies, 50) * 1000,
+                'p99_lat_ms': np.percentile(latencies, 99) * 1000,
+                'rss_mb': rss_mb(),
+                'emb_lookup_ms': dlrm.time_look_up / n * 1000,
+                'interact_ms': dlrm.time_interact / n * 1000,
+                'mlp_ms': dlrm.time_mlp / n * 1000,
+                'cold_total_ms': 0, 'cold_per_batch_ms': 0.0,
+                'emb_total_ms': 0, 'emb_per_batch_ms': 0.0,
+                'total_cold_rows': 0, 'total_cold_batches': 0,
+                'cache_hits': cache_hits,
+                'cache_misses': cache_misses,
+                'cache_hit_rate': cache_hits / total_cache_accesses if total_cache_accesses > 0 else 0.0,
+                'total_frames_decoded': total_frames_decoded,
+                'decode_ms_per_batch': np.mean(decode_times),
+                'op_t_mapping_ms': 0.0, 'op_t_hot_gather_ms': 0.0,
+                'op_t_decode_ms': 0.0, 'op_t_untile_ms': 0.0,
+                'op_t_gather_ms': 0.0, 'op_t_dequant_ms': 0.0,
+                'op_t_scatter_ms': 0.0, 'op_t_pooling_ms': 0.0,
+                'op_t_gather_dequant_ms': 0.0,
+                'op_t_cold_fixup_ms': 0.0, 'op_t_cold_index_ms': 0.0,
+            }
+
+            r = all_results['full_cpp']
+            log(f"\n  [Full C++ + LRU] Results:")
+            log(f"    AUC = {auc:.6f}")
+            log(f"    Latency: mean={r['mean_lat_ms']:.2f}ms, "
+                f"p50={r['p50_lat_ms']:.2f}ms, p99={r['p99_lat_ms']:.2f}ms")
+            log(f"    Forward breakdown: emb={r['emb_lookup_ms']:.2f}ms, "
+                f"interact={r['interact_ms']:.2f}ms, mlp={r['mlp_ms']:.2f}ms")
+            log(f"    Frame cache: {cache_hits}/{total_cache_accesses} hits "
+                f"({r['cache_hit_rate']*100:.1f}%), "
+                f"{total_frames_decoded} total decodes")
+            log(f"    Decode overhead: {r['decode_ms_per_batch']:.4f} ms/batch avg")
+            log(f"    RSS = {r['rss_mb']:.0f}MB")
+
+        else:
+            # ---- Pre-decode all mode (cache_size=0): original behavior ----
+            _cold_data = {}
+            _mapping_tensors = {}
+            for k in compressed_tables:
+                s, zp = cold_quant_params[k]
+                decoded_frames = []
+                for data in cold_compressed_bytes_per_table[k]:
+                    compressed_t = torch.frombuffer(bytearray(data), dtype=torch.uint8)
+                    decoded_frames.append(_C.decode_h265_frame_from_bytes(compressed_t))
+                _cold_data[k] = {
+                    'frames': decoded_frames,
+                    'scale': s, 'zp': zp,
+                    'tiles_per_row': width // TILE_W,
+                }
+                _mapping_tensors[k] = mappings_list[k]
+
+            # Register all cold frames
+            for t in _cold_data:
+                frames = _cold_data[t]['frames']
+                if not frames:
+                    continue
+                sorted_fids = list(range(len(frames)))
+                frame_data_list = []
+                for f in frames:
+                    if f.dim() == 2:
+                        rows = _C.untile_frame_to_rows(f, rows_per_frame)
+                        frame_data_list.append(rows)
+                    else:
+                        frame_data_list.append(f)
+                all_data = torch.cat(frame_data_list, dim=0)
+                frame_ids_t = torch.tensor(sorted_fids, dtype=torch.long)
+                _C.register_cold_frames_for_table(
+                    t, frame_ids_t, all_data,
+                    float(_cold_data[t]['scale']),
+                    float(_cold_data[t]['zp']),
+                    rows_per_frame,
+                    torch.empty(0, dtype=torch.long))
+
+            gc.collect()
+            all_results['full_cpp'] = run_inference(
+                dlrm, test_batches, "Full C++", args.num_batches, large_tables)
+
         dlrm.apply_emb = _orig_apply_emb
 
     # ============================================================
@@ -947,7 +1163,7 @@ def main():
     log("SUMMARY: Python vs C++ Inference Overhead")
     log("=" * 70)
 
-    header = f"{'Experiment':<25} {'AUC':>10} {'Mean(ms)':>10} {'P50(ms)':>10} {'P99(ms)':>10} {'Emb(ms)':>10} {'Cold(ms)':>10} {'RSS(MB)':>10}"
+    header = f"{'Experiment':<25} {'AUC':>10} {'Mean(ms)':>10} {'P50(ms)':>10} {'P99(ms)':>10} {'Emb(ms)':>10} {'Cold(ms)':>10} {'Cache%':>8} {'RSS(MB)':>10}"
     log(header)
     log("-" * len(header))
 
@@ -964,10 +1180,12 @@ def main():
         if name != 'baseline':
             pct = (r['mean_lat_ms'] / baseline_lat - 1) * 100
             overhead = f" ({pct:+.0f}%)"
+        hit_rate = r.get('cache_hit_rate', 0)
+        cache_str = f"{hit_rate*100:.1f}%" if r.get('cache_hits', 0) + r.get('cache_misses', 0) > 0 else "—"
         log(f"{label:<25} {r['auc']:>10.6f} {r['mean_lat_ms']:>9.2f}{overhead:>0} "
             f"{r['p50_lat_ms']:>10.2f} {r['p99_lat_ms']:>10.2f} "
             f"{r['emb_lookup_ms']:>10.2f} {r['cold_per_batch_ms']:>10.3f} "
-            f"{r['rss_mb']:>10.0f}")
+            f"{cache_str:>8} {r['rss_mb']:>10.0f}")
 
     # Per-operation comparison: Python vs C++
     if 'python' in all_results and 'cpp' in all_results:

@@ -2,13 +2,7 @@
 """
 True On-Demand H.265 Codec Benchmark for DLRM Embedding Tables.
 
-Key changes from codec_prefetch_benchmark.py:
-1. Proper video-resolution frames (1080p, 4K) instead of width=16
-2. Per-frame compressed files for true on-demand decode (option 2)
-3. NO pre-decode — each cache miss does in-memory H.265 decode + dequantize
 
-Reuses Phases 1-2 (profiling, hot/cold split) and reordering from previous runs.
-Only re-encodes with new frame geometry and runs Markov predictor experiments.
 """
 
 import os, sys, time, json, threading, gc, subprocess, tempfile, io

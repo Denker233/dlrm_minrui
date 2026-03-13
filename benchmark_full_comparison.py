@@ -13,7 +13,7 @@ Strategy:
 No batch pre-loading in the timed inference loop.
 """
 
-import os, sys, time, json, gc, subprocess, threading
+import os, sys, time, json, gc, subprocess, threading, io
 import numpy as np
 import torch
 import torch.nn as nn
@@ -130,6 +130,37 @@ def compute_metrics(scores, targets):
     return auc, ll, acc
 
 
+def load_compressed_bytes_from_disk(compressed_tables, res_dir):
+    """Load all H.265 compressed frame bytes from disk into RAM.
+    Returns: dict[table_id] -> dict[frame_id] -> bytes"""
+    compressed_bytes_map = {}
+    for t_idx in compressed_tables:
+        frame_dir = os.path.join(res_dir, f'table_{t_idx}')
+        if not os.path.exists(frame_dir):
+            continue
+        compressed_bytes_map[t_idx] = {}
+        frame_files = sorted([f for f in os.listdir(frame_dir)
+                              if f.startswith('frame_') and (f.endswith('.h265') or f.endswith('.h264'))])
+        for ff in frame_files:
+            # Extract frame id from filename like frame_00000.h265
+            fid = int(ff.split('_')[1].split('.')[0])
+            with open(os.path.join(frame_dir, ff), 'rb') as fh:
+                compressed_bytes_map[t_idx][fid] = fh.read()
+    return compressed_bytes_map
+
+
+def decode_frame_from_bytes_cpp(data):
+    """Decode H.265 frame from in-memory bytes using C++ extension."""
+    compressed_t = torch.frombuffer(bytearray(data), dtype=torch.uint8)
+    return _C.decode_h265_frame_from_bytes(compressed_t)
+
+
+def batch_decode_frames_from_bytes(compressed_bytes_table, fids):
+    """Decode multiple frames from in-memory bytes.
+    Returns list of decoded frame tensors."""
+    return [decode_frame_from_bytes_cpp(compressed_bytes_table[fid]) for fid in fids]
+
+
 # ============================================================
 # RUN INFERENCE (shared for baseline and codec full_cpp)
 # ============================================================
@@ -189,7 +220,7 @@ def run_inference(dlrm, test_ld, tag=""):
 def setup_codec_fullcpp(dlrm, ln_emb, state_dict, test_batches,
                         hot_indices, cold_indices, is_hot, o2c_map,
                         cold_quant_scale, cold_quant_zp, cold_num_rows,
-                        large_tables, emb_keys):
+                        large_tables, emb_keys, compressed_bytes_map=None):
     """Register tables and cold frames in C++ for full C++ inference.
     Returns (apply_emb_fn, cleanup_fn, memory_info, frame_access_log)."""
 
@@ -258,33 +289,39 @@ def setup_codec_fullcpp(dlrm, ln_emb, state_dict, test_batches,
     total_needed = sum(len(v) for v in needed_frames.values())
     log(f"  Found {total_needed} unique frames in {time.time()-t_scan0:.1f}s")
 
-    # Decode and register all needed frames
+    # Decode and register all needed frames (from in-memory bytes if available)
     log("  Decoding and registering cold frames in C++...")
     total_cold_frame_mb = 0
     total_compressed_bytes = 0
 
     for t_idx in compressed_tables:
-        frame_dir = os.path.join(res_dir, f'table_{t_idx}')
-        if not os.path.exists(frame_dir):
-            continue
-
         # Count compressed bytes
-        frame_files = [f for f in os.listdir(frame_dir)
-                       if f.startswith('frame_') and (f.endswith('.h265') or f.endswith('.h264'))]
-        total_compressed_bytes += sum(os.path.getsize(os.path.join(frame_dir, ff)) for ff in frame_files)
+        if compressed_bytes_map and t_idx in compressed_bytes_map:
+            total_compressed_bytes += sum(len(v) for v in compressed_bytes_map[t_idx].values())
+        else:
+            frame_dir = os.path.join(res_dir, f'table_{t_idx}')
+            if os.path.exists(frame_dir):
+                frame_files = [f for f in os.listdir(frame_dir)
+                               if f.startswith('frame_') and (f.endswith('.h265') or f.endswith('.h264'))]
+                total_compressed_bytes += sum(os.path.getsize(os.path.join(frame_dir, ff)) for ff in frame_files)
 
         if not needed_frames[t_idx]:
             continue
 
-        # Batch decode all needed frames
+        # Decode all needed frames from in-memory bytes
         sorted_fids = sorted(needed_frames[t_idx])
         fids_t = torch.tensor(sorted_fids, dtype=torch.long)
 
-        if len(sorted_fids) > 1 and hasattr(_C, 'batch_decode_frames'):
-            decoded = _C.batch_decode_frames(frame_dir, fids_t)
+        if compressed_bytes_map and t_idx in compressed_bytes_map:
+            decoded = batch_decode_frames_from_bytes(compressed_bytes_map[t_idx], sorted_fids)
         else:
-            decoded = [_C.decode_h265_frame_from_file(
-                os.path.join(frame_dir, f'frame_{fid:05d}.h265')) for fid in sorted_fids]
+            # Fallback to disk decode if bytes not loaded
+            frame_dir = os.path.join(res_dir, f'table_{t_idx}')
+            if len(sorted_fids) > 1 and hasattr(_C, 'batch_decode_frames'):
+                decoded = _C.batch_decode_frames(frame_dir, fids_t)
+            else:
+                decoded = [_C.decode_h265_frame_from_file(
+                    os.path.join(frame_dir, f'frame_{fid:05d}.h265')) for fid in sorted_fids]
 
         # Concatenate into contiguous buffer
         padded = []
@@ -409,7 +446,7 @@ def simulate_lru_cache(batch_frame_log, cache_capacity):
 def run_real_lru_inference(dlrm, test_ld, cache_capacity, ln_emb, state_dict,
                            hot_indices, cold_indices, is_hot, o2c_map,
                            cold_quant_scale, cold_quant_zp, cold_num_rows,
-                           large_tables, emb_keys):
+                           large_tables, emb_keys, compressed_bytes_map=None):
     """Run real end-to-end inference with LRU cache of decoded frames."""
 
     width, height = 1920, 1080
@@ -541,22 +578,27 @@ def run_real_lru_inference(dlrm, test_ld, cache_capacity, ln_emb, state_dict,
                         cache_misses += 1
                         misses_by_table.setdefault(t_idx, []).append(fid)
 
-            # Batch decode misses per table
+            # Batch decode misses per table (from in-memory bytes)
             for t_idx, miss_fids in misses_by_table.items():
                 total_frames_decoded += len(miss_fids)
-                frame_dir = os.path.join(res_dir, f'table_{t_idx}')
                 sorted_fids = sorted(miss_fids)
 
-                if len(sorted_fids) > 1 and hasattr(_C, 'batch_decode_frames'):
-                    fids_t = torch.tensor(sorted_fids, dtype=torch.long)
-                    decoded_list = _C.batch_decode_frames(frame_dir, fids_t)
+                if compressed_bytes_map and t_idx in compressed_bytes_map:
+                    decoded_list = batch_decode_frames_from_bytes(
+                        compressed_bytes_map[t_idx], sorted_fids)
                 else:
-                    decoded_list = []
-                    for fid in sorted_fids:
-                        fpath = os.path.join(frame_dir, f'frame_{fid:05d}.h265')
-                        if not os.path.exists(fpath):
-                            fpath = os.path.join(frame_dir, f'frame_{fid:05d}.h264')
-                        decoded_list.append(_C.decode_h265_frame_from_file(fpath))
+                    # Fallback to disk decode
+                    frame_dir = os.path.join(res_dir, f'table_{t_idx}')
+                    if len(sorted_fids) > 1 and hasattr(_C, 'batch_decode_frames'):
+                        fids_t = torch.tensor(sorted_fids, dtype=torch.long)
+                        decoded_list = _C.batch_decode_frames(frame_dir, fids_t)
+                    else:
+                        decoded_list = []
+                        for fid in sorted_fids:
+                            fpath = os.path.join(frame_dir, f'frame_{fid:05d}.h265')
+                            if not os.path.exists(fpath):
+                                fpath = os.path.join(frame_dir, f'frame_{fid:05d}.h264')
+                            decoded_list.append(_C.decode_h265_frame_from_file(fpath))
 
                 for fid, frame in zip(sorted_fids, decoded_list):
                     rows = _C.untile_frame_to_rows(frame, rows_per_frame)
@@ -645,7 +687,7 @@ def run_real_lru_inference(dlrm, test_ld, cache_capacity, ln_emb, state_dict,
 def run_lookahead_inference(dlrm, test_ld, group_size, ln_emb, state_dict,
                             hot_indices, cold_indices, is_hot, o2c_map,
                             cold_quant_scale, cold_quant_zp, cold_num_rows,
-                            large_tables, emb_keys):
+                            large_tables, emb_keys, compressed_bytes_map=None):
     """Run inference with dynamic look-ahead: buffer group_size batches,
     scan for needed frames, batch decode, process group."""
 
@@ -766,26 +808,30 @@ def run_lookahead_inference(dlrm, test_ld, group_size, ln_emb, state_dict,
                 scan_ms = (time.time() - t_scan) * 1000
                 scan_times.append(scan_ms)
 
-                # DECODE + REGISTER needed frames
+                # DECODE + REGISTER needed frames (from in-memory bytes)
                 t_dec = time.time()
                 group_cold_mb = 0
                 for t_idx in compressed_tables:
                     if not needed[t_idx]:
                         continue
-                    frame_dir = os.path.join(res_dir, f'table_{t_idx}')
                     sorted_fids = sorted(needed[t_idx])
                     total_frames_decoded += len(sorted_fids)
 
                     fids_t = torch.tensor(sorted_fids, dtype=torch.long)
-                    if len(sorted_fids) > 1 and hasattr(_C, 'batch_decode_frames'):
-                        decoded = _C.batch_decode_frames(frame_dir, fids_t)
+                    if compressed_bytes_map and t_idx in compressed_bytes_map:
+                        decoded = batch_decode_frames_from_bytes(
+                            compressed_bytes_map[t_idx], sorted_fids)
                     else:
-                        ext = '.h265'
-                        for e in ['.h265', '.h264']:
-                            if os.path.exists(os.path.join(frame_dir, f'frame_00000{e}')):
-                                ext = e; break
-                        decoded = [_C.decode_h265_frame_from_file(
-                            os.path.join(frame_dir, f'frame_{fid:05d}{ext}')) for fid in sorted_fids]
+                        frame_dir = os.path.join(res_dir, f'table_{t_idx}')
+                        if len(sorted_fids) > 1 and hasattr(_C, 'batch_decode_frames'):
+                            decoded = _C.batch_decode_frames(frame_dir, fids_t)
+                        else:
+                            ext = '.h265'
+                            for e in ['.h265', '.h264']:
+                                if os.path.exists(os.path.join(frame_dir, f'frame_00000{e}')):
+                                    ext = e; break
+                            decoded = [_C.decode_h265_frame_from_file(
+                                os.path.join(frame_dir, f'frame_{fid:05d}{ext}')) for fid in sorted_fids]
 
                     padded = []
                     for frame in decoded:
@@ -828,19 +874,23 @@ def run_lookahead_inference(dlrm, test_ld, group_size, ln_emb, state_dict,
             t_dec = time.time()
             for t_idx in compressed_tables:
                 if not needed[t_idx]: continue
-                frame_dir = os.path.join(res_dir, f'table_{t_idx}')
                 sorted_fids = sorted(needed[t_idx])
                 total_frames_decoded += len(sorted_fids)
                 fids_t = torch.tensor(sorted_fids, dtype=torch.long)
-                if len(sorted_fids) > 1:
-                    decoded = _C.batch_decode_frames(frame_dir, fids_t)
+                if compressed_bytes_map and t_idx in compressed_bytes_map:
+                    decoded = batch_decode_frames_from_bytes(
+                        compressed_bytes_map[t_idx], sorted_fids)
                 else:
-                    ext = '.h265'
-                    for e in ['.h265', '.h264']:
-                        if os.path.exists(os.path.join(frame_dir, f'frame_00000{e}')):
-                            ext = e; break
-                    decoded = [_C.decode_h265_frame_from_file(
-                        os.path.join(frame_dir, f'frame_{fid:05d}{ext}')) for fid in sorted_fids]
+                    frame_dir = os.path.join(res_dir, f'table_{t_idx}')
+                    if len(sorted_fids) > 1:
+                        decoded = _C.batch_decode_frames(frame_dir, fids_t)
+                    else:
+                        ext = '.h265'
+                        for e in ['.h265', '.h264']:
+                            if os.path.exists(os.path.join(frame_dir, f'frame_00000{e}')):
+                                ext = e; break
+                        decoded = [_C.decode_h265_frame_from_file(
+                            os.path.join(frame_dir, f'frame_{fid:05d}{ext}')) for fid in sorted_fids]
                 padded = []
                 for frame in decoded:
                     rows = _C.untile_frame_to_rows(frame, rows_per_frame)
@@ -1061,6 +1111,17 @@ if __name__ == '__main__':
         del cold_w
 
     torch.set_num_threads(OPTIMIZED_THREADS)
+
+    # Load compressed H.265 frame bytes from disk into RAM for in-memory decode
+    res_dir = os.path.join(ONDEMAND_DIR, '1080p')
+    compressed_tables_all = set(t for t in large_tables if cold_num_rows.get(t, 0) > 0)
+    log("Loading compressed H.265 frame bytes into RAM...")
+    compressed_bytes_map = load_compressed_bytes_from_disk(compressed_tables_all, res_dir)
+    total_loaded = sum(sum(len(v) for v in table_bytes.values())
+                       for table_bytes in compressed_bytes_map.values())
+    log(f"  Loaded {total_loaded/1024/1024:.1f}MB compressed bytes for "
+        f"{sum(len(v) for v in compressed_bytes_map.values())} frames")
+
     all_results = OrderedDict()
 
     # ---- 1. BASELINE ----
@@ -1101,7 +1162,7 @@ if __name__ == '__main__':
             dlrm, ln_emb, state_dict, test_batches,
             hot_indices, cold_indices, is_hot, o2c_map,
             cold_quant_scale, cold_quant_zp, cold_num_rows,
-            large_tables, emb_keys)
+            large_tables, emb_keys, compressed_bytes_map)
 
         r = run_inference(dlrm, test_ld, f"codec run {run+1}")
         r.update(mem_info)
@@ -1130,7 +1191,7 @@ if __name__ == '__main__':
                 dlrm, test_ld, cache_size, ln_emb, state_dict,
                 hot_indices, cold_indices, is_hot, o2c_map,
                 cold_quant_scale, cold_quant_zp, cold_num_rows,
-                large_tables, emb_keys)
+                large_tables, emb_keys, compressed_bytes_map)
             log(f"  Run {run+1}: AUC={r['auc']:.6f}, BLat={r['mean_lat_ms']:.2f}ms, "
                 f"hit={r['hit_rate']:.1%}, decode={r['decode_ms_per_batch']:.2f}ms/batch, "
                 f"total={r['total_time']:.1f}s, frames={r['total_frames_decoded']}")
@@ -1156,7 +1217,7 @@ if __name__ == '__main__':
                 dlrm, test_ld, group_size, ln_emb, state_dict,
                 hot_indices, cold_indices, is_hot, o2c_map,
                 cold_quant_scale, cold_quant_zp, cold_num_rows,
-                large_tables, emb_keys)
+                large_tables, emb_keys, compressed_bytes_map)
             log(f"  Run {run+1}: AUC={r['auc']:.6f}, BLat={r['mean_lat_ms']:.2f}ms, "
                 f"scan={r['scan_ms_per_batch']:.2f}ms, decode={r['decode_ms_per_batch']:.2f}ms, "
                 f"total={r['total_time']:.1f}s, frames={r['total_frames_decoded']}")

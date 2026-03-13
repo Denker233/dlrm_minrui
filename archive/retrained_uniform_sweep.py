@@ -1,0 +1,422 @@
+#!/usr/bin/env python3
+"""
+Phase 2A: Uniform Codec Compression Sweep with Retrained Model
+Tests CRF levels: 0, 15, 18, 20, 23, 25, 28, 30, 33, 35, 38, 40, 43, 45, 48, 51
+"""
+
+import os
+import sys
+import time
+import json
+import tempfile
+import subprocess
+import numpy as np
+import torch
+from sklearn.metrics import roc_auc_score
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import dlrm_data_pytorch as dp
+from dlrm_s_pytorch import DLRM_Net
+from dlrm_s_pytorch import tile_embeddings, untile_embeddings
+
+# ============================================================
+# Configuration
+# ============================================================
+MODEL_PATH = "./models/dlrm_kaggle_1epoch.pt"
+DATA_FILE = "./input/train.txt"
+PROCESSED_DATA = "./input/kaggleAdDisplayChallenge_processed.npz"
+RESULTS_DIR = os.path.expanduser("~/experiment-control")
+
+ARCH_SPARSE_FEATURE_SIZE = 16
+ARCH_MLP_BOT = "13-512-256-64-16"
+ARCH_MLP_TOP = "512-256-1"
+TEST_BATCH_SIZE = 16384
+
+CRF_LEVELS = [0, 15, 18, 20, 23, 25, 28, 30, 33, 35, 38, 40, 43, 45, 48, 51]
+
+
+def drop_caches():
+    """Drop OS page/buffer caches between experiments for consistent timing."""
+    try:
+        subprocess.run(['sync'], check=True)
+        subprocess.run(['sudo', 'sh', '-c', 'echo 3 > /proc/sys/vm/drop_caches'], check=True)
+        print("  [CACHE] Dropped caches")
+    except Exception as e:
+        print(f"  [CACHE] Warning: {e}")
+
+
+def create_args():
+    class Args:
+        pass
+    args = Args()
+    args.arch_sparse_feature_size = ARCH_SPARSE_FEATURE_SIZE
+    args.arch_mlp_bot = ARCH_MLP_BOT
+    args.arch_mlp_top = ARCH_MLP_TOP
+    args.arch_interaction_op = "dot"
+    args.arch_interaction_itself = False
+    args.data_generation = "dataset"
+    args.data_set = "kaggle"
+    args.raw_data_file = DATA_FILE
+    args.processed_data_file = PROCESSED_DATA
+    args.loss_function = "bce"
+    args.max_ind_range = -1
+    args.test_mini_batch_size = TEST_BATCH_SIZE
+    args.test_num_workers = 0
+    args.num_workers = 0
+    args.mlperf_logging = False
+    args.memory_map = False
+    args.data_randomize = "total"
+    args.data_trace_enable_padding = False
+    args.data_sub_sample_rate = 0.0
+    args.num_indices_per_lookup = 10
+    args.num_indices_per_lookup_fixed = False
+    args.mini_batch_size = 128
+    args.round_targets = True
+    args.mlperf_bin_loader = False
+    args.mlperf_bin_shuffle = False
+    args.dataset_multiprocessing = False
+    return args
+
+
+def load_model_and_data():
+    print("Loading model and data...")
+    args = create_args()
+    train_data, train_ld, test_data, test_ld = dp.make_criteo_data_and_loaders(args)
+    ln_emb = np.array(train_data.counts)
+    m_spa = args.arch_sparse_feature_size
+    ln_bot = np.fromstring(args.arch_mlp_bot, dtype=int, sep="-")
+    ln_bot[0] = train_data.m_den
+    num_fea = ln_emb.size + 1
+    m_den_out = ln_bot[ln_bot.size - 1]
+    num_int = (num_fea * (num_fea - 1)) // 2 + m_den_out
+    ln_top = np.fromstring(str(num_int) + "-" + args.arch_mlp_top, dtype=int, sep="-")
+
+    dlrm = DLRM_Net(
+        m_spa, ln_emb, ln_bot, ln_top,
+        arch_interaction_op=args.arch_interaction_op,
+        arch_interaction_itself=args.arch_interaction_itself,
+        sigmoid_bot=-1,
+        sigmoid_top=ln_top.size - 2,
+        loss_function=args.loss_function,
+    )
+    ld_model = torch.load(MODEL_PATH, map_location=torch.device("cpu"))
+    dlrm.load_state_dict(ld_model["state_dict"])
+    dlrm.eval()
+    return dlrm, test_ld, ln_emb, ln_bot, ln_top, m_spa, args
+
+
+def run_inference(dlrm, test_ld):
+    """Run inference, return (accuracy, auc, inference_time)"""
+    all_scores = []
+    all_targets = []
+    test_accu = 0
+    test_samp = 0
+
+    t0 = time.time()
+    with torch.no_grad():
+        for i, testBatch in enumerate(test_ld):
+            X_test, lS_o_test, lS_i_test, T_test = testBatch
+            Z_test = dlrm(X_test, lS_o_test, lS_i_test)
+            S_test = Z_test.detach().cpu().numpy().flatten()
+            T_test_np = T_test.detach().cpu().numpy().flatten()
+            test_accu += np.sum((np.round(S_test, 0) == T_test_np).astype(np.uint8))
+            test_samp += T_test_np.shape[0]
+            all_scores.extend(S_test.tolist())
+            all_targets.extend(T_test_np.tolist())
+            if i % 50 == 0:
+                print(f"  Batch {i}/{len(test_ld)}", end='\r')
+    inference_time = time.time() - t0
+
+    accuracy = test_accu / test_samp
+    auc = roc_auc_score(all_targets, all_scores)
+    print(f"  Inference complete: {test_samp} samples in {inference_time:.2f}s")
+    return accuracy, auc, inference_time
+
+
+def get_codec_args(crf):
+    if crf == 0:
+        return ['-c:v', 'libx265', '-x265-params', 'lossless=1:log-level=error',
+                '-preset', 'ultrafast']
+    else:
+        return ['-c:v', 'libx265', '-crf', str(crf), '-preset', 'ultrafast',
+                '-x265-params', 'log-level=error:allow-non-conformance=1']
+
+
+def compress_table_with_codec(weights, codec_cmd_args):
+    num_emb, emb_dim = weights.shape
+    w_min, w_max = weights.min(), weights.max()
+    scale = (w_max - w_min) / 255.0
+    zero_point = -(w_min / scale).round() if scale > 0 else 0.0
+    quantized = ((weights / scale).round() + zero_point).clamp(0, 255).to(torch.uint8)
+    pixels = quantized.numpy()
+
+    MAX_DIM = 16384
+    MIN_WIDTH = 64
+    MIN_HEIGHT = 64
+    TILE_SIZE = 4
+    TILING_THRESHOLD = 50000
+
+    width = emb_dim
+    height = num_emb
+    tiling_meta = {'tiled': False}
+
+    if num_emb > TILING_THRESHOLD:
+        data_flat = pixels.reshape(-1)
+        image, grid_size, tiles_per_emb = tile_embeddings(
+            data_flat, emb_dim, num_emb, TILE_SIZE)
+        width = image.shape[1]
+        height = image.shape[0]
+        raw_data = image.tobytes()
+        tiling_meta = {'tiled': True, 'grid_size': grid_size,
+                       'tiles_per_emb': tiles_per_emb, 'tile_size': TILE_SIZE}
+    else:
+        raw_data = pixels.tobytes()
+
+    total_pixels = width * height
+    if height > MAX_DIM or width < MIN_WIDTH or height < MIN_HEIGHT:
+        min_required = MIN_WIDTH * MIN_HEIGHT
+        if total_pixels < min_required:
+            width = MIN_WIDTH
+            height = MIN_HEIGHT
+        elif height > MAX_DIM:
+            width = (total_pixels + MAX_DIM - 1) // MAX_DIM
+            height = MAX_DIM
+            if width < MIN_WIDTH:
+                width = MIN_WIDTH
+                height = (total_pixels + width - 1) // width
+        elif width < MIN_WIDTH:
+            width = MIN_WIDTH
+            height = (total_pixels + width - 1) // width
+            if height < MIN_HEIGHT:
+                height = MIN_HEIGHT
+        elif height < MIN_HEIGHT:
+            height = MIN_HEIGHT
+            width = (total_pixels + height - 1) // height
+            if width < MIN_WIDTH:
+                width = MIN_WIDTH
+                height = MIN_HEIGHT
+
+        padded_pixels = width * height
+        if padded_pixels > len(raw_data):
+            padded = bytearray(padded_pixels)
+            padded[:len(raw_data)] = raw_data
+            raw_data = bytes(padded)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        raw_file = os.path.join(tmpdir, 'pixels.raw')
+        video_file = os.path.join(tmpdir, 'compressed.mp4')
+        with open(raw_file, 'wb') as f:
+            f.write(raw_data)
+        cmd = ['ffmpeg', '-y', '-f', 'rawvideo', '-pix_fmt', 'gray',
+               '-s', f'{width}x{height}', '-r', '1', '-i', raw_file
+               ] + codec_cmd_args + ['-frames:v', '1', video_file]
+        t0 = time.time()
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        compress_time = time.time() - t0
+        if result.returncode != 0:
+            raise RuntimeError(f"Encoding failed: {result.stderr[:500]}")
+        with open(video_file, 'rb') as f:
+            compressed_data = f.read()
+
+    metadata = {
+        'shape': (num_emb, emb_dim),
+        'quant_params': {'scale': float(scale), 'zero_point': float(zero_point)},
+        'frame_width': width, 'frame_height': height,
+        'tiling': tiling_meta, 'original_pixels': num_emb * emb_dim,
+    }
+    return compressed_data, metadata, compress_time
+
+
+def decompress_table(compressed_data, metadata):
+    num_emb, emb_dim = metadata['shape']
+    with tempfile.TemporaryDirectory() as tmpdir:
+        video_file = os.path.join(tmpdir, 'compressed.mp4')
+        raw_file = os.path.join(tmpdir, 'decoded.raw')
+        with open(video_file, 'wb') as f:
+            f.write(compressed_data)
+        cmd = ['ffmpeg', '-y', '-i', video_file, '-pix_fmt', 'gray',
+               '-f', 'rawvideo', raw_file]
+        t0 = time.time()
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        decompress_time = time.time() - t0
+        if result.returncode != 0:
+            raise RuntimeError(f"Decoding failed: {result.stderr[:500]}")
+        pixels_uint8 = np.fromfile(raw_file, dtype=np.uint8)
+
+    if metadata.get('tiling', {}).get('tiled', False):
+        tiling = metadata['tiling']
+        grid_size = tiling['grid_size']
+        tile_size = tiling['tile_size']
+        image_size = grid_size * tile_size
+        pixels_uint8 = untile_embeddings(
+            pixels_uint8[:image_size * image_size].reshape(image_size, image_size),
+            emb_dim, num_emb, grid_size, tiling['tiles_per_emb'], tile_size)
+    else:
+        pixels_uint8 = pixels_uint8[:num_emb * emb_dim]
+
+    pixels_uint8 = torch.from_numpy(pixels_uint8.copy()).reshape(num_emb, emb_dim)
+    qp = metadata['quant_params']
+    weights = (pixels_uint8.float() - qp['zero_point']) * qp['scale']
+    return weights, decompress_time
+
+
+def main():
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+    print("=" * 80)
+    print("PHASE 2A: UNIFORM CODEC COMPRESSION SWEEP (RETRAINED MODEL)")
+    print("=" * 80)
+
+    dlrm, test_ld, ln_emb, ln_bot, ln_top, m_spa, args = load_model_and_data()
+    state_dict = torch.load(MODEL_PATH, map_location='cpu')['state_dict']
+    emb_keys = [k for k in state_dict.keys() if 'emb_l' in k and 'weight' in k]
+    total_emb_size = sum(state_dict[k].numel() * 4 for k in emb_keys)
+    num_tables = len(emb_keys)
+
+    print(f"  Model: {MODEL_PATH}")
+    print(f"  Tables: {num_tables}")
+    print(f"  Total emb size: {total_emb_size/1024/1024:.2f} MB")
+
+    # Baseline
+    print("\n  Running baseline inference...")
+    baseline_acc, baseline_auc, baseline_infer = run_inference(dlrm, test_ld)
+    print(f"  BASELINE: acc={baseline_acc*100:.4f}%, AUC={baseline_auc:.6f}, "
+          f"infer={baseline_infer:.2f}s")
+
+    results = []
+
+    for crf in CRF_LEVELS:
+        drop_caches()
+        print(f"\n{'='*60}")
+        print(f"CRF = {crf}")
+        print(f"{'='*60}")
+
+        codec_args = get_codec_args(crf)
+        tot_comp = 0
+        tot_ct = 0.0
+        tot_dt = 0.0
+
+        # Compress and decompress each table
+        for t in range(num_tables):
+            weights = state_dict[emb_keys[t]]
+            table_size = weights.numel() * 4
+            try:
+                cdata, meta, ct = compress_table_with_codec(weights, codec_args)
+                dec_w, dt = decompress_table(cdata, meta)
+                tot_comp += len(cdata)
+                tot_ct += ct
+                tot_dt += dt
+                with torch.no_grad():
+                    dlrm.emb_l[t].weight.data = dec_w
+                if t % 5 == 0:
+                    print(f"  Table {t}/{num_tables}: {weights.shape} -> "
+                          f"{len(cdata)} bytes ({table_size/len(cdata):.1f}x)")
+            except Exception as e:
+                print(f"  Table {t} FAILED: {e}")
+                tot_comp += table_size
+
+        # Run inference with compressed weights
+        acc, auc, infer_t = run_inference(dlrm, test_ld)
+
+        # Restore original weights
+        for t in range(num_tables):
+            with torch.no_grad():
+                dlrm.emb_l[t].weight.data = state_dict[emb_keys[t]].clone()
+
+        comp_ratio = total_emb_size / tot_comp if tot_comp > 0 else 0
+
+        result = {
+            'crf': crf,
+            'compression_ratio': comp_ratio,
+            'accuracy': acc,
+            'accuracy_pct': acc * 100,
+            'auc': auc,
+            'accuracy_loss_pct': (baseline_acc - acc) * 100,
+            'auc_loss': baseline_auc - auc,
+            'compressed_size': tot_comp,
+            'compressed_mb': tot_comp / 1024 / 1024,
+            'compress_time': tot_ct,
+            'decompress_time': tot_dt,
+            'inference_time': infer_t,
+        }
+        results.append(result)
+
+        print(f"  CRF {crf}: ratio={comp_ratio:.2f}x, "
+              f"acc={acc*100:.4f}% (loss {result['accuracy_loss_pct']:.4f}%), "
+              f"AUC={auc:.6f} (loss {result['auc_loss']:.6f}), "
+              f"size={tot_comp/1024/1024:.2f}MB, "
+              f"ct={tot_ct:.2f}s, dt={tot_dt:.2f}s, infer={infer_t:.2f}s")
+
+    # Write results
+    out_path = os.path.join(RESULTS_DIR, "retrained_uniform_results.md")
+    with open(out_path, 'w') as f:
+        f.write("# Retrained Model: Uniform Codec Compression Results\n\n")
+        f.write("## Baseline Model\n\n")
+        f.write(f"- **Model:** `{MODEL_PATH}`\n")
+        f.write(f"- **Embedding tables:** {num_tables}\n")
+        f.write(f"- **Total embedding size:** {total_emb_size:,} bytes "
+                f"({total_emb_size/1024/1024:.2f} MB)\n")
+        f.write(f"- **Baseline accuracy:** {baseline_acc*100:.4f}%\n")
+        f.write(f"- **Baseline AUC:** {baseline_auc:.6f}\n")
+        f.write(f"- **Baseline inference time:** {baseline_infer:.2f}s\n\n")
+
+        f.write("## CRF Quality Sweep (libx265, ultrafast preset)\n\n")
+        f.write("| CRF | Comp Ratio | Accuracy (%) | AUC | Acc Loss (%) | AUC Loss | "
+                "Compressed (MB) | Compress (s) | Decompress (s) | Inference (s) |\n")
+        f.write("|-----|-----------|-------------|------|-------------|----------|"
+                "----------------|-------------|---------------|---------------|\n")
+        for r in results:
+            f.write(f"| {r['crf']} | {r['compression_ratio']:.2f}x "
+                    f"| {r['accuracy_pct']:.4f} | {r['auc']:.6f} "
+                    f"| {r['accuracy_loss_pct']:.4f} | {r['auc_loss']:.6f} "
+                    f"| {r['compressed_mb']:.2f} | {r['compress_time']:.2f} "
+                    f"| {r['decompress_time']:.2f} | {r['inference_time']:.2f} |\n")
+
+        f.write("\n## Validation\n\n")
+        all_valid = True
+        for r in results:
+            issues = []
+            if r['compression_ratio'] <= 1:
+                issues.append(f"compression_ratio={r['compression_ratio']:.2f}")
+            if not (0.5 <= r['accuracy'] <= 1.0):
+                issues.append(f"accuracy={r['accuracy']:.4f}")
+            if not (0.5 <= r['auc'] <= 1.0):
+                issues.append(f"AUC={r['auc']:.6f}")
+            if r['compressed_size'] <= 0:
+                issues.append("compressed_size<=0")
+            if r['compress_time'] <= 0:
+                issues.append("compress_time<=0")
+            if r['decompress_time'] <= 0:
+                issues.append("decompress_time<=0")
+            if r['inference_time'] <= 0:
+                issues.append("inference_time<=0")
+            if issues:
+                f.write(f"- FAIL CRF {r['crf']}: {', '.join(issues)}\n")
+                all_valid = False
+        if all_valid:
+            f.write("- ALL CHECKS PASSED\n")
+
+    print(f"\nResults written to: {out_path}")
+
+    # Also save JSON for programmatic use
+    json_path = os.path.join(RESULTS_DIR, "retrained_uniform_results.json")
+    with open(json_path, 'w') as f:
+        json.dump({
+            'baseline': {
+                'accuracy': baseline_acc,
+                'auc': baseline_auc,
+                'inference_time': baseline_infer,
+                'total_emb_size': total_emb_size,
+                'num_tables': num_tables,
+                'model_path': MODEL_PATH,
+            },
+            'results': results,
+        }, f, indent=2)
+    print(f"JSON saved to: {json_path}")
+
+    print("\n" + "=" * 80)
+    print("PHASE 2A COMPLETE")
+    print("=" * 80)
+
+
+if __name__ == "__main__":
+    main()

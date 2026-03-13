@@ -998,6 +998,9 @@ def getCriteoAdData(
             for k, line in enumerate(f):
                 # process a line (data point)
                 line = line.split("\t")
+                # pad to 40 fields if line is short (missing trailing fields)
+                while len(line) < 40:
+                    line.append("0")
                 # set missing values to zero
                 for j in range(len(line)):
                     if (line[j] == "") or (line[j] == "\n"):

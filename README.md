@@ -129,6 +129,9 @@ python3 benchmark_python_vs_cpp_inference.py --num-batches 500 --resolution 1080
 
 # Subsequent runs (load existing compressed frames, skip encoding)
 python3 benchmark_python_vs_cpp_inference.py --num-batches 500 --compressed-dir results/demo_crf0_1080p
+
+# Pre-decode all frames instead of LRU cache (experiment 4 only)
+python3 benchmark_python_vs_cpp_inference.py --num-batches 500 --cache-size 0
 ```
 
 Runs 4 experiments on the same compressed model:
@@ -136,9 +139,9 @@ Runs 4 experiments on the same compressed model:
 | Experiment | What it tests |
 |-----------|---------------|
 | Baseline | Full fp32, no compression (reference) |
-| Python compressed | Pure Python: PyAV in-memory H.265 decode, reshape+transpose untiling, numpy dequant |
-| C++ compressed | C++ in-memory H.265 decode, fused gather+dequant from tiled frame, merged mapping |
-| Full C++ fast_forward | Single C++ call per batch, all 26 tables, pre-decoded frames, zero Python loop |
+| Python compressed | Pure Python: PyAV in-memory H.265 decode, reshape+transpose untiling, numpy dequant. **Decodes all frames every batch (no cache)** to measure raw per-operation overhead |
+| C++ compressed | C++ in-memory H.265 decode, fused gather+dequant from tiled frame, merged mapping. **Decodes all frames every batch (no cache)** to measure raw per-operation overhead |
+| Full C++ fast_forward | Single C++ call per batch + LRU frame cache (default 20), on-demand H.265 decode on miss |
 
 ## How It Works
 
@@ -247,7 +250,19 @@ at::parallel_for(0, K, 128, [&](int64_t begin, int64_t end) {
 | Hot forward + pooling | Separate gather, then scatter_add | Fused accumulate in one loop |
 | Parallelism | Single-threaded (GIL) | `at::parallel_for` across cores |
 
-### Measured Inference Overhead (Kaggle, 1080p, 500 batches)
+### Measured Inference Overhead (Kaggle, 1080p)
+
+With LRU frame cache (default `--cache-size 20`), frequency reordering ensures >99% cache hit rate — H.265 decodes are rare after warmup:
+
+```
+Experiment              Latency     vs Baseline    AUC        Cache Hit
+Baseline (fp32)          4.29 ms       —           0.804736      —
+C++ + LRU cache=16       2.36 ms      -45%         0.804736    99.8%
+C++ + LRU cache=8        2.45 ms      -43%         0.804736    92%
+Full C++ fast_forward    2.48 ms      -42%         0.804736      —
+```
+
+Without cache (`--cache-size 0`), every cold batch decodes H.265 from RAM:
 
 ```
 Experiment              Latency     vs Baseline    AUC
@@ -257,12 +272,12 @@ C++ compressed          14.94 ms      +163%        0.804733
 Full C++ fast_forward    3.01 ms       -47%        0.804733
 ```
 
-Per-operation breakdown (ms/batch):
+Per-operation breakdown without cache (ms/batch):
 
 ```
 Operation                    Python       C++     Speedup
 Mapping + hot/cold split      1.31      0.69        1.9x
-H.265 decode (memory)          —          —      (cached, rare)
+H.265 decode (memory)          —          —      (on cache miss only)
 Frame untiling              722.93      0.00    (fused in C++)
 Row gather                    2.80      0.00    (fused in C++)
 Dequantization               11.15      0.00    (fused in C++)
@@ -270,7 +285,7 @@ Fused gather+dequant           —        7.09       104x
 Sum pooling                   4.61      0.00    (fused in C++)
 ```
 
-The full C++ path (`fast_forward`) is actually **47% faster than the uncompressed baseline** because it uses compact hot tensors + merged int32 mapping instead of full `nn.EmbeddingBag`.
+The full C++ path (`fast_forward`) is actually **45% faster than the uncompressed baseline** because it uses compact hot tensors + merged int32 mapping instead of full `nn.EmbeddingBag`. With LRU cache, the on-demand C++ path achieves similar latency since frequency reordering concentrates >95% of cold accesses into a few frames that stay cached.
 
 ## File Guide
 
