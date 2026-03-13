@@ -98,6 +98,20 @@ python3 benchmark_frame_packing.py
 
 Benchmarks individual operations (tiling, untiling, gather, fused encode) per frame in isolation without running the full model.
 
+Per-frame results (1080p, 129,600 rows/frame):
+
+| Operation | Python | C++ | Speedup |
+|-----------|--------|-----|---------|
+| Tile (rows → frame) | 2.71 ms | 0.25 ms | 11x |
+| Untile (frame → rows) | 2.92 ms | 0.04 ms | 82x |
+| Gather K=100 rows | 2.85 ms | 0.004 ms | 716x |
+| Gather K=1,000 rows | 2.88 ms | 0.023 ms | 124x |
+| Gather+dequant K=100 | 2.88 ms | 0.005 ms | 540x |
+| Fused encode pipeline | 5.72 ms | 0.098 ms | 59x |
+| Memory allocations | 16 MB | 2 MB | 8x less |
+
+At 4K (518,400 rows/frame), C++ selective gather is up to 5,547x faster than Python full-untile for K=10 rows.
+
 **Step 3: Compare Python vs C++ overhead during inference**
 
 ```bash
