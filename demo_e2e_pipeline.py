@@ -446,16 +446,12 @@ class SimpleCompressedEmbeddingBag(nn.Module):
         row_offsets = (cold_reordered_indices % self.rows_per_frame).long()
         unique_frames = torch.unique(frame_ids).tolist()
 
-        # Decode needed frames
-        for fid in unique_frames:
-            self._get_frame(fid)
-
-        # Gather rows from cached frames
+        # Gather rows: decode each frame and gather in one pass
         result = torch.zeros(len(cold_reordered_indices), EMB_DIM)
         for fid in unique_frames:
             mask = frame_ids == fid
             offsets = row_offsets[mask]
-            frame_data = self.cache[fid]
+            frame_data = self._get_frame(fid)
 
             if HAS_CPP and isinstance(frame_data, torch.Tensor) and frame_data.dim() == 2:
                 # C++ gather + dequant from tiled frame
