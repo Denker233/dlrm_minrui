@@ -151,12 +151,12 @@ Runs 4 experiments on the same compressed model:
 ```
 Trained DLRM Model (26 embedding tables, 2GB fp32)
   │
-  ├── Phase 1: Profile access patterns (test set)
+  ├── Phase 1: Profile access patterns
   │     → count per-row access frequency
   │
-  ├── Phase 2: Hot/Cold split
-  │     → Hot: top 4.3% of rows by frequency → keep as fp32
-  │     → Cold: remaining rows → sort by frequency (most accessed first)
+  ├── Phase 2: Hot/Cold split (top 4.3% by frequency → hot)
+  │     → Hot: top 4.3% of rows by access frequency → keep as fp32
+  │     → Cold: remaining 95.7% → sort by frequency (most accessed first)
   │
   ├── Phase 3: Compress cold embeddings
   │     → Quantize fp32 → uint8 (global min/max per table)
