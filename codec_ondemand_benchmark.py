@@ -1639,17 +1639,24 @@ def main():
                         table_frames[fid] = data
                 if not table_frames:
                     continue
-                # Sort by frame ID and concatenate into contiguous uint8 buffer
+                # Sort by frame ID, untile, and concatenate into contiguous uint8 buffer
                 sorted_fids = sorted(table_frames.keys())
                 padded_frames = []
                 for fid in sorted_fids:
                     frame = table_frames[fid]
-                    if frame.shape[0] < rows_per_frame:
-                        pad = np.zeros((rows_per_frame - frame.shape[0], EMB_DIM), dtype=np.uint8)
-                        frame = np.concatenate([frame, pad], axis=0)
-                    padded_frames.append(frame)
-                all_data = np.concatenate(padded_frames, axis=0)
-                frame_data_tensor = torch.from_numpy(all_data.copy())
+                    # Untile from (H, W) tiled format to (rows, D) row format
+                    if isinstance(frame, torch.Tensor) and frame.dim() == 2 and frame.shape[1] != EMB_DIM:
+                        rows = _C.untile_frame_to_rows(frame, rows_per_frame)
+                    elif isinstance(frame, np.ndarray) and frame.ndim == 2 and frame.shape[1] != EMB_DIM:
+                        rows = _C.untile_frame_to_rows(torch.from_numpy(frame), rows_per_frame)
+                    else:
+                        rows = torch.from_numpy(frame) if isinstance(frame, np.ndarray) else frame
+                    if rows.shape[0] < rows_per_frame:
+                        pad = torch.zeros(rows_per_frame - rows.shape[0], EMB_DIM, dtype=torch.uint8)
+                        rows = torch.cat([rows, pad], dim=0)
+                    padded_frames.append(rows)
+                all_data = torch.cat(padded_frames, dim=0)
+                frame_data_tensor = all_data
                 frame_ids_tensor = torch.tensor(sorted_fids, dtype=torch.long)
 
                 if use_bitmap:
