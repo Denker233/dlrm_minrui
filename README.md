@@ -190,7 +190,7 @@ Cache hit rate: ~60%              Cache hit rate: ~95%+
 Many H.265 decodes per batch      Rare H.265 decodes
 ```
 
-Reordering doesn't change compression ratio (same data, just reordered), but it concentrates most-accessed cold rows into fewer frames, making the LRU cache much more effective. This also steers H.265 compression errors away from frequently-accessed rows (3.9x less AUC loss vs random ordering).
+Reordering doesn't change compression ratio (same data, just reordered), but it concentrates most-accessed cold rows into fewer frames, making the LRU cache much more effective. This also steers H.265 compression errors away from frequently-accessed rows (1.6x less AUC loss vs random ordering).
 
 ### In-Memory Compressed Storage
 
@@ -317,7 +317,7 @@ H.265 decode dominates when decoding all frames every batch (~116ms, same cost f
 |------|-------------|---------|
 | `experiment_mlsys_baselines.py` | Compare H.265 vs INT8, INT4, PQ, SVD, pruning, Zstd | ~2 hours |
 | `experiment_crf_and_entropy.py` | CRF sweep + per-table entropy analysis | ~1 hour |
-| `experiment_crf_cache_memory.py` | Memory breakdown + cache sizing for Kaggle & Terabyte | ~1 hour |
+| `experiment_crf_cache_memory.py` | Memory breakdown + cache sizing | ~1 hour |
 | `experiment_intrinsic_compressibility.py` | Why embeddings compress well: entropy, sparsity, ordering effects | ~3 hours |
 
 ### Figure Generation
@@ -330,14 +330,13 @@ H.265 decode dominates when decoding all frames every batch (~116ms, same cost f
 
 ## Key Results
 
-### Headline Numbers
+### Headline Numbers (Kaggle, D=16)
 
-| Metric | Kaggle (D=16) | Terabyte (D=64) |
-|--------|--------------|-----------------|
-| Storage compression | 23.0x (89 MB) | 21.3x (260 MB) |
-| Runtime memory | 7.8x (263 MB) | 8.6x (641 MB) |
-| AUC loss (CRF=18) | -0.037% | -0.050% |
-| Cold uint8 ratio | 1360x | 59x |
+| Metric | Value |
+|--------|-------|
+| Compression ratio (cold rows) | 1360x |
+| Runtime memory | 7.8x (2,058 → 263 MB) |
+| AUC loss (CRF=18) | -0.037% |
 
 ### Comparison with Prior Methods (Kaggle)
 
