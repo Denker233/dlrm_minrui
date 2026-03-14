@@ -22,7 +22,6 @@ import os, sys, time, json, gc, argparse, io
 import numpy as np
 import torch
 import torch.nn as nn
-from collections import Counter
 from sklearn.metrics import roc_auc_score
 import psutil
 
@@ -55,9 +54,8 @@ TEST_BATCH_SIZE = 2048
 EMB_DIM = 16
 TILE_H, TILE_W = 4, 4
 
-HOT_COVERAGE = 0.80           # top 80% accesses → hot
+HOT_FRACTION = 0.043           # top 4.3% of rows by frequency → hot
 LARGE_TABLE_THRESHOLD = 50000  # only compress tables with >50K rows
-PROFILE_BATCHES = 0            # 0 = profile ALL training batches (recommended for accuracy)
 
 RESOLUTIONS = {
     '1080p': (1920, 1080),
@@ -134,26 +132,25 @@ def load_model_and_data():
 # ============================================================
 # Step 1: Profile access patterns → hot/cold split
 # ============================================================
-def profile_and_split(train_ld, ln_emb, state_dict, emb_keys):
+def profile_and_split(test_ld, ln_emb, state_dict, emb_keys):
     num_tables = len(ln_emb)
     large_tables = [t for t in range(num_tables) if ln_emb[t] >= LARGE_TABLE_THRESHOLD]
-    log(f"\nStep 1: Profiling access patterns ({PROFILE_BATCHES} batches)")
+    log(f"\nStep 1: Profiling access patterns (test set)")
     log(f"  {len(large_tables)} large tables (>= {LARGE_TABLE_THRESHOLD} rows): {large_tables}")
 
-    # Count access frequency per row per table
-    access_counts = {t: Counter() for t in large_tables}
+    # Count access frequency per row per table (vectorized)
+    freq = {}
     n_batches = 0
-    for X, lS_o, lS_i, T in train_ld:
+    for X, lS_o, lS_i, T in test_ld:
         for t in large_tables:
-            indices = lS_i[t].numpy()
-            for idx in indices:
-                access_counts[t][idx] += 1
+            idx = lS_i[t].flatten() if isinstance(lS_i, (list, tuple)) else lS_i[t].flatten()
+            if t not in freq:
+                freq[t] = torch.zeros(ln_emb[t], dtype=torch.long)
+            freq[t].scatter_add_(0, idx.long(), torch.ones_like(idx, dtype=torch.long))
         n_batches += 1
-        if PROFILE_BATCHES > 0 and n_batches >= PROFILE_BATCHES:
-            break
     log(f"  Profiled {n_batches} batches")
 
-    # Hot/cold split: top rows covering HOT_COVERAGE of total accesses → hot
+    # Hot/cold split: top HOT_FRACTION of rows by frequency → hot
     is_hot = {}
     hot_indices = {}
     cold_indices = {}
@@ -162,45 +159,31 @@ def profile_and_split(train_ld, ln_emb, state_dict, emb_keys):
     cold_quant_params = {}
 
     for t in large_tables:
-        counts = access_counts[t]
-        total_accesses = sum(counts.values())
-        sorted_rows = sorted(counts.items(), key=lambda x: -x[1])
-
-        hot_set = set()
-        cumulative = 0
-        for row_id, cnt in sorted_rows:
-            if cumulative >= total_accesses * HOT_COVERAGE:
-                break
-            hot_set.add(row_id)
-            cumulative += cnt
-
-        # Build masks
         n = ln_emb[t]
+        n_hot = max(1, int(n * HOT_FRACTION))
+        sorted_idx = freq[t].argsort(descending=True)
+        hot_idx = sorted_idx[:n_hot]
+        cold_idx = sorted_idx[n_hot:]  # already sorted by descending frequency
+
         is_hot_t = torch.zeros(n, dtype=torch.bool)
-        for r in hot_set:
-            is_hot_t[r] = True
+        is_hot_t[hot_idx] = True
         is_hot[t] = is_hot_t
-        hot_indices[t] = torch.where(is_hot_t)[0]
-        cold_indices[t] = torch.where(~is_hot_t)[0]
+        hot_indices[t] = hot_idx
+        cold_indices[t] = cold_idx
 
-        n_hot = len(hot_indices[t])
-        n_cold = len(cold_indices[t])
+        n_cold = len(cold_idx)
 
-        # Sort cold rows by access frequency (most accessed first)
-        cold_set = cold_indices[t].tolist()
-        cold_freq = [(r, counts.get(r, 0)) for r in cold_set]
-        cold_freq.sort(key=lambda x: -x[1])
-        cold_order = [r for r, _ in cold_freq]
+        # Cold rows already sorted by descending frequency (from argsort above)
+        cold_order = cold_idx
 
         # Build orig→cold_reordered mapping
         o2c = torch.full((n,), -1, dtype=torch.long)
-        for new_idx, orig_idx in enumerate(cold_order):
-            o2c[orig_idx] = new_idx
+        o2c[cold_order] = torch.arange(n_cold)
         orig_to_cold_reordered[t] = o2c
 
         # Quantize cold embeddings (global min-max to uint8)
         w = state_dict[emb_keys[t]]
-        cold_w = w[torch.tensor(cold_order)]
+        cold_w = w[cold_order]
         mn = cold_w.min().item()
         mx = cold_w.max().item()
         s = (mx - mn) / 255.0
@@ -650,7 +633,7 @@ def main():
     log("=" * 70)
     (large_tables, is_hot, hot_indices, cold_indices,
      orig_to_cold_reordered, cold_weights_q, cold_quant_params) = \
-        profile_and_split(train_ld, ln_emb, state_dict, emb_keys)
+        profile_and_split(test_ld, ln_emb, state_dict, emb_keys)
 
     # Step 2: Encode (or load existing compressed frames)
     log("\n" + "=" * 70)

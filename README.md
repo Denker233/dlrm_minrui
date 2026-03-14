@@ -266,32 +266,32 @@ C++ + LRU cache=8        2.45 ms      -43%         0.802486    92.5%
 Full C++ (pre-decoded)   2.48 ms      -42%         0.802496      —
 ```
 
-**Python vs C++ raw overhead** (`benchmark_python_vs_cpp_inference.py`, 500 batches, CRF=0 lossless):
+**Python vs C++ raw overhead** (`benchmark_python_vs_cpp_inference.py`, 500 batches, CRF=0 lossless, OS page cache dropped between experiments):
 
 Python and C++ compressed experiments decode all frames every batch (no cache) to measure raw per-operation cost. Full C++ uses LRU cache (default 20).
 
 ```
 Experiment              Latency     vs Baseline    AUC        Cache Hit
-Baseline (fp32)          6.30 ms       —           0.804736      —
-Python compressed      159.04 ms    +2,426%        0.803988      —
-C++ compressed         126.06 ms    +1,902%        0.803988      —
-Full C++ + cache=20      2.32 ms      -63%         0.803988    99.7%
+Baseline (fp32)          4.63 ms       —           0.804736      —
+Python compressed       96.16 ms    +1,978%        0.803617      —
+C++ compressed          59.54 ms    +1,186%        0.803617      —
+Full C++ + cache=20      2.55 ms      -45%         0.803617    99.7%
 ```
 
 Per-operation breakdown, Python vs C++ compressed (ms/batch, decode all frames):
 
 ```
 Operation                    Python       C++
-H.265 decode (in-memory)    116.60     115.28      ~1x (both use libavcodec)
-Frame untile + gather        24.56        —        (fused in C++)
-Dequantization                1.30        —        (fused in C++)
-Fused gather+dequant           —        116.77     includes decode in fused path
-Mapping + hot/cold split      1.23       0.73       1.7x
-Scatter + pooling             4.64       0.44      10.6x
-Total embedding             155.03     122.28       1.3x
+H.265 decode (in-memory)     56.15      50.16      ~1x (both use libavcodec)
+Frame untile + gather        24.25        —        (fused in C++)
+Dequantization                1.21        —        (fused in C++)
+Fused gather+dequant           —        51.23      includes decode in fused path
+Mapping + hot/cold split      1.26       0.62       2.0x
+Scatter + pooling             4.18       0.37      11.3x
+Total embedding              92.92      56.07       1.7x
 ```
 
-H.265 decode dominates when decoding all frames every batch (~116ms, same cost for Python and C++). The C++ advantage comes from fused gather+dequant directly from tiled frames (O(K) vs Python's O(N) full untile). With LRU cache (>99% hit rate), H.265 decodes are rare and the full C++ path is **63% faster than the uncompressed baseline** because it uses compact hot tensors + merged int32 mapping instead of full `nn.EmbeddingBag`.
+H.265 decode dominates when decoding all frames every batch (~53ms, same cost for Python and C++). The C++ advantage comes from fused gather+dequant directly from tiled frames (O(K) vs Python's O(N) full untile). With LRU cache (>99% hit rate), H.265 decodes are rare and the full C++ path is **45% faster than the uncompressed baseline** because it uses compact hot tensors + merged int32 mapping instead of full `nn.EmbeddingBag`.
 
 ## File Guide
 

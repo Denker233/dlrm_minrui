@@ -78,12 +78,10 @@ def drop_caches():
     """Drop OS page cache, dentries, and inodes between experiments."""
     gc.collect()
     torch.cuda.empty_cache() if torch.cuda.is_available() else None
-    try:
-        os.system('sync')
-        with open('/proc/sys/vm/drop_caches', 'w') as f:
-            f.write('3\n')
+    ret = os.system('sync && sudo sh -c "echo 3 > /proc/sys/vm/drop_caches" 2>/dev/null')
+    if ret == 0:
         log("  [dropped OS page cache]")
-    except (PermissionError, OSError):
+    else:
         log("  [WARNING: cannot drop OS page cache (no root)]")
 
 
