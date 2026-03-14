@@ -43,7 +43,6 @@ python3 input/train_split.py 1
 ### Build C++ Extension
 
 ```bash
-cd ~/dlrm_minrui
 python3 setup_compressed_emb.py build_ext --inplace
 ```
 
@@ -152,11 +151,11 @@ Runs 4 experiments on the same compressed model:
 ```
 Trained DLRM Model (26 embedding tables, 2GB fp32)
   │
-  ├── Phase 1: Profile access patterns (all training batches)
+  ├── Phase 1: Profile access patterns (test set)
   │     → count per-row access frequency
   │
   ├── Phase 2: Hot/Cold split
-  │     → Hot: top rows covering 80% accesses → keep as fp32
+  │     → Hot: top 4.3% of rows by frequency → keep as fp32
   │     → Cold: remaining rows → sort by frequency (most accessed first)
   │
   ├── Phase 3: Compress cold embeddings
@@ -310,6 +309,7 @@ H.265 decode dominates when decoding all frames every batch (~53ms, same cost fo
 | `demo_e2e_pipeline.py` | **End-to-end demo.** Load model → profile → compress → inference → compare with baseline. Supports `--compressed-dir` to skip encoding on repeat runs |
 | `benchmark_python_vs_cpp_inference.py` | **Python vs C++ during inference.** Measures per-operation overhead (H.265 decode, untiling, gather, dequant, pooling) across 4 experiments. Supports `--compressed-dir` |
 | `benchmark_frame_packing.py` | **Standalone microbenchmark.** Tests tiling, untiling, selective gather, fused encode per frame in isolation (no model needed) |
+| `benchmark_full_comparison.py` | **Cache sweep benchmark.** Compares LRU cache sizes (8/16/32 frames) with full pre-decode and measures cache hit rates |
 
 ### Experiment Scripts
 

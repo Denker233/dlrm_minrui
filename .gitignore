@@ -9,3 +9,7 @@ input/
 logs/
 results/
 .claude/
+models/
+CAFE/
+CAFE_old/
+run_kaggle_pt/
