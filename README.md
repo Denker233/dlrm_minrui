@@ -334,7 +334,7 @@ H.265 decode dominates when decoding all frames every batch (~53ms, same cost fo
 
 | Metric | Value |
 |--------|-------|
-| Compression ratio (fp32 → H.265) | 1360x |
+| Storage compression ratio | 1360x |
 | Runtime memory | 7.8x (2,058 → 263 MB) |
 | AUC loss (CRF=18) | -0.037% |
 
