@@ -90,6 +90,8 @@ python3 demo_e2e_pipeline.py --help
 
 ### Option B: Step-by-Step (separate scripts)
 
+> **Prerequisite:** Run the demo first (`python3 demo_e2e_pipeline.py --crf 18`) to generate profiling data in `results/hotcold/` and `results/reorder/`. The step-by-step scripts load this data and will fail without it.
+
 **Step 1: Profile + Compress + Run on-demand inference**
 
 ```bash

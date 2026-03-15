@@ -132,16 +132,16 @@ def load_model_and_data():
 # ============================================================
 # Step 1: Profile access patterns → hot/cold split
 # ============================================================
-def profile_and_split(test_ld, ln_emb, state_dict, emb_keys):
+def profile_and_split(data_ld, ln_emb, state_dict, emb_keys):
     num_tables = len(ln_emb)
     large_tables = [t for t in range(num_tables) if ln_emb[t] >= LARGE_TABLE_THRESHOLD]
-    log(f"\nStep 1: Profiling access patterns (test set)")
+    log(f"\nStep 1: Profiling access patterns")
     log(f"  {len(large_tables)} large tables (>= {LARGE_TABLE_THRESHOLD} rows): {large_tables}")
 
     # Count access frequency per row per table (vectorized)
     freq = {}
     n_batches = 0
-    for X, lS_o, lS_i, T in test_ld:
+    for X, lS_o, lS_i, T in data_ld:
         for t in large_tables:
             idx = lS_i[t].flatten() if isinstance(lS_i, (list, tuple)) else lS_i[t].flatten()
             if t not in freq:
@@ -199,6 +199,27 @@ def profile_and_split(test_ld, ln_emb, state_dict, emb_keys):
         cold_q_mb = n_cold * EMB_DIM / 1024 / 1024
         log(f"  Table {t}: {n:,} rows → {n_hot:,} hot ({hot_mb:.1f}MB fp32) + "
             f"{n_cold:,} cold ({cold_mb:.1f}MB fp32 → {cold_q_mb:.1f}MB uint8)")
+
+    # Save profiling data so step-by-step scripts can reuse it
+    hotcold_dir = os.path.join("results", "hotcold")
+    reorder_dir = os.path.join("results", "reorder")
+    os.makedirs(hotcold_dir, exist_ok=True)
+    os.makedirs(reorder_dir, exist_ok=True)
+    for t in range(num_tables):
+        if t in is_hot:
+            torch.save(is_hot[t], os.path.join(hotcold_dir, f'is_hot_{t}.pt'))
+        else:
+            torch.save(torch.zeros(ln_emb[t], dtype=torch.bool),
+                       os.path.join(hotcold_dir, f'is_hot_{t}.pt'))
+    for t in large_tables:
+        torch.save(orig_to_cold_reordered[t], os.path.join(reorder_dir, f'orig_to_cold_reordered_{t}.pt'))
+        np.save(os.path.join(reorder_dir, f'cold_order_{t}.npy'),
+                cold_indices[t].numpy())
+        with open(os.path.join(reorder_dir, f'num_cold_{t}.txt'), 'w') as f:
+            f.write(str(len(cold_indices[t])))
+    with open(os.path.join(hotcold_dir, '.done'), 'w') as f:
+        f.write(f'Completed at {time.strftime("%Y-%m-%d %H:%M:%S")}\n')
+    log(f"  Saved profiling data to {hotcold_dir}/ and {reorder_dir}/")
 
     return large_tables, is_hot, hot_indices, cold_indices, orig_to_cold_reordered, \
            cold_weights_q, cold_quant_params
