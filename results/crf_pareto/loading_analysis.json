@@ -1,0 +1,13 @@
+{
+  "measured_rates": {
+    "ssd_cached_gbps": 2.5700327685421995,
+    "decode_single_frame_gbps": 0.9726088056680162,
+    "decode_1080p_gbps": 5.6
+  },
+  "kaggle_measured": {
+    "read_uncomp_ms": 782,
+    "read_comp_ms": 0.1,
+    "decode_pool_ms": 494,
+    "total_comp_ms": 494.1
+  }
+}

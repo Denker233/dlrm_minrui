@@ -1,151 +1,39 @@
-[20:23:24] ======================================================================
-[20:23:24] MLSYS REVIEWER EXPERIMENTS
-[20:23:24] ======================================================================
-[20:23:24] 
+[06:31:19] ======================================================================
+[06:31:19] MLSYS REVIEWER EXPERIMENTS
+[06:31:19] ======================================================================
+[06:31:19] 
 ######################################################################
-[20:23:24] # KAGGLE
-[20:23:24] ######################################################################
-[20:23:24] Loading kaggle dataset...
-[20:25:31]   26 tables, D=16
-[20:25:35] Large tables: [2, 3, 9, 11, 15, 20, 23, 25]
-[20:25:35] 
+[06:31:19] # KAGGLE
+[06:31:19] ######################################################################
+[06:31:19] Loading kaggle dataset...
+[06:47:57]   26 tables, D=16
+[06:48:03] Large tables: [2, 3, 9, 11, 15, 20, 23, 25]
+[06:48:03] 
 Profiling access frequencies...
-[20:26:02]   Table 2: 10,131,227 rows, 946,681 accessed (9.3%)
-[20:26:02]   Table 3: 2,202,608 rows, 305,825 accessed (13.9%)
-[20:26:02]   Table 9: 93,145 rows, 45,643 accessed (49.0%)
-[20:26:02]   Table 11: 8,351,593 rows, 814,963 accessed (9.8%)
-[20:26:02]   Table 15: 5,461,306 rows, 594,358 accessed (10.9%)
-[20:26:02]   Table 20: 7,046,547 rows, 720,100 accessed (10.2%)
-[20:26:02]   Table 23: 286,181 rows, 78,300 accessed (27.4%)
-[20:26:02]   Table 25: 142,572 rows, 54,262 accessed (38.1%)
-[20:26:03]   Table 2: 435,642 hot (4.3%), 9,695,585 cold
-[20:26:03]   Table 3: 94,712 hot (4.3%), 2,107,896 cold
-[20:26:03]   Table 9: 4,005 hot (4.3%), 89,140 cold
-[20:26:03]   Table 11: 359,118 hot (4.3%), 7,992,475 cold
-[20:26:03]   Table 15: 234,836 hot (4.3%), 5,226,470 cold
-[20:26:03]   Table 20: 303,001 hot (4.3%), 6,743,546 cold
-[20:26:03]   Table 23: 12,305 hot (4.3%), 273,876 cold
-[20:26:03]   Table 25: 6,130 hot (4.3%), 136,442 cold
-[20:26:03] 
-======================================================================
-[20:26:03] EXPERIMENT 1: Fair Baseline Decomposition (kaggle)
-[20:26:03] ======================================================================
-[20:26:03] 
-  Config A: PyTorch EmbeddingBag fp32
-[20:26:37]     Run 1: batch=4.47ms, emb=1.39ms
-[20:27:10]     Run 2: batch=4.44ms, emb=1.39ms
-[20:27:43]     Run 3: batch=4.35ms, emb=1.31ms
-[20:28:17]   Config A median: batch=4.44ms, emb=1.39ms, AUC=0.802497
-[20:28:17] 
-  Config B: C++ fast_forward, ALL tables STANDARD fp32
-[20:28:47]     Run 1: batch=2.45ms, emb=0.27ms
-[20:29:17]     Run 2: batch=2.45ms, emb=0.29ms
-[20:29:47]     Run 3: batch=2.35ms, emb=0.17ms
-[20:30:17]   Config B median: batch=2.45ms, emb=0.27ms, AUC=0.802497
-[20:30:17] 
-  Config C: C++ fast_forward with hot/cold split + uint8 cold
-[20:30:45]   Need 20 unique cold frames
-[20:30:48]   Cold frames encoded and registered
-[20:31:18]     Run 1: batch=2.48ms, emb=0.23ms
-[20:31:48]     Run 2: batch=2.43ms, emb=0.22ms
-[20:32:18]     Run 3: batch=2.46ms, emb=0.23ms
-[20:32:49]   Config C median: batch=2.46ms, emb=0.23ms, AUC=0.802496
-[20:32:49] 
-  DECOMPOSITION:
-[20:32:49]     A→B (C++ benefit):          4.44 → 2.45 ms (1.81x)
-[20:32:49]     B→C (compression benefit):  2.45 → 2.46 ms (0.99x)
-[20:32:49]     A→C (total):                4.44 → 2.46 ms (1.80x)
-[20:32:49]   Experiment 2 already done (results/mlsys_baselines/kaggle_exp2.done)
-[20:32:49]   Experiment 3 already done (results/mlsys_baselines/kaggle_exp3.done)
-[20:32:49] 
-======================================================================
-[20:32:49] EXPERIMENT 4: CPU Cache Profiling (kaggle)
-[20:32:49] ======================================================================
-[20:32:49]   config_A: warming up (50 batches)...
-[20:32:50]   config_A: running 200 measured batches...
-[20:32:56]   config_A: lat=4.33ms, L1 miss=8.0542%, LLC miss=37.7564%, IPC=0.348
-[20:32:56]   config_B: warming up (50 batches)...
-[20:32:57]   config_B: running 200 measured batches...
-[20:33:02]   config_B: lat=2.42ms, L1 miss=8.1654%, LLC miss=35.3475%, IPC=0.377
-[20:33:32]   config_C: warming up (50 batches)...
-[20:33:33]   config_C: running 200 measured batches...
-[20:33:39]   config_C: lat=2.54ms, L1 miss=8.1848%, LLC miss=39.5781%, IPC=0.375
-[20:33:39]   Experiment 5 already done (results/mlsys_baselines/kaggle_exp5.done)
-[20:33:39] Summary appended to results/mlsys_baselines/summary.md
-[20:33:39] 
+[06:49:24]   Table 2: 10,131,227 rows, 946,681 accessed (9.3%)
+[06:49:24]   Table 3: 2,202,608 rows, 305,825 accessed (13.9%)
+[06:49:24]   Table 9: 93,145 rows, 45,643 accessed (49.0%)
+[06:49:24]   Table 11: 8,351,593 rows, 814,963 accessed (9.8%)
+[06:49:24]   Table 15: 5,461,306 rows, 594,358 accessed (10.9%)
+[06:49:24]   Table 20: 7,046,547 rows, 720,100 accessed (10.2%)
+[06:49:24]   Table 23: 286,181 rows, 78,300 accessed (27.4%)
+[06:49:24]   Table 25: 142,572 rows, 54,262 accessed (38.1%)
+[06:49:25]   Table 2: 435,642 hot (4.3%), 9,695,585 cold
+[06:49:25]   Table 3: 94,712 hot (4.3%), 2,107,896 cold
+[06:49:26]   Table 9: 4,005 hot (4.3%), 89,140 cold
+[06:49:27]   Table 11: 359,118 hot (4.3%), 7,992,475 cold
+[06:49:27]   Table 15: 234,836 hot (4.3%), 5,226,470 cold
+[06:49:28]   Table 20: 303,001 hot (4.3%), 6,743,546 cold
+[06:49:28]   Table 23: 12,305 hot (4.3%), 273,876 cold
+[06:49:28]   Table 25: 6,130 hot (4.3%), 136,442 cold
+[06:49:28]   Experiment 1 already done (results/mlsys_baselines/kaggle_exp1.done)
+[06:49:28]   Experiment 2 already done (results/mlsys_baselines/kaggle_exp2.done)
+[06:49:28]   Experiment 3 already done (results/mlsys_baselines/kaggle_exp3.done)
+[06:49:28]   Experiment 4 already done (results/mlsys_baselines/kaggle_exp4.done)
+[06:49:28]   Experiment 5 already done (results/mlsys_baselines/kaggle_exp5.done)
+[06:49:28] Summary appended to results/mlsys_baselines/summary.md
+[06:49:29] 
 ######################################################################
-[20:33:39] # TERABYTE
-[20:33:39] ######################################################################
-[20:33:39] Loading terabyte dataset...
-[20:37:35]   26 tables, D=64
-[20:37:40] Large tables: [0, 9, 10, 11, 19, 20, 21, 22]
-[20:37:41] 
-Profiling access frequencies...
-[20:39:24]   Table 0: 5,449,495 rows, 1,330,754 accessed (24.4%)
-[20:39:24]   Table 9: 3,948,314 rows, 937,737 accessed (23.8%)
-[20:39:24]   Table 10: 396,536 rows, 133,192 accessed (33.6%)
-[20:39:24]   Table 11: 143,256 rows, 81,637 accessed (57.0%)
-[20:39:24]   Table 19: 5,733,362 rows, 1,408,013 accessed (24.6%)
-[20:39:24]   Table 20: 1,790,249 rows, 443,819 accessed (24.8%)
-[20:39:24]   Table 21: 4,944,292 rows, 1,191,135 accessed (24.1%)
-[20:39:24]   Table 22: 202,406 rows, 93,953 accessed (46.4%)
-[20:39:24]   Table 0: 234,328 hot (4.3%), 5,215,167 cold
-[20:39:24]   Table 9: 169,777 hot (4.3%), 3,778,537 cold
-[20:39:24]   Table 10: 17,051 hot (4.3%), 379,485 cold
-[20:39:24]   Table 11: 6,160 hot (4.3%), 137,096 cold
-[20:39:24]   Table 19: 246,534 hot (4.3%), 5,486,828 cold
-[20:39:25]   Table 20: 76,980 hot (4.3%), 1,713,269 cold
-[20:39:25]   Table 21: 212,604 hot (4.3%), 4,731,688 cold
-[20:39:25]   Table 22: 8,703 hot (4.3%), 193,703 cold
-[20:39:25] 
-======================================================================
-[20:39:25] EXPERIMENT 1: Fair Baseline Decomposition (terabyte)
-[20:39:25] ======================================================================
-[20:39:25] 
-  Config A: PyTorch EmbeddingBag fp32
-[20:41:38]     Run 1: batch=5.30ms, emb=1.47ms
-[20:43:49]     Run 2: batch=5.28ms, emb=1.48ms
-[20:45:57]     Run 3: batch=5.22ms, emb=1.49ms
-[20:48:10]   Config A median: batch=5.28ms, emb=1.48ms, AUC=0.768818
-[20:48:10] 
-  Config B: C++ fast_forward, ALL tables STANDARD fp32
-[20:50:11]     Run 1: batch=3.63ms, emb=0.38ms
-[20:52:12]     Run 2: batch=3.71ms, emb=0.56ms
-[20:54:12]     Run 3: batch=3.59ms, emb=0.38ms
-[20:56:18]   Config B median: batch=3.63ms, emb=0.38ms, AUC=0.768818
-[20:56:18] 
-  Config C: C++ fast_forward with hot/cold split + uint8 cold
-[20:58:06]   Need 147 unique cold frames
-[20:58:35]   Cold frames encoded and registered
-[21:00:37]     Run 1: batch=3.60ms, emb=0.44ms
-[21:02:39]     Run 2: batch=3.57ms, emb=0.40ms
-[21:04:41]     Run 3: batch=3.57ms, emb=0.36ms
-[21:06:46]   Config C median: batch=3.57ms, emb=0.36ms, AUC=0.768818
-[21:06:46] 
-  DECOMPOSITION:
-[21:06:46]     A→B (C++ benefit):          5.28 → 3.63 ms (1.45x)
-[21:06:46]     B→C (compression benefit):  3.63 → 3.57 ms (1.02x)
-[21:06:46]     A→C (total):                5.28 → 3.57 ms (1.48x)
-[21:06:47]   Experiment 2 already done (results/mlsys_baselines/terabyte_exp2.done)
-[21:06:47]   Experiment 3 already done (results/mlsys_baselines/terabyte_exp3.done)
-[21:06:47] 
-======================================================================
-[21:06:47] EXPERIMENT 4: CPU Cache Profiling (terabyte)
-[21:06:47] ======================================================================
-[21:06:47]   config_A: warming up (50 batches)...
-[21:06:49]   config_A: running 200 measured batches...
-[21:06:56]   config_A: lat=5.63ms, L1 miss=9.0307%, LLC miss=36.0533%, IPC=0.387
-[21:06:56]   config_B: warming up (50 batches)...
-[21:06:57]   config_B: running 200 measured batches...
-[21:07:04]   config_B: lat=3.82ms, L1 miss=9.2984%, LLC miss=48.31%, IPC=0.416
-[21:09:22]   config_C: warming up (50 batches)...
-[21:09:24]   config_C: running 200 measured batches...
-[21:09:30]   config_C: lat=4.12ms, L1 miss=9.1083%, LLC miss=31.6373%, IPC=0.41
-[21:09:30]   Experiment 5 already done (results/mlsys_baselines/terabyte_exp5.done)
-[21:09:30] Summary appended to results/mlsys_baselines/summary.md
-[21:09:32] 
-All results saved to results/mlsys_baselines/all_experiments.json
-[21:09:32] 
-======================================================================
-[21:09:32] ALL EXPERIMENTS COMPLETE
-[21:09:32] ======================================================================
+[06:49:29] # TERABYTE
+[06:49:29] ######################################################################
+[06:49:29] Loading terabyte dataset...

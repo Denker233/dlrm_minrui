@@ -1,0 +1,83 @@
+{
+  "L0_fp32": {
+    "bytes": 2064987520,
+    "ratio_vs_fp32": 1.0
+  },
+  "L1_uint8": {
+    "bytes": 516246880,
+    "ratio_vs_fp32": 4.0
+  },
+  "L2_zstd_unsorted": {
+    "bytes": 76409004,
+    "ratio_vs_fp32": 27.025447419783145,
+    "ratio_vs_uint8": 6.756361854945786
+  },
+  "L2_zstd_sorted": {
+    "bytes": 76507711,
+    "ratio_vs_fp32": 26.99058033509851,
+    "ratio_vs_uint8": 6.747645083774628
+  },
+  "L3_dct_lossless_unsorted": {
+    "bytes": 113292645,
+    "ratio_vs_fp32": 18.22702188654877,
+    "improvement_from_dct": 0.674439227718622
+  },
+  "L3_dct_lossless_sorted": {
+    "bytes": 113474980,
+    "ratio_vs_fp32": 18.197734161310272,
+    "improvement_from_dct": 0.6742253754968717
+  },
+  "L4_dct_lossy_step4": {
+    "bytes": 10563014,
+    "ratio_vs_fp32": 195.4922638557518,
+    "improvement_from_lossy_quant": 10.742670605189012
+  },
+  "L4_dct_lossy_step8": {
+    "bytes": 7539890,
+    "ratio_vs_fp32": 273.8750193968347,
+    "improvement_from_lossy_quant": 15.049951657119665
+  },
+  "L4_dct_lossy_step16": {
+    "bytes": 7407754,
+    "ratio_vs_fp32": 278.7602720068728,
+    "improvement_from_lossy_quant": 15.318405551804231
+  },
+  "L4_dct_lossy_step32": {
+    "bytes": 6166460,
+    "ratio_vs_fp32": 334.8740638875465,
+    "improvement_from_lossy_quant": 18.401964822604867
+  },
+  "L4_dct_lossy_step64": {
+    "bytes": 6153168,
+    "ratio_vs_fp32": 335.5974548395233,
+    "improvement_from_lossy_quant": 18.441716527161294
+  },
+  "L4_dct_lossy_step128": {
+    "bytes": 2892676,
+    "ratio_vs_fp32": 713.8675468666383,
+    "improvement_from_lossy_quant": 39.22837538666619
+  },
+  "L5_h265_crf0_unsorted": {
+    "bytes": 77794086,
+    "ratio_vs_fp32": 26.54427381536432,
+    "improvement_over_dct_zstd": 1.456314365593292
+  },
+  "L5_h265_crf0_sorted": {
+    "bytes": 77834781,
+    "ratio_vs_fp32": 26.530395453929522,
+    "improvement_over_dct_zstd": 1.4578955390135935
+  },
+  "L5b_h265_crf0_nointra": {
+    "bytes": 1770991,
+    "ratio_vs_fp32": 1166.0067837724755,
+    "intra_contribution": 0.02275320849171529
+  },
+  "L6_h265_crf30_full (CABA": {
+    "bytes": 319361,
+    "ratio_vs_fp32": 6465.99778933558
+  },
+  "L6_h265_crf30_no intra (": {
+    "bytes": 82618,
+    "ratio_vs_fp32": 24994.4021883851
+  }
+}

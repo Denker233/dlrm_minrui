@@ -46,11 +46,41 @@ HOT_COVERAGE = 0.80
 LARGE_TABLE_THRESHOLD = 50000
 H265_CRF = 0  # lossless
 
-# Resolution configs: (name, width, height, pixels_per_frame)
+# Resolution configs: (name -> (width, height))
+# Entries with _crf suffix use lossy compression at the specified CRF
+# Entries with _zstd suffix use Zstd codec (flat storage, no tiling)
 RESOLUTIONS = {
     '480p':  (640, 480),
     '1080p': (1920, 1080),
     '4K':    (3840, 2160),
+    '1080p_crf18': (1920, 1080),
+    '1080p_crf30_nofilter': (1920, 1080),
+    '1080p_zstd3': (1920, 1080),
+    '1080p_zstd9': (1920, 1080),
+    '1080p_zstd19': (1920, 1080),
+}
+
+# CRF override per resolution name (default: H265_CRF=0 lossless)
+RES_CRF = {
+    '1080p_crf18': 18,
+    '1080p_crf30_nofilter': 30,
+}
+
+# Zstd configs: res_name -> zstd compression level
+RES_ZSTD = {
+    '1080p_zstd3': 3,
+    '1080p_zstd9': 9,
+    '1080p_zstd19': 19,
+}
+
+# Encoder preset override (default: 'ultrafast')
+RES_PRESET = {
+    '1080p_crf30_nofilter': 'medium',
+}
+
+# Extra x265 params per resolution name
+RES_EXTRA_X265 = {
+    '1080p_crf30_nofilter': 'no-deblock=1:no-sao=1',
 }
 
 RESULTS_DIR = "results"
@@ -206,7 +236,7 @@ def tiled_frame_to_rows(frame, width, height):
 # NEW H.265 ENCODING: Proper video resolution frames with 4x4 tiling
 # ============================================================
 def encode_h265_perframe(q_np, width, height, crf=0, output_dir=None, table_id=0,
-                         codec='h265'):
+                         codec='h265', preset='ultrafast', extra_x265_params=''):
     """
     Encode uint8 cold embeddings as individual compressed frame files.
 
@@ -282,10 +312,11 @@ def encode_h265_perframe(q_np, width, height, crf=0, output_dir=None, table_id=0
                 '-r', '1',
                 '-i', 'pipe:0',
                 '-c:v', 'libx265',
-                '-preset', 'ultrafast',
+                '-preset', preset,
                 '-pix_fmt', 'gray',
                 '-x265-params',
-                f'keyint=1:min-keyint=1:{"lossless=1" if crf == 0 else f"crf={crf}"}:log-level=error',
+                f'keyint=1:min-keyint=1:{"lossless=1" if crf == 0 else f"crf={crf}"}:log-level=error'
+                + (f':{extra_x265_params}' if extra_x265_params else ''),
                 '-f', 'matroska',
                 frame_path,
             ]
@@ -308,15 +339,62 @@ def encode_h265_perframe(q_np, width, height, crf=0, output_dir=None, table_id=0
     return num_frames, frame_dir, total_compressed, encode_time, rows_per_frame
 
 
+def encode_zstd_perframe(q_np, rows_per_frame, output_dir=None, table_id=0, level=3):
+    """
+    Encode uint8 cold embeddings as individual Zstd-compressed frame files.
+
+    No tiling needed — Zstd operates on flat byte streams.
+    Each frame stores rows_per_frame × emb_dim uint8 bytes.
+
+    Returns: (num_frames, frame_dir, total_compressed_bytes, encode_time, rows_per_frame)
+    """
+    num_rows = q_np.shape[0] if isinstance(q_np, np.ndarray) else q_np.shape[0]
+    emb_dim = q_np.shape[1] if isinstance(q_np, np.ndarray) else q_np.shape[1]
+    num_frames = max(1, (num_rows + rows_per_frame - 1) // rows_per_frame)
+
+    frame_dir = os.path.join(output_dir, f'table_{table_id}')
+    os.makedirs(frame_dir, exist_ok=True)
+
+    t0 = time.time()
+
+    q_t = torch.from_numpy(q_np) if isinstance(q_np, np.ndarray) else q_np
+    # Pad to full frame count
+    padded_rows = num_frames * rows_per_frame
+    if q_t.shape[0] < padded_rows:
+        padded = torch.zeros(padded_rows, emb_dim, dtype=torch.uint8)
+        padded[:q_t.shape[0]] = q_t
+        q_t = padded
+
+    # Split into per-frame flat tensors
+    flat_frames = []
+    for i in range(num_frames):
+        start = i * rows_per_frame
+        end = start + rows_per_frame
+        flat_frames.append(q_t[start:end].contiguous().view(-1))
+
+    # Batch compress in parallel via C++
+    total_compressed = _C.batch_zstd_compress(flat_frames, frame_dir, level)
+
+    encode_time = time.time() - t0
+    raw_bytes = num_rows * emb_dim
+    ratio = raw_bytes / total_compressed if total_compressed > 0 else 0
+
+    log(f"  ZSTD-L{level} encode (flat, rpf={rows_per_frame}): {num_frames} frames, "
+        f"{raw_bytes/1024/1024:.1f}MB -> {total_compressed/1024/1024:.1f}MB "
+        f"({ratio:.2f}x uint8 ratio), {encode_time:.1f}s")
+
+    return num_frames, frame_dir, total_compressed, encode_time, rows_per_frame
+
+
 # ============================================================
 # TRUE ON-DEMAND FRAME DECODER: Per-frame file, no pre-decode
 # ============================================================
 class OnDemandFrameDecoder:
     """
     Decode a single compressed frame file on demand.
-    Supports H.265, H.264, FFV1, and any codec detectable by libavformat.
-    Uses C++ direct libavcodec decode when available (~7% faster, returns torch tensor directly).
-    Falls back to PyAV if C++ extension not available.
+    Supports H.265, H.264, FFV1 (via libavcodec), and Zstd (via libzstd).
+    Uses C++ direct decode when available.
+    Falls back to PyAV for video codecs if C++ extension not available.
     Thread-safe: each call is independent (opens its own file).
     """
     def __init__(self, frame_dir, rows_per_frame, emb_dim, width, height):
@@ -327,12 +405,13 @@ class OnDemandFrameDecoder:
         self.height = height
         self.tiles_per_row = width // TILE_W
         self._use_cpp_decode = HAS_CPP_EXT and hasattr(_C, 'decode_h265_frame_from_file')
-        # Auto-detect frame file extension (supports .h265, .h264, .mkv)
+        # Auto-detect frame file extension (supports .h265, .h264, .mkv, .zst)
         self._frame_ext = '.h265'
-        for ext in ['.h265', '.h264', '.mkv']:
+        for ext in ['.h265', '.h264', '.mkv', '.zst']:
             if os.path.exists(os.path.join(frame_dir, f'frame_00000{ext}')):
                 self._frame_ext = ext
                 break
+        self._is_zstd = (self._frame_ext == '.zst')
         # Count frames
         self.num_frames = len([f for f in os.listdir(frame_dir)
                                if f.startswith('frame_') and f.endswith(self._frame_ext)])
@@ -341,14 +420,30 @@ class OnDemandFrameDecoder:
         """
         Read and decode a single frame file from disk.
 
-        If tiled=False (default): untiles 4x4 tiles back to embedding rows.
+        For Zstd: returns flat uint8 rows directly (no tiling involved).
+            tiled parameter is ignored for Zstd.
             Returns uint8 ndarray (rows_per_frame, emb_dim).
-        If tiled=True: returns raw tiled frame as torch.Tensor (height, width).
-            Skips the untile step — caller uses C++ gather_from_tiled_frame.
+        For video codecs:
+            If tiled=False: untiles 4x4 tiles back to embedding rows.
+                Returns uint8 ndarray (rows_per_frame, emb_dim).
+            If tiled=True: returns raw tiled frame as torch.Tensor (height, width).
 
         Thread-safe: each call opens its own file/container.
         """
         frame_path = os.path.join(self.frame_dir, f'frame_{frame_id:05d}{self._frame_ext}')
+
+        if self._is_zstd:
+            # Zstd: flat storage, no tiling
+            original_size = self.rows_per_frame * self.emb_dim
+            decompressed = _C.zstd_decompress_frame(
+                torch.from_numpy(np.fromfile(frame_path, dtype=np.uint8)),
+                original_size)
+            rows = decompressed.view(self.rows_per_frame, self.emb_dim)
+            if tiled:
+                # For Zstd, "tiled" returns the rows as a torch tensor
+                # (caller must not use gather_from_tiled_frame with this)
+                return rows
+            return rows.numpy()
 
         if self._use_cpp_decode:
             # C++ direct decode: returns torch.Tensor (H, W) uint8
@@ -634,11 +729,14 @@ class OnDemandPrefetchCache:
                 frame_data, offsets_t, self.tiles_per_row,
                 self.quant_scale, self.quant_zp)
 
-        if HAS_CPP_EXT and isinstance(frame_data, np.ndarray):
-            uint8_t = torch.from_numpy(frame_data)
+        if HAS_CPP_EXT and isinstance(frame_data, (np.ndarray, torch.Tensor)):
+            uint8_t = torch.from_numpy(frame_data) if isinstance(frame_data, np.ndarray) else frame_data
             offsets_t = torch.from_numpy(row_offsets).long() if isinstance(row_offsets, np.ndarray) else row_offsets.long()
             return _C.gather_dequant_uint8(uint8_t, offsets_t, self.quant_scale, self.quant_zp)
         selected = frame_data[row_offsets]
+        if isinstance(selected, torch.Tensor):
+            fp32 = (selected.float() - self.quant_zp) * self.quant_scale
+            return fp32
         fp32 = (selected.astype(np.float32) - self.quant_zp) * self.quant_scale
         return torch.from_numpy(fp32)
 
@@ -756,8 +854,9 @@ class OnDemandPrefetchCache:
         # Phase 2: batch decode all cache misses in parallel
         if miss_frames:
             t0 = time.time()
-            use_batch_cpp = (self.use_tiled_storage and
-                             HAS_CPP_EXT and hasattr(_C, 'batch_decode_frames') and
+            is_zstd = hasattr(self._decoder, '_is_zstd') and self._decoder._is_zstd
+            use_batch_cpp = (HAS_CPP_EXT and hasattr(_C, 'batch_decode_frames') and
+                             (self.use_tiled_storage or is_zstd) and
                              len(miss_frames) > 1)
 
             if use_batch_cpp:
@@ -765,7 +864,11 @@ class OnDemandPrefetchCache:
                 miss_ids_t = torch.tensor(miss_frames, dtype=torch.long)
                 decoded_frames = _C.batch_decode_frames(self.frame_dir, miss_ids_t)
                 for i, fid in enumerate(miss_frames):
-                    self.global_cache.put(self.table_id, fid, decoded_frames[i])
+                    frame = decoded_frames[i]
+                    # Zstd returns 1D tensor; reshape to (rows_per_frame, emb_dim) for cache
+                    if is_zstd and frame.dim() == 1:
+                        frame = frame.view(self.rows_per_frame, self.emb_dim)
+                    self.global_cache.put(self.table_id, fid, frame)
             else:
                 # Serial decode (1 frame or no C++ batch support)
                 for fid in miss_frames:
@@ -1066,14 +1169,11 @@ def main():
     is_hot = {}
     hot_indices = {}
     cold_indices = {}
-    orig_to_cold = {}
     for t in large_tables:
         is_hot[t] = torch.load(os.path.join(HOTCOLD_DIR, f'is_hot_{t}.pt'),
                                map_location='cpu', weights_only=True)
         hot_indices[t] = torch.where(is_hot[t])[0]
         cold_indices[t] = torch.where(~is_hot[t])[0]
-        orig_to_cold[t] = torch.load(os.path.join(HOTCOLD_DIR, f'orig_to_cold_{t}.pt'),
-                                      map_location='cpu', weights_only=True)
 
     # Load reordering
     orig_to_cold_reordered = {}
@@ -1127,16 +1227,29 @@ def main():
             log(f"\n  Table {t}: {n_cold:,} cold embeddings")
 
             # Load reordered cold weights and quantize (global)
+            # cold_order contains original table indices (not cold-relative)
             cold_order = np.load(os.path.join(REORDER_DIR, f'cold_order_{t}.npy'))
-            cold_w = state_dict[emb_keys[t]][cold_indices[t]]
-            reordered_w = cold_w[cold_order]
+            reordered_w = state_dict[emb_keys[t]][cold_order]
             q, s, zp = quantize_table(reordered_w)
             cold_quant_scale[t] = s
             cold_quant_zp[t] = zp
 
-            num_frames, frame_dir, compressed_bytes, enc_time, rpf = \
-                encode_h265_perframe(q.numpy(), width, height, crf=H265_CRF,
-                                     output_dir=res_dir, table_id=t)
+            zstd_level = RES_ZSTD.get(res_name, None)
+            if zstd_level is not None:
+                # Zstd codec: flat storage, no tiling
+                num_frames, frame_dir, compressed_bytes, enc_time, rpf = \
+                    encode_zstd_perframe(q.numpy(), rows_per_frame,
+                                         output_dir=res_dir, table_id=t,
+                                         level=zstd_level)
+            else:
+                crf = RES_CRF.get(res_name, H265_CRF)
+                enc_preset = RES_PRESET.get(res_name, 'ultrafast')
+                enc_extra = RES_EXTRA_X265.get(res_name, '')
+                num_frames, frame_dir, compressed_bytes, enc_time, rpf = \
+                    encode_h265_perframe(q.numpy(), width, height, crf=crf,
+                                         output_dir=res_dir, table_id=t,
+                                         preset=enc_preset,
+                                         extra_x265_params=enc_extra)
 
             # Save metadata
             meta = {
@@ -1156,7 +1269,7 @@ def main():
             total_compressed += compressed_bytes
             total_raw += n_cold * EMB_DIM
 
-            del cold_w, reordered_w, q
+            del reordered_w, q
             gc.collect()
 
         ratio = total_raw / total_compressed if total_compressed > 0 else 0
@@ -1333,15 +1446,16 @@ def main():
 
             frame_files = sorted([f for f in os.listdir(frame_dir)
                                   if f.startswith('frame_') and
-                                  (f.endswith('.h265') or f.endswith('.h264') or f.endswith('.mkv'))])
+                                  (f.endswith('.h265') or f.endswith('.h264')
+                                   or f.endswith('.mkv') or f.endswith('.zst'))])
 
-            if disk_decode:
+            is_zstd = any(ff.endswith('.zst') for ff in frame_files)
+            if disk_decode or is_zstd:
                 # Disk-based: don't load compressed bytes into memory
-                # Just count sizes for reporting
+                # (Zstd always uses disk decode — 0.2ms/frame, I/O is negligible)
                 comp_bytes = sum(os.path.getsize(os.path.join(frame_dir, ff))
                                  for ff in frame_files)
                 total_compressed_bytes += comp_bytes
-                # Use disk-based decoder (already the default in OnDemandPrefetchCache)
                 decoder = None  # will use the default OnDemandFrameDecoder
             else:
                 # In-memory: load all compressed frame files into memory
@@ -1421,7 +1535,8 @@ def main():
         gc.collect()
 
         total_compressed_mb = total_compressed_bytes / 1024 / 1024
-        compressed_in_mem_mb = 0.0 if disk_decode else total_compressed_mb
+        _any_zstd = RES_ZSTD.get(res_name) is not None
+        compressed_in_mem_mb = 0.0 if (disk_decode or _any_zstd) else total_compressed_mb
         rss_after_setup = get_rss_mb()
         log(f"  Memory: hot={total_hot_mb:.1f}MB + compressed_cold="
             f"{'0 (on disk)' if disk_decode else f'{total_compressed_mb:.1f}MB'} "
@@ -1594,39 +1709,67 @@ def main():
             n_warmed = len(global_cache) if global_cache is not None else sum(len(c.cache) for c in caches.values() if c.cache is not None)
             log(f"  Cache warmed ({n_warmed} frames loaded)")
 
-        # Full C++ mode: register cold frame data in C++ for zero-Python cold lookup
+        # Register cold frame data in C++ for zero-Python cold lookup
+        # (works for both full_cpp=True and LRU configs after warmup)
         _full_cpp_active = False
         _cold_frame_mb = 0.0
-        if full_cpp and HAS_CPP_EXT and compressed_table_ids and global_cache is not None:
-            # Comprehensive cold frame scan: find ALL unique cold frame IDs across all batches
-            log(f"  Scanning all batches for cold frame coverage...")
-            t_scan0 = time.time()
-            needed_frames = {t_idx: set() for t_idx in caches}  # table_idx -> set of frame_ids
-            for X_s, lS_o_s, lS_i_s, T_s in test_batches:
-                for t_idx in caches:
-                    indices = lS_i_s[t_idx]
-                    cold_mask = ~is_hot[t_idx][indices]
-                    if cold_mask.any():
-                        cold_orig = indices[cold_mask]
-                        cold_mapped = o2c_map[t_idx][cold_orig]
-                        valid = cold_mapped >= 0
-                        if valid.any():
-                            fids = (cold_mapped[valid] // rows_per_frame).unique().tolist()
-                            needed_frames[t_idx].update(fids)
-            total_needed = sum(len(v) for v in needed_frames.values())
-            log(f"  Found {total_needed} unique cold frames across all batches "
-                f"({time.time()-t_scan0:.1f}s)")
+        if HAS_CPP_EXT and compressed_table_ids and global_cache is not None:
+            if full_cpp:
+                # full_cpp mode: scan ALL batches, decode missing frames
+                log(f"  Scanning all batches for cold frame coverage...")
+                t_scan0 = time.time()
+                needed_frames = {t_idx: set() for t_idx in caches}  # table_idx -> set of frame_ids
+                for X_s, lS_o_s, lS_i_s, T_s in test_batches:
+                    for t_idx in caches:
+                        indices = lS_i_s[t_idx]
+                        cold_mask = ~is_hot[t_idx][indices]
+                        if cold_mask.any():
+                            cold_orig = indices[cold_mask]
+                            cold_mapped = o2c_map[t_idx][cold_orig]
+                            valid = cold_mapped >= 0
+                            if valid.any():
+                                fids = (cold_mapped[valid] // rows_per_frame).unique().tolist()
+                                needed_frames[t_idx].update(fids)
+                total_needed = sum(len(v) for v in needed_frames.values())
+                log(f"  Found {total_needed} unique cold frames across all batches "
+                    f"({time.time()-t_scan0:.1f}s)")
 
-            # Decode all needed frames that aren't already in the global cache
-            for t_idx in caches:
-                for fid in sorted(needed_frames[t_idx]):
-                    cached = global_cache.get(t_idx, fid)
-                    if cached is None:
-                        # Demand decode this frame
-                        frame_data = caches[t_idx]._decode_raw(fid)
-                        global_cache.put(t_idx, fid, frame_data)
-            final_cached = len(global_cache)
-            log(f"  All cold frames loaded: {final_cached} frames in global cache")
+                # Decode all needed frames that aren't already in the global cache
+                # For Zstd: use batch parallel decompress (all frames in ~4ms)
+                is_zstd_codec = any(
+                    caches[t_idx]._decoder._is_zstd
+                    for t_idx in caches if hasattr(caches[t_idx]._decoder, '_is_zstd'))
+                t_decode0 = time.time()
+                if is_zstd_codec and HAS_CPP_EXT:
+                    for t_idx in caches:
+                        fids = sorted(needed_frames[t_idx])
+                        if not fids:
+                            continue
+                        decoder = caches[t_idx]._decoder
+                        paths = [os.path.join(decoder.frame_dir,
+                                 f'frame_{fid:05d}{decoder._frame_ext}')
+                                 for fid in fids]
+                        original_size = decoder.rows_per_frame * decoder.emb_dim
+                        decoded = _C.batch_zstd_decompress_files(
+                            paths, original_size, 0)
+                        for i, fid in enumerate(fids):
+                            rows = decoded[i].view(decoder.rows_per_frame, decoder.emb_dim)
+                            global_cache.put(t_idx, fid, rows)
+                    log(f"  Zstd batch decode: {total_needed} frames in "
+                        f"{(time.time()-t_decode0)*1000:.1f}ms")
+                else:
+                    for t_idx in caches:
+                        for fid in sorted(needed_frames[t_idx]):
+                            cached = global_cache.get(t_idx, fid)
+                            if cached is None:
+                                # Demand decode this frame
+                                frame_data = caches[t_idx]._decode_raw(fid)
+                                global_cache.put(t_idx, fid, frame_data)
+                final_cached = len(global_cache)
+                log(f"  All cold frames loaded: {final_cached} frames in global cache")
+            else:
+                # LRU mode: register whatever warmup put in the cache
+                log(f"  Registering {len(global_cache)} warmed frames in C++...")
 
             # Register cold frames in C++ for each table
             log(f"  Registering cold frames in C++ for full C++ cold lookup...")
@@ -1660,23 +1803,45 @@ def main():
                 frame_ids_tensor = torch.tensor(sorted_fids, dtype=torch.long)
 
                 if use_bitmap:
-                    # Bitmap mode: need cold mapping (orig_idx -> cold_reordered_idx)
-                    cold_mapping_tensor = torch.empty(0, dtype=torch.long)
-                    mmap_path = os.path.join(REORDER_DIR, f'orig_to_cold_reordered_{t_idx}.npy')
-                    if os.path.exists(mmap_path):
-                        cold_mapping_tensor = torch.from_numpy(
-                            np.load(mmap_path).copy()).int()
+                    # Bitmap mode: sparse flat buffer (only cached rows stored)
+                    # Uses validity bitmap + rank for O(1) lookup — no cold_mapping needed
+                    n_rows = ln_emb[t_idx]
+                    is_hot_t = is_hot[t_idx][:n_rows]
+                    cold_orig = torch.where(~is_hot_t)[0]
+                    n_cold = cold_orig.size(0)
+
+                    # Get reordered indices for cold rows
+                    if t_idx in _cold_reordered_mmap:
+                        o2c_np = _cold_reordered_mmap[t_idx]
+                        cold_reordered = torch.from_numpy(
+                            np.array(o2c_np[cold_orig.numpy()])).long()
                     else:
-                        pt_path = os.path.join(REORDER_DIR, f'orig_to_cold_reordered_{t_idx}.pt')
-                        cold_mapping_tensor = torch.load(
-                            pt_path, map_location='cpu', weights_only=True).int()
-                    _C.register_cold_frames_for_table(
-                        t_idx, frame_ids_tensor, frame_data_tensor,
+                        cold_reordered = o2c_map[t_idx][cold_orig].long()
+
+                    # Map reordered index -> position in all_data (concatenated frames)
+                    max_fid = max(sorted_fids) + 1
+                    fid_to_offset = torch.full((max_fid,), -1, dtype=torch.long)
+                    for ci, fid in enumerate(sorted_fids):
+                        fid_to_offset[fid] = ci * rows_per_frame
+
+                    fids = cold_reordered // rows_per_frame
+                    rows_in_frame = cold_reordered % rows_per_frame
+                    valid = (cold_reordered >= 0) & (fids < max_fid)
+                    offsets = torch.where(valid,
+                        fid_to_offset[fids.clamp(0, max_fid - 1)], torch.tensor(-1))
+                    valid = valid & (offsets >= 0)
+                    src_pos = offsets + rows_in_frame
+
+                    # Extract only valid (cached) rows into dense buffer
+                    valid_cold_ranks = torch.where(valid)[0].long()
+                    valid_data = all_data[src_pos[valid]]  # [n_cached, D] uint8
+
+                    _C.register_cold_sparse_flat(
+                        t_idx, valid_data, valid_cold_ranks,
                         float(cold_quant_scale[t_idx]),
                         float(cold_quant_zp[t_idx]),
-                        rows_per_frame,
-                        cold_mapping_tensor)
-                    total_cold_frame_mb += all_data.nbytes / 1024 / 1024
+                        n_cold)
+                    total_cold_frame_mb += valid_data.nbytes / 1024 / 1024
                 else:
                     _C.register_cold_frames_for_table(
                         t_idx, frame_ids_tensor, frame_data_tensor,
@@ -1689,6 +1854,11 @@ def main():
             _full_cpp_active = True
             _cold_frame_mb = total_cold_frame_mb
             log(f"  Cold frames registered: {total_cold_frame_mb:.1f}MB uint8")
+
+            # Free Python cache — data now lives in C++
+            global_cache.cache.clear()
+            gc.collect()
+            log(f"  Python global cache freed (data now in C++)")
 
             # Replace _fast_apply_emb with simplified version (no Python cold path)
             def _full_cpp_apply_emb(lS_o, lS_i, emb_l, v_W_l):
@@ -1801,10 +1971,14 @@ def main():
                     n_words = (n_rows + 63) // 64
                     bm_mb += (n_words * 8 + (n_words + 1) * 4) / 1024 / 1024
                 effective_mapping_mb = bm_mb
-                # Full C++ bitmap mode also needs cold mapping (int32, 4 bytes/row)
+                # Sparse flat uses validity bitmap+rank (~6 MB) — no cold_mapping needed
                 if _full_cpp_active:
-                    cold_map_mb = sum(ln_emb[t] * 4 for t in caches) / 1024 / 1024
-                    effective_mapping_mb += cold_map_mb
+                    sparse_bm_mb = 0
+                    for t_idx in caches:
+                        n_cold = int((~is_hot[t_idx][:ln_emb[t_idx]]).sum().item())
+                        n_words = (n_cold + 63) // 64
+                        sparse_bm_mb += (n_words * 8 + (n_words + 1) * 4) / 1024 / 1024
+                    effective_mapping_mb += sparse_bm_mb
             else:
                 # Hash table: ~60% load factor, 8 bytes per slot
                 hash_mb = 0
@@ -1952,6 +2126,77 @@ def main():
         predictor_type='none', lookahead_depth=1, tag=key,
         use_global_cache=True, disk_decode=False, quantize_hot=True,
         warmup_batches=1, full_cpp=True)
+
+    # === LRU cache mode (realistic production memory) ===
+    # C++ fast_forward for hot + C++ batch_decode + cold_fixup for cold + Python LRU management
+    # bitmap-rank + uint8 hot + global LRU cache (on-demand H.265 decode)
+
+    key = '1080p_bitmap_lru8'
+    all_results[key] = run_ondemand_inference(
+        res_name='1080p', cache_capacity=8,
+        predictor_type='none', tag=key,
+        use_global_cache=True, disk_decode=False, quantize_hot=True,
+        use_bitmap=True, warmup_batches=1, full_cpp=False)
+
+    key = '1080p_bitmap_lru16'
+    all_results[key] = run_ondemand_inference(
+        res_name='1080p', cache_capacity=16,
+        predictor_type='none', tag=key,
+        use_global_cache=True, disk_decode=False, quantize_hot=True,
+        use_bitmap=True, warmup_batches=1, full_cpp=False)
+
+    key = '1080p_bitmap_lru20'
+    all_results[key] = run_ondemand_inference(
+        res_name='1080p', cache_capacity=20,
+        predictor_type='none', tag=key,
+        use_global_cache=True, disk_decode=False, quantize_hot=True,
+        use_bitmap=True, warmup_batches=1, full_cpp=False)
+
+    # === CRF=18 lossy compression (much smaller on-disk/in-memory compressed data) ===
+
+    key = '1080p_crf18_bitmap_fullcpp'
+    all_results[key] = run_ondemand_inference(
+        res_name='1080p_crf18', cache_capacity=32,
+        predictor_type='none', tag=key,
+        use_global_cache=True, disk_decode=False, quantize_hot=True,
+        use_bitmap=True, warmup_batches=1, full_cpp=True)
+
+    key = '1080p_crf18_bitmap_lru20'
+    all_results[key] = run_ondemand_inference(
+        res_name='1080p_crf18', cache_capacity=20,
+        predictor_type='none', tag=key,
+        use_global_cache=True, disk_decode=False, quantize_hot=True,
+        use_bitmap=True, warmup_batches=1, full_cpp=False)
+
+    key = '1080p_crf18_bitmap_lru20_disk'
+    all_results[key] = run_ondemand_inference(
+        res_name='1080p_crf18', cache_capacity=20,
+        predictor_type='none', tag=key,
+        use_global_cache=True, disk_decode=True, quantize_hot=True,
+        use_bitmap=True, warmup_batches=1, full_cpp=False)
+
+    # === Zstd lossless compression (35x faster decode, pipeline-viable) ===
+
+    key = 'zstd3_bitmap_fullcpp'
+    all_results[key] = run_ondemand_inference(
+        res_name='1080p_zstd3', cache_capacity=32,
+        predictor_type='none', tag=key,
+        use_global_cache=True, disk_decode=False, quantize_hot=True,
+        use_bitmap=True, warmup_batches=1, full_cpp=True)
+
+    key = 'zstd9_bitmap_fullcpp'
+    all_results[key] = run_ondemand_inference(
+        res_name='1080p_zstd9', cache_capacity=32,
+        predictor_type='none', tag=key,
+        use_global_cache=True, disk_decode=False, quantize_hot=True,
+        use_bitmap=True, warmup_batches=1, full_cpp=True)
+
+    key = 'zstd3_bitmap_lru20'
+    all_results[key] = run_ondemand_inference(
+        res_name='1080p_zstd3', cache_capacity=20,
+        predictor_type='none', tag=key,
+        use_global_cache=True, disk_decode=False, quantize_hot=True,
+        use_bitmap=True, warmup_batches=1, full_cpp=False)
 
     # Restore default thread count
     torch.set_num_threads(default_threads)

@@ -21,7 +21,7 @@ setup(
             'compressed_emb',
             ['csrc/compressed_emb.cpp'],
             extra_compile_args=['-O3', '-march=native', '-fopenmp'] + ffmpeg_cflags,
-            extra_link_args=['-fopenmp'] + ffmpeg_libs,
+            extra_link_args=['-fopenmp'] + ffmpeg_libs + ['-lzstd'],
         ),
     ],
     cmdclass={'build_ext': BuildExtension},

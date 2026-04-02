@@ -1,0 +1,20 @@
+{
+  "baseline_auc": 0.802617,
+  "compressed_auc": 0.8022,
+  "baseline_time": 13.3,
+  "compressed_time": 10.1,
+  "baseline_ms_per_batch": 6.6,
+  "compressed_ms_per_batch": 5.1,
+  "comp_ratio_storage": 737,
+  "comp_mb": 2.79,
+  "sparse_delta_mb": 31.1,
+  "dirty_rows": 510300,
+  "frames_accessed_avg": 112,
+  "decoded_mb_per_batch": 221.3,
+  "measured_fwd_ms": 2.1,
+  "measured_bwd_ms": 4.45,
+  "required_throughput_all_compressed_gbps": 49.7,
+  "required_throughput_hotcold_gbps": 9.0,
+  "n_train_steps": 2000,
+  "fix_applied": "sparse=True on EmbeddingBag (was dense gradients causing 306ms/b)"
+}

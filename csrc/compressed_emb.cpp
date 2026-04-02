@@ -6,6 +6,13 @@
 #include <cstring>
 #include <algorithm>
 #include <atomic>
+#include <mutex>
+#include <queue>
+#include <thread>
+#include <future>
+#include <unordered_map>
+#include <unordered_set>
+#include <unistd.h>
 
 // FFmpeg/libav headers for direct H.265 decode (avoids PyAV Python overhead)
 extern "C" {
@@ -15,6 +22,8 @@ extern "C" {
 #include <libavutil/opt.h>
 #include <libswscale/swscale.h>
 }
+
+#include <zstd.h>
 
 // SIMD helpers for D=16 embedding accumulation
 #ifdef __AVX512F__
@@ -1009,7 +1018,132 @@ std::vector<torch::Tensor> all_tables_forward(
 namespace {
 
 // Table types
-enum class TableKind { STANDARD, COMPRESSED_FP32, COMPRESSED_Q8 };
+enum class TableKind { STANDARD, COMPRESSED_FP32, COMPRESSED_Q8, DCT_DOMAIN };
+
+// ====================================================================
+// DCT-Domain Embedding: compressed-domain lookup without full decode.
+//
+// Storage: per block (4 embedding rows), store only DC coefficient (int16).
+// At step>=8 on CRF=30-equivalent quality, 100% of blocks are DC-only.
+// Lookup: output[d] += DC_value * step_size * weight[row_in_block][d]
+// Pre-computed weights: IDCT basis functions for each (row_in_block, dim).
+// ====================================================================
+static constexpr int DCT_BLOCK = 8;
+static constexpr int DCT_TILE = 4;
+static constexpr int DCT_ROWS_PER_BLOCK = 4;  // (8/4)^2
+
+struct DctDomainTable {
+    // DC values: one uint8 per block (quantized DC coefficient, fits in 0-255 for step>=8)
+    // Full coefficients stored as sparse AC for blocks with non-zero AC
+    std::vector<uint8_t> dc_values;           // (n_blocks,) — quantized DC coefficient per block
+    std::vector<std::vector<std::pair<uint8_t, int16_t>>> ac_coeffs;  // per-block sparse AC
+    int64_t n_blocks = 0;
+    int64_t n_rows = 0;
+    float step_size = 16.0f;
+    float quant_scale = 0.0f;     // uint8 dequant scale
+    float quant_zp = 0.0f;        // uint8 dequant zero point
+
+    // Pre-computed weight vectors for DC-only fast path
+    // dc_weights[row_in_block][d] = IDCT basis weight for DC coefficient at (row, dim)
+    // Since DC coefficient at (u=0,v=0): C(0)*C(0) * cos(0)*cos(0) = 1/N for ortho
+    // For 8×8 ortho DCT: C(0) = 1/sqrt(8), so dc_weight = 1/8 for all pixels
+    // But each row maps to specific pixel positions, so dc_weight is same for all dims in a row:
+    //   dc_weights[r][d] = (1/sqrt(8))*(1/sqrt(8)) = 1/8 = 0.125
+    // Actually for ortho-normalized DCT, DC → pixel is uniform: each pixel gets DC * 1/8
+    // WRONG: it's C(0)*C(0) = (1/sqrt(8))^2 = 1/8... let me compute properly.
+    // f(x,y) = sum_{u,v} C(u)C(v) F(u,v) cos(...) where C(0)=1/sqrt(N), C(k>0)=sqrt(2/N)
+    // For u=0,v=0: C(0)C(0) cos(0) cos(0) = (1/sqrt(8))^2 = 1/8 = 0.125
+    // So DC contributes 0.125 * DC_value to every pixel regardless of position.
+    float dc_weight_uniform;      // = 1/8 for 8x8 block
+
+    // Full weight matrix for AC coefficients: weights[row_in_block * EMB_DIM + d][u * 8 + v]
+    // Flattened for cache-friendly access
+    std::vector<float> full_weights;  // (4 * 16, 64) = (64, 64) = 4096 floats = 16KB
+
+    void init_weights(int D) {
+        // DC weight: uniform for all pixels
+        dc_weight_uniform = 1.0f / DCT_BLOCK;  // 1/sqrt(8) * 1/sqrt(8) = 1/8
+
+        // Full weights for AC coefficients
+        full_weights.resize(DCT_ROWS_PER_BLOCK * D * DCT_BLOCK * DCT_BLOCK);
+        for (int r = 0; r < DCT_ROWS_PER_BLOCK; r++) {
+            for (int d = 0; d < D; d++) {
+                int py = (r / 2) * DCT_TILE + d / DCT_TILE;
+                int px = (r % 2) * DCT_TILE + d % DCT_TILE;
+                for (int u = 0; u < DCT_BLOCK; u++) {
+                    for (int v = 0; v < DCT_BLOCK; v++) {
+                        float cu = (u == 0) ? (1.0f / std::sqrt((float)DCT_BLOCK))
+                                             : std::sqrt(2.0f / DCT_BLOCK);
+                        float cv = (v == 0) ? (1.0f / std::sqrt((float)DCT_BLOCK))
+                                             : std::sqrt(2.0f / DCT_BLOCK);
+                        float w = cu * cv
+                            * std::cos(M_PI * (2*py + 1) * u / (2.0f * DCT_BLOCK))
+                            * std::cos(M_PI * (2*px + 1) * v / (2.0f * DCT_BLOCK));
+                        int idx = (r * D + d) * (DCT_BLOCK * DCT_BLOCK) + u * DCT_BLOCK + v;
+                        full_weights[idx] = w;
+                    }
+                }
+            }
+        }
+    }
+
+    // Accumulate contribution of one cold row into output (D floats)
+    // DC-only fast path: ~D multiply-adds
+    inline void accum_row(float* __restrict__ out, int64_t cold_row_idx, int D) const {
+        int64_t block_id = cold_row_idx / DCT_ROWS_PER_BLOCK;
+        int row_in_block = cold_row_idx % DCT_ROWS_PER_BLOCK;
+
+        if (block_id >= n_blocks) return;
+
+        float dc_val = static_cast<float>(dc_values[block_id]) * step_size;  // uint8 * step
+
+        // DC contribution: dc_val * dc_weight_uniform for each pixel in this row
+        // But dc_weight is the same for all pixels (0.125), so:
+        float dc_contribution = dc_val * dc_weight_uniform;
+
+        // For DC-only blocks (common case), just add dc_contribution to each dim
+        // But this gives the uint8 domain value. We need to dequantize:
+        // fp32_val = (uint8_val - quant_zp) * quant_scale
+        // Each dim gets dc_contribution, then sum is: n_dims_in_row × dc_contribution... no.
+        // For SUM mode: output[d] += (pixel_value_at(row, d) - quant_zp) * quant_scale
+        // pixel_value = dc_val * weight[row_in_block, d, 0, 0] + sum_ac(...)
+        // For DC-only: pixel_value = dc_val * dc_weight_uniform (same for all d)
+        // But wait — the weight is NOT uniform across dimensions because each dimension
+        // maps to a DIFFERENT pixel position (py, px).
+        //
+        // For u=0, v=0: basis(u=0,v=0,x,y) = C(0)*C(0)*cos(0)*cos(0) = 1/8
+        // This IS uniform — every pixel gets DC * 1/8 regardless of position.
+        // So for DC-only: every dimension of this row = dc_val * 1/8.
+
+        if (block_id < (int64_t)ac_coeffs.size() && !ac_coeffs[block_id].empty()) {
+            // Has AC coefficients — use full weight lookup
+            const float* w_base = &full_weights[(row_in_block * D) * (DCT_BLOCK * DCT_BLOCK)];
+            for (int d = 0; d < D; d++) {
+                float val = dc_contribution;  // DC part
+                const float* w_d = w_base + d * (DCT_BLOCK * DCT_BLOCK);
+                // Add AC contributions
+                for (const auto& [pos, coeff] : ac_coeffs[block_id]) {
+                    val += static_cast<float>(coeff) * step_size * w_d[pos];
+                }
+                out[d] += (val - quant_zp) * quant_scale;
+            }
+        } else {
+            // DC-only: all dimensions get the same uint8 value
+            float uint8_val = dc_contribution;
+            float fp32_val = (uint8_val - quant_zp) * quant_scale;
+#if HAS_AVX512
+            if (D == 16) {
+                __m512 v = _mm512_set1_ps(fp32_val);
+                __m512 o = _mm512_loadu_ps(out);
+                _mm512_storeu_ps(out, _mm512_add_ps(o, v));
+            } else
+#endif
+            {
+                for (int d = 0; d < D; d++) out[d] += fp32_val;
+            }
+        }
+    }
+};
 
 // Open-addressing hash table: maps original_idx (int32) -> hot_compact_idx (int32)
 // Interleaved key-value layout for cache-friendly probing (key+value in same cache line).
@@ -1169,6 +1303,91 @@ struct RegisteredTable {
     // When cold_flat=true, no cold_mapping is needed — cold_rank gives direct buffer offset
     bool cold_flat = false;
     int64_t n_cold_rows = 0;  // total number of cold rows in flat buffer
+
+    // Sparse flat mode: only a subset of cold rows are cached (LRU after warmup)
+    // Uses a second bitmap+rank to map cold_rank -> dense buffer position
+    bool cold_sparse = false;
+    std::vector<uint64_t> cold_valid_bitmap;  // 1 = cached, indexed by cold_rank
+    std::vector<int32_t> cold_valid_rank;     // prefix popcount for O(1) dense index
+    int64_t n_cold_total = 0;   // total cold rows (bitmap size)
+    int64_t n_cold_cached = 0;  // number of cached rows (dense buffer size)
+
+    // Dynamic frame mode: per-frame pointers for O(1) add/remove (pipelined decode)
+    // cold_frame_accum uses this when cold_dynamic=true
+    bool cold_dynamic = false;
+    bool dyn_tiled = false;    // if true, frames stored in tiled (H,W) layout (skip untiling)
+    int64_t dyn_width = 0;     // frame width (for tile coordinate computation)
+    std::vector<const uint8_t*> dyn_frame_ptrs;  // frame_id -> pointer to frame data (null = not cached)
+    std::vector<torch::Tensor> dyn_frame_tensors; // keep alive (frame_id -> tensor)
+
+    // Row-level cache: cache individual cold rows, not entire frames.
+    // Memory: ~80KB for Kaggle (vs 40MB for frame cache)
+    // Uses open-addressing hash table for cache-friendly O(1) lookup.
+    bool cold_row_cache = false;
+    torch::Tensor rc_data;             // (capacity, D) uint8 — row data
+    uint8_t* rc_data_ptr = nullptr;
+    int32_t rc_next_slot = 0;          // next free slot in rc_data
+    int32_t rc_data_capacity = 0;      // max rows in rc_data
+
+    // Open-addressing hash table: cold_rank → slot in rc_data
+    // Power-of-2 size, linear probing, contiguous memory (cache-friendly)
+    std::vector<int64_t> rc_ht_keys;   // -1 = empty
+    std::vector<int32_t> rc_ht_vals;   // slot in rc_data
+    int64_t rc_ht_mask = 0;            // ht_size - 1
+    int64_t rc_ht_count = 0;           // number of entries
+
+    inline int64_t rc_hash(int64_t key) const {
+        // Mix bits for better distribution
+        uint64_t h = static_cast<uint64_t>(key);
+        h ^= h >> 16;
+        h *= 0x45d9f3b;
+        h ^= h >> 16;
+        return static_cast<int64_t>(h & rc_ht_mask);
+    }
+
+    inline int32_t rc_find(int64_t cold_rank) const {
+        if (rc_ht_mask == 0) return -1;
+        int64_t h = rc_hash(cold_rank);
+        for (int64_t probe = 0; probe <= rc_ht_mask; probe++) {
+            if (rc_ht_keys[h] == cold_rank) return rc_ht_vals[h];
+            if (rc_ht_keys[h] == -1) return -1;
+            h = (h + 1) & rc_ht_mask;
+        }
+        return -1;  // table full (shouldn't happen)
+    }
+
+    inline void rc_insert(int64_t cold_rank, int32_t slot) {
+        // Rehash if load > 50%
+        if (rc_ht_count * 2 >= (int64_t)rc_ht_keys.size()) {
+            int64_t new_size = std::max((int64_t)rc_ht_keys.size() * 2, (int64_t)1024);
+            std::vector<int64_t> old_keys = std::move(rc_ht_keys);
+            std::vector<int32_t> old_vals = std::move(rc_ht_vals);
+            rc_ht_keys.assign(new_size, -1);
+            rc_ht_vals.resize(new_size);
+            rc_ht_mask = new_size - 1;
+            rc_ht_count = 0;
+            for (size_t i = 0; i < old_keys.size(); i++) {
+                if (old_keys[i] != -1) {
+                    rc_insert(old_keys[i], old_vals[i]);
+                }
+            }
+        }
+        int64_t h = rc_hash(cold_rank);
+        while (rc_ht_keys[h] != -1) {
+            h = (h + 1) & rc_ht_mask;
+        }
+        rc_ht_keys[h] = cold_rank;
+        rc_ht_vals[h] = slot;
+        rc_ht_count++;
+    }
+
+    inline bool rc_contains(int64_t cold_rank) const {
+        return rc_find(cold_rank) >= 0;
+    }
+
+    // DCT-domain cold lookup (no frame decode needed)
+    DctDomainTable dct_cold;
+    bool has_dct_cold = false;
 };
 
 // Static storage for registered tables
@@ -1345,6 +1564,133 @@ void register_cold_flat(
             table_idx, n_cold_rows, flat_mb, tab.cold_scale, tab.cold_zp);
 }
 
+// register_cold_sparse_flat: register a sparse cold buffer for a table.
+// Only a subset of cold rows (those whose frames are cached) are stored.
+// Uses a validity bitmap + rank for O(1) lookup: cold_rank -> dense buffer position.
+// valid_cold_ranks: [n_cached] int64 — which cold_rank positions have data (sorted ascending)
+// cold_data: [n_cached, D] uint8 — the actual cached row data (dense, in valid_cold_ranks order)
+void register_cold_sparse_flat(
+    int64_t table_idx,
+    const torch::Tensor& cold_data,
+    const torch::Tensor& valid_cold_ranks,
+    double cold_scale,
+    double cold_zp,
+    int64_t n_cold_total
+) {
+    TORCH_CHECK(g_registered, "Tables not registered. Call register_tables first.");
+    TORCH_CHECK(table_idx >= 0 && table_idx < (int64_t)g_tables.size(),
+                "Invalid table index: ", table_idx);
+
+    auto& tab = g_tables[table_idx];
+    tab.has_cold_frames = true;
+    tab.cold_flat = true;
+    tab.cold_sparse = true;
+    tab.n_cold_total = n_cold_total;
+    tab.n_cold_cached = valid_cold_ranks.size(0);
+    tab.cold_frame_concat = cold_data.contiguous();
+    tab.cold_frame_data_ptr = tab.cold_frame_concat.data_ptr<uint8_t>();
+    tab.cold_scale = static_cast<float>(cold_scale);
+    tab.cold_zp = static_cast<float>(cold_zp);
+    // Also set n_cold_rows for compatibility with dense flat path checks
+    tab.n_cold_rows = n_cold_total;
+
+    // Build validity bitmap + rank from valid_cold_ranks
+    int64_t n_words = (n_cold_total + 63) / 64;
+    tab.cold_valid_bitmap.assign(n_words, 0);
+    tab.cold_valid_rank.resize(n_words + 1);
+
+    const int64_t* vr_ptr = valid_cold_ranks.data_ptr<int64_t>();
+    for (int64_t i = 0; i < tab.n_cold_cached; i++) {
+        int64_t cr = vr_ptr[i];
+        tab.cold_valid_bitmap[cr / 64] |= (1ULL << (cr % 64));
+    }
+    tab.cold_valid_rank[0] = 0;
+    for (int64_t k = 0; k < n_words; k++) {
+        tab.cold_valid_rank[k + 1] = tab.cold_valid_rank[k] +
+            __builtin_popcountll(tab.cold_valid_bitmap[k]);
+    }
+
+    int64_t data_mb = cold_data.numel() / (1024 * 1024);
+    int64_t bm_kb = (n_words * 8 + (n_words + 1) * 4) / 1024;
+    fprintf(stderr, "[C++] Table %ld: registered sparse flat cold buffer "
+            "(%ld/%ld cached rows, %ld MB uint8, %ld KB bitmap+rank), "
+            "scale=%.6f, zp=%.1f\n",
+            table_idx, tab.n_cold_cached, n_cold_total, data_mb, bm_kb,
+            tab.cold_scale, tab.cold_zp);
+}
+
+// register_cold_dct: register DCT-domain cold data for a table.
+// dc_values: (n_blocks,) int16 — DC coefficient per block
+// ac_positions: list of (n_blocks) tensors, each (n_ac,) uint8 — position of non-zero AC coeffs
+// ac_values: list of (n_blocks) tensors, each (n_ac,) int16 — values of non-zero AC coeffs
+// For DC-only mode (step>=8 on most data): ac lists can be empty.
+void register_cold_dct(
+    int64_t table_idx,
+    const torch::Tensor& dc_values_t,     // (n_blocks,) int16
+    const torch::Tensor& ac_data_t,       // (total_ac,) int16 — concatenated AC values
+    const torch::Tensor& ac_positions_t,  // (total_ac,) uint8 — concatenated AC positions (u*8+v)
+    const torch::Tensor& ac_block_offsets_t, // (n_blocks+1,) int64 — start offset per block in ac_data
+    double step_size,
+    double quant_scale,
+    double quant_zp,
+    int64_t n_cold_rows
+) {
+    TORCH_CHECK(g_registered, "Tables not registered. Call register_tables first.");
+    TORCH_CHECK(table_idx >= 0 && table_idx < (int64_t)g_tables.size(),
+                "Invalid table index: ", table_idx);
+
+    auto& tab = g_tables[table_idx];
+    auto& dct = tab.dct_cold;
+
+    int64_t n_blocks = dc_values_t.size(0);
+    dct.n_blocks = n_blocks;
+    dct.n_rows = n_cold_rows;
+    dct.step_size = static_cast<float>(step_size);
+    dct.quant_scale = static_cast<float>(quant_scale);
+    dct.quant_zp = static_cast<float>(quant_zp);
+
+    // Copy DC values — accept int16 from Python, store as uint8
+    // At step>=8, quantized DC fits in uint8 (range 0-255)
+    dct.dc_values.resize(n_blocks);
+    const int16_t* dc_ptr = dc_values_t.data_ptr<int16_t>();
+    for (int64_t i = 0; i < n_blocks; i++) {
+        int16_t v = dc_ptr[i];
+        dct.dc_values[i] = static_cast<uint8_t>(std::max(0, std::min(255, (int)v)));
+    }
+
+    // Copy AC coefficients (sparse)
+    dct.ac_coeffs.resize(n_blocks);
+    if (ac_data_t.numel() > 0) {
+        const int16_t* ac_val_ptr = ac_data_t.data_ptr<int16_t>();
+        const uint8_t* ac_pos_ptr = ac_positions_t.data_ptr<uint8_t>();
+        const int64_t* ac_off_ptr = ac_block_offsets_t.data_ptr<int64_t>();
+
+        for (int64_t bi = 0; bi < n_blocks; bi++) {
+            int64_t start = ac_off_ptr[bi];
+            int64_t end = ac_off_ptr[bi + 1];
+            dct.ac_coeffs[bi].clear();
+            for (int64_t j = start; j < end; j++) {
+                dct.ac_coeffs[bi].emplace_back(ac_pos_ptr[j], ac_val_ptr[j]);
+            }
+        }
+    }
+
+    // Initialize weight matrices
+    dct.init_weights(tab.D);
+
+    tab.has_dct_cold = true;
+    tab.has_cold_frames = true;  // Signal that cold lookup is handled in C++
+
+    int64_t total_ac = ac_data_t.numel();
+    int64_t dc_kb = n_blocks / 1024;  // uint8: 1 byte per block
+    int64_t ac_kb = total_ac * 3 / 1024;  // 3 bytes per AC (pos + val)
+    fprintf(stderr, "[C++] Table %ld: registered DCT-domain cold "
+            "(%ld blocks, %ld rows, DC=%ldKB, AC=%ldKB, step=%.0f, "
+            "scale=%.6f, zp=%.1f)\n",
+            table_idx, n_blocks, n_cold_rows, dc_kb, ac_kb,
+            dct.step_size, dct.quant_scale, dct.quant_zp);
+}
+
 // Helper: look up a cold row from registered frame cache and accumulate into output.
 // cold_idx: either the reordered cold index (frame mode) or natural cold position (flat mode)
 // Returns true if handled in C++, false if needs Python fallback.
@@ -1354,14 +1700,92 @@ static inline bool cold_frame_accum(
     int64_t cold_idx,
     int64_t D
 ) {
+    // DCT-domain: compute directly from DCT coefficients (no decode/cache needed)
+    if (tab.has_dct_cold) {
+        tab.dct_cold.accum_row(out_row, cold_idx, D);
+        return true;
+    }
+
     int64_t buf_row;
     if (tab.cold_flat) {
-        // Flat mode: direct indexing by natural cold position
-        if (__builtin_expect(cold_idx >= 0 && cold_idx < tab.n_cold_rows, 1)) {
-            buf_row = cold_idx;
+        if (tab.cold_sparse) {
+            // Sparse flat: check validity bitmap, then rank for dense index
+            if (__builtin_expect(cold_idx >= 0 && cold_idx < tab.n_cold_total, 1)) {
+                int64_t word = cold_idx / 64;
+                int64_t bit = cold_idx % 64;
+                uint64_t w = tab.cold_valid_bitmap[word];
+                if (!((w >> bit) & 1)) return false;  // not cached
+                uint64_t below_mask = (1ULL << bit) - 1;
+                buf_row = tab.cold_valid_rank[word] +
+                    __builtin_popcountll(w & below_mask);
+            } else {
+                return false;
+            }
         } else {
-            return false;
+            // Dense flat: direct indexing by natural cold position
+            if (__builtin_expect(cold_idx >= 0 && cold_idx < tab.n_cold_rows, 1)) {
+                buf_row = cold_idx;
+            } else {
+                return false;
+            }
         }
+    } else if (tab.cold_row_cache) {
+        // Row-level cache: open-addressing hash lookup
+        int32_t slot = tab.rc_find(cold_idx);
+        if (__builtin_expect(slot >= 0, 1)) {
+            const uint8_t* emb = tab.rc_data_ptr + slot * D;
+#if HAS_AVX512
+            if (D == 16) {
+                accum_q8_d16(out_row, emb, tab.cold_scale, tab.cold_zp);
+            } else
+#endif
+            {
+                for (int64_t d = 0; d < D; d++)
+                    out_row[d] += (static_cast<float>(emb[d]) - tab.cold_zp) * tab.cold_scale;
+            }
+            return true;
+        }
+        return false;
+    } else if (tab.cold_dynamic) {
+        // Dynamic frame mode: per-frame pointers, O(1) add/remove
+        int64_t fid = cold_idx / tab.rows_per_frame;
+        if (__builtin_expect(fid < (int64_t)tab.dyn_frame_ptrs.size() &&
+                             tab.dyn_frame_ptrs[fid] != nullptr, 1)) {
+            int64_t off_in_frame = cold_idx % tab.rows_per_frame;
+            const uint8_t* frame_ptr = tab.dyn_frame_ptrs[fid];
+
+            if (tab.dyn_tiled && D == 16) {
+                // Tiled (H,W) layout: compute tile coordinates directly
+                // Each row is a 4×4 tile in the frame. Row r → tile at (ty, tx).
+                int64_t tiles_per_row = tab.dyn_width / 4;
+                int64_t ty = off_in_frame / tiles_per_row;
+                int64_t tx = off_in_frame % tiles_per_row;
+                float scale = tab.cold_scale;
+                float zp = tab.cold_zp;
+                // Read 4 rows of 4 pixels each from tiled frame
+                for (int ly = 0; ly < 4; ly++) {
+                    const uint8_t* pixel = frame_ptr + (ty * 4 + ly) * tab.dyn_width + tx * 4;
+                    for (int lx = 0; lx < 4; lx++) {
+                        out_row[ly * 4 + lx] += (static_cast<float>(pixel[lx]) - zp) * scale;
+                    }
+                }
+                return true;
+            }
+
+            // Flat (rpf, D) layout: contiguous row read
+            const uint8_t* emb = frame_ptr + off_in_frame * D;
+#if HAS_AVX512
+            if (D == 16) {
+                accum_q8_d16(out_row, emb, tab.cold_scale, tab.cold_zp);
+            } else
+#endif
+            {
+                for (int64_t d = 0; d < D; d++)
+                    out_row[d] += (static_cast<float>(emb[d]) - tab.cold_zp) * tab.cold_scale;
+            }
+            return true;
+        }
+        return false;
     } else {
         // Frame mode: compute frame + offset
         int64_t fid = cold_idx / tab.rows_per_frame;
@@ -1710,6 +2134,387 @@ std::vector<torch::Tensor> fast_forward(
     return results;
 }
 
+/**
+ * fast_forward_seq — Same as fast_forward but sequential tables,
+ * parallel batch elements within each table.
+ * Matches baseline nn.EmbeddingBag parallelization.
+ */
+std::vector<torch::Tensor> fast_forward_seq(
+    const torch::Tensor& lS_i,
+    const torch::Tensor& lS_o)
+{
+    TORCH_CHECK(g_registered, "Tables not registered.");
+    const int64_t T = g_tables.size();
+    const int64_t N = lS_i.size(1);
+    const int64_t B = lS_o.size(1);
+    const int64_t D = g_tables[0].D;
+    constexpr int32_t INVALID = std::numeric_limits<int32_t>::min();
+
+    auto all_outputs = torch::zeros({T * B, D}, torch::kFloat32);
+    float* all_out_ptr = all_outputs.data_ptr<float>();
+
+    int64_t n_compressed = 0;
+    for (int64_t t = 0; t < T; t++)
+        if (g_tables[t].kind != TableKind::STANDARD) n_compressed++;
+
+    auto all_cold_masks = torch::zeros({n_compressed * N}, torch::kBool);
+    bool* all_cm_ptr = all_cold_masks.data_ptr<bool>();
+
+    std::vector<int64_t> cm_offset(T, -1);
+    { int64_t ci = 0;
+      for (int64_t t = 0; t < T; t++)
+          if (g_tables[t].kind != TableKind::STANDARD)
+              cm_offset[t] = ci++ * N;
+    }
+    std::vector<int64_t> cold_counts(T, 0);
+
+    // Sequential over tables, parallel over batches within each table
+    for (int64_t t = 0; t < T; t++) {
+        const auto& tab = g_tables[t];
+        const int64_t* idx_ptr = lS_i.data_ptr<int64_t>() + t * N;
+        const int64_t* off_ptr = lS_o.data_ptr<int64_t>() + t * B;
+        float* out_ptr = all_out_ptr + t * B * D;
+
+        if (tab.kind == TableKind::STANDARD) {
+            const float* w_ptr = tab.weight.data_ptr<float>();
+            at::parallel_for(0, B, 1, [&](int64_t b_begin, int64_t b_end) {
+                for (int64_t b = b_begin; b < b_end; b++) {
+                    int64_t start = off_ptr[b];
+                    int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+                    float* out_row = out_ptr + b * D;
+                    for (int64_t i = start; i < end; i++) {
+                        const float* emb_row = w_ptr + idx_ptr[i] * D;
+#if HAS_AVX512
+                        if (D == 16) accum_fp32_d16(out_row, emb_row);
+                        else
+#endif
+                        for (int64_t d = 0; d < D; d++) out_row[d] += emb_row[d];
+                    }
+                }
+            });
+        } else {
+            bool is_q8 = (tab.kind == TableKind::COMPRESSED_Q8);
+            const uint8_t* hw_q8 = is_q8 ? tab.weight.data_ptr<uint8_t>() : nullptr;
+            const float* hw_fp32 = !is_q8 ? tab.weight.data_ptr<float>() : nullptr;
+            bool* cm_ptr = all_cm_ptr + cm_offset[t];
+            std::atomic<int64_t> atomic_cold{0};
+
+            at::parallel_for(0, B, 1, [&](int64_t b_begin, int64_t b_end) {
+                int64_t local_cold = 0;
+                for (int64_t b = b_begin; b < b_end; b++) {
+                    int64_t start = off_ptr[b];
+                    int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+                    float* out_row = out_ptr + b * D;
+
+                    for (int64_t i = start; i < end; i++) {
+                        int32_t m;
+                        if (tab.use_bitmap) {
+                            m = tab.bitmap_rank.lookup(idx_ptr[i]);
+                        } else {
+                            m = tab.mapping.data_ptr<int32_t>()[idx_ptr[i]];
+                            if (m == INVALID) { cm_ptr[i] = true; local_cold++; continue; }
+                        }
+
+                        if (m >= 0) {
+                            if (is_q8) {
+                                const uint8_t* emb = hw_q8 + static_cast<int64_t>(m) * D;
+#if HAS_AVX512
+                                if (D == 16) accum_q8_d16(out_row, emb, tab.hot_scale, tab.hot_zp);
+                                else
+#endif
+                                for (int64_t d = 0; d < D; d++)
+                                    out_row[d] += (static_cast<float>(emb[d]) - tab.hot_zp) * tab.hot_scale;
+                            } else {
+                                const float* emb = hw_fp32 + static_cast<int64_t>(m) * D;
+#if HAS_AVX512
+                                if (D == 16) accum_fp32_d16(out_row, emb);
+                                else
+#endif
+                                for (int64_t d = 0; d < D; d++) out_row[d] += emb[d];
+                            }
+                        } else {
+                            if (tab.has_cold_frames) {
+                                int64_t ci;
+                                if (tab.use_bitmap && tab.cold_flat) {
+                                    ci = tab.bitmap_rank.cold_rank(idx_ptr[i]);
+                                } else if (tab.use_bitmap && tab.has_cold_mapping) {
+                                    ci = tab.cold_mapping_ptr[idx_ptr[i]];
+                                } else {
+                                    ci = -(static_cast<int64_t>(m) + 1);
+                                }
+                                if (ci >= 0) cold_frame_accum(out_row, tab, ci, D);
+                            } else {
+                                cm_ptr[i] = true; local_cold++;
+                            }
+                        }
+                    }
+                }
+                atomic_cold += local_cold;
+            });
+            cold_counts[t] = atomic_cold.load();
+        }
+    }
+
+    std::vector<torch::Tensor> results;
+    results.reserve(T * 3 + 1);
+    auto outputs_3d = all_outputs.view({T, B, D});
+    for (int64_t t = 0; t < T; t++) results.push_back(outputs_3d[t]);
+    for (int64_t t = 0; t < T; t++) {
+        if (cm_offset[t] >= 0)
+            results.push_back(all_cold_masks.slice(0, cm_offset[t], cm_offset[t] + N));
+        else results.push_back(torch::Tensor());
+    }
+    for (int64_t t = 0; t < T; t++)
+        results.push_back(torch::tensor(cold_counts[t], torch::kLong));
+    results.push_back(outputs_3d);
+    return results;
+}
+
+
+
+// Pipeline structs (needed by fast_forward_seq_pipelined, defined early for access)
+struct PipelineTableInfo {
+    std::string frame_dir;
+    std::string frame_ext;
+    int64_t rpf;
+    float cold_scale, cold_zp;
+    int64_t n_cold;
+    int64_t D;
+    torch::Tensor is_hot;
+    torch::Tensor o2c_map;
+};
+
+struct PipelineState {
+    std::vector<PipelineTableInfo> table_info;
+    std::vector<int64_t> compressed_tables;
+    int64_t budget = 9999;
+    bool initialized = false;
+    std::future<void> bg_future;
+
+    // Pre-loaded compressed frames in memory (eliminates file I/O during decode)
+    // Key: (pipeline_k, frame_id) → compressed bytes tensor
+    std::unordered_map<int64_t, torch::Tensor> inmem_frames;  // key = k * 100000 + fid
+};
+
+static PipelineState g_pipeline;
+
+// Forward declarations for pipeline/decode functions defined later
+static void pipeline_add_frame(int64_t table_idx, int64_t frame_id, torch::Tensor frame_data);
+static void pipeline_remove_frame(int64_t table_idx, int64_t frame_id);
+torch::Tensor decode_hevc_file_fast(const std::string& path, int mode,
+    bool skip_loop_filter, bool skip_idct, bool fast_decode);
+torch::Tensor decode_h265_frame_from_file(const std::string& path, int num_threads,
+    bool skip_loop_filter, bool skip_idct, bool fast_decode);
+std::vector<torch::Tensor> batch_decode_fast(
+    const std::vector<std::string>& paths, int mode, int max_parallel,
+    bool skip_loop_filter, bool skip_idct, bool fast_decode);
+
+/**
+ * fast_forward_seq_pipelined — Sequential tables with 2-table frame LRU cache.
+ *
+ * Processes tables sequentially. Before each compressed table:
+ *   1. Decode its needed frames (parallel threads, one per frame)
+ *   2. If cache > 2 tables, evict oldest table's frames
+ *   3. Run inference using dynamic frame pointers
+ *
+ * Peak memory: ~2 tables' decoded frames (~8-16MB vs 40MB for all 8 tables)
+ * Re-decodes frames each batch since different tables' frames get evicted.
+ */
+std::vector<torch::Tensor> fast_forward_seq_pipelined(
+    const torch::Tensor& lS_i,
+    const torch::Tensor& lS_o)
+{
+    TORCH_CHECK(g_registered, "Tables not registered.");
+    TORCH_CHECK(g_pipeline.initialized, "Pipeline not initialized.");
+    const int64_t T = g_tables.size();
+    const int64_t N = lS_i.size(1);
+    const int64_t B = lS_o.size(1);
+    const int64_t D = g_tables[0].D;
+    constexpr int32_t INVALID = std::numeric_limits<int32_t>::min();
+    const int64_t K = g_pipeline.compressed_tables.size();
+
+    auto all_outputs = torch::zeros({T * B, D}, torch::kFloat32);
+    float* all_out_ptr = all_outputs.data_ptr<float>();
+
+    int64_t n_compressed = 0;
+    for (int64_t t = 0; t < T; t++)
+        if (g_tables[t].kind != TableKind::STANDARD) n_compressed++;
+
+    auto all_cold_masks = torch::zeros({n_compressed * N}, torch::kBool);
+    bool* all_cm_ptr = all_cold_masks.data_ptr<bool>();
+
+    std::vector<int64_t> cm_offset(T, -1);
+    { int64_t ci = 0;
+      for (int64_t t = 0; t < T; t++)
+          if (g_tables[t].kind != TableKind::STANDARD) cm_offset[t] = ci++ * N;
+    }
+    std::vector<int64_t> cold_counts(T, 0);
+
+    // Map table_idx -> pipeline index k
+    std::unordered_map<int64_t, int64_t> table_to_k;
+    for (int64_t k = 0; k < K; k++)
+        table_to_k[g_pipeline.compressed_tables[k]] = k;
+
+    // LRU: track which tables have frames loaded (oldest first)
+    std::deque<int64_t> cached_tables;  // pipeline k indices, front = oldest
+
+    // --- Process tables sequentially ---
+    for (int64_t t = 0; t < T; t++) {
+        const auto& tab = g_tables[t];
+        const int64_t* idx_ptr = lS_i.data_ptr<int64_t>() + t * N;
+        const int64_t* off_ptr = lS_o.data_ptr<int64_t>() + t * B;
+        float* out_ptr = all_out_ptr + t * B * D;
+
+        auto kit = table_to_k.find(t);
+        if (kit != table_to_k.end()) {
+            int64_t k = kit->second;
+            auto& info = g_pipeline.table_info[k];
+
+            // Evict oldest table if cache full (keep max 2)
+            while ((int64_t)cached_tables.size() >= 2) {
+                int64_t evict_k = cached_tables.front();
+                cached_tables.pop_front();
+                int64_t evict_t = g_pipeline.compressed_tables[evict_k];
+                auto& evict_tab = g_tables[evict_t];
+                // Clear all frame pointers for this table
+                for (size_t fi = 0; fi < evict_tab.dyn_frame_ptrs.size(); fi++) {
+                    evict_tab.dyn_frame_ptrs[fi] = nullptr;
+                    evict_tab.dyn_frame_tensors[fi] = torch::Tensor();
+                }
+            }
+
+            // Scan which frames this table needs
+            const bool* hot_ptr = info.is_hot.data_ptr<bool>();
+            const int32_t* o2c_ptr = info.o2c_map.data_ptr<int32_t>();
+            std::unordered_set<int64_t> needed_fids;
+            for (int64_t i = 0; i < N; i++) {
+                int64_t orig = idx_ptr[i];
+                if (!hot_ptr[orig]) {
+                    int32_t ci = o2c_ptr[orig];
+                    if (ci >= 0) needed_fids.insert(ci / info.rpf);
+                }
+            }
+
+            // Decode missing frames using batch_decode_fast (pool-accelerated)
+            std::vector<std::string> paths_to_decode;
+            std::vector<int64_t> fids_to_decode;
+            auto& dyn = g_tables[t].dyn_frame_ptrs;
+            for (int64_t fid : needed_fids) {
+                if (fid >= (int64_t)dyn.size() || dyn[fid] == nullptr) {
+                    char fname[128];
+                    snprintf(fname, sizeof(fname), "frame_%05ld%s",
+                             (long)fid, info.frame_ext.c_str());
+                    paths_to_decode.push_back(info.frame_dir + "/" + fname);
+                    fids_to_decode.push_back(fid);
+                }
+            }
+
+            if (!paths_to_decode.empty()) {
+                auto decoded = batch_decode_fast(
+                    paths_to_decode, 2, paths_to_decode.size(),
+                    true, false, false);
+                for (size_t i = 0; i < fids_to_decode.size(); i++) {
+                    if (decoded[i].defined())
+                        pipeline_add_frame(t, fids_to_decode[i], decoded[i]);
+                }
+            }
+
+            cached_tables.push_back(k);
+        }
+
+        // --- Run inference for this table ---
+        if (tab.kind == TableKind::STANDARD) {
+            const float* w_ptr = tab.weight.data_ptr<float>();
+            at::parallel_for(0, B, 1, [&](int64_t b_begin, int64_t b_end) {
+                for (int64_t b = b_begin; b < b_end; b++) {
+                    int64_t start = off_ptr[b];
+                    int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+                    float* out_row = out_ptr + b * D;
+                    for (int64_t i = start; i < end; i++) {
+                        const float* emb_row = w_ptr + idx_ptr[i] * D;
+#if HAS_AVX512
+                        if (D == 16) accum_fp32_d16(out_row, emb_row);
+                        else
+#endif
+                        for (int64_t d = 0; d < D; d++) out_row[d] += emb_row[d];
+                    }
+                }
+            });
+        } else {
+            bool is_q8 = (tab.kind == TableKind::COMPRESSED_Q8);
+            const uint8_t* hw_q8 = is_q8 ? tab.weight.data_ptr<uint8_t>() : nullptr;
+            const float* hw_fp32 = !is_q8 ? tab.weight.data_ptr<float>() : nullptr;
+            bool* cm_ptr = all_cm_ptr + cm_offset[t];
+            std::atomic<int64_t> atomic_cold{0};
+
+            at::parallel_for(0, B, 1, [&](int64_t b_begin, int64_t b_end) {
+                int64_t local_cold = 0;
+                for (int64_t b = b_begin; b < b_end; b++) {
+                    int64_t start = off_ptr[b];
+                    int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+                    float* out_row = out_ptr + b * D;
+                    for (int64_t i = start; i < end; i++) {
+                        int32_t m;
+                        if (tab.use_bitmap) {
+                            m = tab.bitmap_rank.lookup(idx_ptr[i]);
+                        } else {
+                            m = tab.mapping.data_ptr<int32_t>()[idx_ptr[i]];
+                            if (m == INVALID) { cm_ptr[i] = true; local_cold++; continue; }
+                        }
+                        if (m >= 0) {
+                            if (is_q8) {
+                                const uint8_t* emb = hw_q8 + static_cast<int64_t>(m) * D;
+#if HAS_AVX512
+                                if (D == 16) accum_q8_d16(out_row, emb, tab.hot_scale, tab.hot_zp);
+                                else
+#endif
+                                for (int64_t d = 0; d < D; d++)
+                                    out_row[d] += (static_cast<float>(emb[d]) - tab.hot_zp) * tab.hot_scale;
+                            } else {
+                                const float* emb = hw_fp32 + static_cast<int64_t>(m) * D;
+#if HAS_AVX512
+                                if (D == 16) accum_fp32_d16(out_row, emb);
+                                else
+#endif
+                                for (int64_t d = 0; d < D; d++) out_row[d] += emb[d];
+                            }
+                        } else {
+                            if (tab.has_cold_frames) {
+                                int64_t ci;
+                                if (tab.use_bitmap && tab.cold_flat) {
+                                    ci = tab.bitmap_rank.cold_rank(idx_ptr[i]);
+                                } else if (tab.use_bitmap && tab.has_cold_mapping) {
+                                    ci = tab.cold_mapping_ptr[idx_ptr[i]];
+                                } else {
+                                    ci = -(static_cast<int64_t>(m) + 1);
+                                }
+                                if (ci >= 0) cold_frame_accum(out_row, tab, ci, D);
+                            } else {
+                                cm_ptr[i] = true; local_cold++;
+                            }
+                        }
+                    }
+                }
+                atomic_cold += local_cold;
+            });
+            cold_counts[t] = atomic_cold.load();
+        }
+    }
+
+    std::vector<torch::Tensor> results;
+    results.reserve(T * 3 + 1);
+    auto outputs_3d = all_outputs.view({T, B, D});
+    for (int64_t t = 0; t < T; t++) results.push_back(outputs_3d[t]);
+    for (int64_t t = 0; t < T; t++) {
+        if (cm_offset[t] >= 0)
+            results.push_back(all_cold_masks.slice(0, cm_offset[t], cm_offset[t] + N));
+        else results.push_back(torch::Tensor());
+    }
+    for (int64_t t = 0; t < T; t++)
+        results.push_back(torch::tensor(cold_counts[t], torch::kLong));
+    results.push_back(outputs_3d);
+    return results;
+}
 
 // ============================================================
 // Frame packing/unpacking optimizations
@@ -3076,6 +3881,325 @@ int64_t batch_encode_frames_codec(
 
 
 // ============================================================
+// CODEC CONTEXT POOL — reuse AVCodecContext across decodes
+// ============================================================
+
+/**
+ * HevcDecoderPool — Thread-safe pool of pre-initialized H.265 decoder contexts.
+ *
+ * Avoids ~2ms overhead of avcodec_alloc_context3 + avcodec_open2 per decode.
+ * Contexts are flushed (avcodec_flush_buffers) between uses, which is safe
+ * for ALL-INTRA frames with no inter-frame dependencies.
+ */
+class HevcDecoderPool {
+public:
+    struct DecoderCtx {
+        AVCodecContext* codec_ctx;
+        AVPacket* pkt;
+        AVFrame* frame;
+    };
+
+    static HevcDecoderPool& instance() {
+        static HevcDecoderPool pool;
+        return pool;
+    }
+
+    /**
+     * acquire — Get a decoder context from the pool or create one.
+     *
+     * The caller must provide AVCodecParameters from the stream so that
+     * newly created contexts are properly initialized with SPS/PPS extradata.
+     */
+    DecoderCtx acquire(AVCodecParameters* codecpar,
+                       bool skip_loop_filter = false,
+                       bool skip_idct = false,
+                       bool fast_decode = false) {
+        std::lock_guard<std::mutex> lock(mu_);
+        uint8_t key = (skip_loop_filter ? 1 : 0) |
+                      (skip_idct ? 2 : 0) |
+                      (fast_decode ? 4 : 0);
+        auto& q = pools_[key];
+        if (!q.empty()) {
+            auto ctx = q.front();
+            q.pop();
+            avcodec_flush_buffers(ctx.codec_ctx);
+            return ctx;
+        }
+        // Create new context from stream parameters
+        return create_new(codecpar, skip_loop_filter, skip_idct, fast_decode);
+    }
+
+    void release(DecoderCtx ctx, bool skip_loop_filter = false,
+                 bool skip_idct = false, bool fast_decode = false) {
+        std::lock_guard<std::mutex> lock(mu_);
+        uint8_t key = (skip_loop_filter ? 1 : 0) |
+                      (skip_idct ? 2 : 0) |
+                      (fast_decode ? 4 : 0);
+        pools_[key].push(ctx);
+    }
+
+private:
+    HevcDecoderPool() = default;
+
+    DecoderCtx create_new(AVCodecParameters* codecpar,
+                          bool skip_loop_filter, bool skip_idct, bool fast_decode) {
+        const AVCodec* codec = avcodec_find_decoder(codecpar->codec_id);
+        TORCH_CHECK(codec != nullptr, "Decoder not found for codec");
+
+        AVCodecContext* codec_ctx = avcodec_alloc_context3(codec);
+        TORCH_CHECK(codec_ctx != nullptr, "Failed to alloc codec context");
+
+        // Copy ALL parameters from stream (including extradata/SPS/PPS)
+        avcodec_parameters_to_context(codec_ctx, codecpar);
+
+        codec_ctx->thread_count = 1;
+        codec_ctx->thread_type = FF_THREAD_SLICE;
+
+        if (skip_loop_filter) codec_ctx->skip_loop_filter = AVDISCARD_ALL;
+        if (skip_idct) codec_ctx->skip_idct = AVDISCARD_ALL;
+        if (fast_decode) codec_ctx->flags2 |= AV_CODEC_FLAG2_FAST;
+
+        int ret = avcodec_open2(codec_ctx, codec, nullptr);
+        TORCH_CHECK(ret >= 0, "Failed to open codec");
+
+        AVPacket* pkt = av_packet_alloc();
+        AVFrame* frame = av_frame_alloc();
+
+        return {codec_ctx, pkt, frame};
+    }
+
+    std::mutex mu_;
+    std::unordered_map<uint8_t, std::queue<DecoderCtx>> pools_;
+};
+
+
+/**
+ * decode_hevc_file_fast — Fast single-frame decode with format hint + pool.
+ *
+ * Optimizations vs the original decode_h265_frame_from_file:
+ *   1. Format hint: tells avformat the file is HEVC, skips format probing
+ *   2. Skip find_stream_info: we know the stream layout
+ *   3. Pool codec context: reuse AVCodecContext across decodes (biggest win)
+ *
+ * Modes:
+ *   mode=0: original (full avformat probing, fresh context each time)
+ *   mode=1: format hint only (skip probing, fresh context)
+ *   mode=2: pool only (full probing, reuse context)
+ *   mode=3: hint + pool (fastest)
+ */
+torch::Tensor decode_hevc_file_fast(
+    const std::string& path,
+    int mode = 3,
+    bool skip_loop_filter = false,
+    bool skip_idct = false,
+    bool fast_decode = false);
+
+// Forward declarations — defined later in this file
+torch::Tensor decode_h265_frame_from_file(const std::string& path, int num_threads,
+                                          bool skip_loop_filter,
+                                          bool skip_idct,
+                                          bool fast_decode);
+static torch::Tensor decode_any_frame_from_file(
+    const std::string& path, const std::string& ext, int num_threads,
+    bool skip_loop_filter, bool skip_idct, bool fast_decode);
+
+torch::Tensor decode_hevc_file_fast(
+    const std::string& path,
+    int mode,
+    bool skip_loop_filter,
+    bool skip_idct,
+    bool fast_decode)
+{
+    // Mode 0: original path
+    if (mode == 0) {
+        return decode_h265_frame_from_file(path, 1, skip_loop_filter,
+                                           skip_idct, fast_decode);
+    }
+
+    bool use_hint = (mode == 1 || mode == 3);
+    bool use_pool = (mode == 2 || mode == 3);
+
+    // --- Open file with avformat ---
+    AVFormatContext* fmt_ctx = nullptr;
+    int ret = avformat_open_input(&fmt_ctx, path.c_str(), nullptr, nullptr);
+    TORCH_CHECK(ret >= 0, "Failed to open file: ", path);
+
+    if (use_hint) {
+        // Fast probing: minimize probe size and skip duration analysis.
+        // Our files are small single-frame containers, so minimal probing suffices.
+        fmt_ctx->probesize = 4096;
+        fmt_ctx->max_analyze_duration = 0;
+    }
+    ret = avformat_find_stream_info(fmt_ctx, nullptr);
+    TORCH_CHECK(ret >= 0, "Failed to find stream info");
+
+    // Find video stream
+    int video_stream = -1;
+    for (unsigned i = 0; i < fmt_ctx->nb_streams; i++) {
+        if (fmt_ctx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+            video_stream = i;
+            break;
+        }
+    }
+    TORCH_CHECK(video_stream >= 0, "No video stream found");
+    AVCodecParameters* codecpar = fmt_ctx->streams[video_stream]->codecpar;
+
+    // --- Get or create codec context ---
+    HevcDecoderPool::DecoderCtx dctx = {};
+    AVCodecContext* codec_ctx = nullptr;
+    AVPacket* pkt = nullptr;
+    AVFrame* frame = nullptr;
+    bool from_pool = false;
+
+    if (use_pool) {
+        dctx = HevcDecoderPool::instance().acquire(
+            codecpar, skip_loop_filter, skip_idct, fast_decode);
+        codec_ctx = dctx.codec_ctx;
+        pkt = dctx.pkt;
+        frame = dctx.frame;
+        from_pool = true;
+    } else {
+        // Fresh context
+        const AVCodec* codec = avcodec_find_decoder(codecpar->codec_id);
+        TORCH_CHECK(codec != nullptr, "Codec not found");
+        codec_ctx = avcodec_alloc_context3(codec);
+        TORCH_CHECK(codec_ctx != nullptr, "Failed to alloc codec context");
+        avcodec_parameters_to_context(codec_ctx, codecpar);
+        codec_ctx->thread_count = 1;
+        codec_ctx->thread_type = FF_THREAD_SLICE;
+        if (skip_loop_filter) codec_ctx->skip_loop_filter = AVDISCARD_ALL;
+        if (skip_idct) codec_ctx->skip_idct = AVDISCARD_ALL;
+        if (fast_decode) codec_ctx->flags2 |= AV_CODEC_FLAG2_FAST;
+        ret = avcodec_open2(codec_ctx, codec, nullptr);
+        TORCH_CHECK(ret >= 0, "Failed to open codec");
+        pkt = av_packet_alloc();
+        frame = av_frame_alloc();
+    }
+
+    // --- Read and decode ---
+    torch::Tensor result;
+    bool decoded = false;
+
+    while (av_read_frame(fmt_ctx, pkt) >= 0 && !decoded) {
+        if (pkt->stream_index == video_stream) {
+            ret = avcodec_send_packet(codec_ctx, pkt);
+            if (ret >= 0) {
+                ret = avcodec_receive_frame(codec_ctx, frame);
+                if (ret >= 0) {
+                    int h = frame->height;
+                    int w = frame->width;
+                    result = torch::empty({h, w}, torch::kUInt8);
+                    uint8_t* dst = result.data_ptr<uint8_t>();
+                    if (frame->linesize[0] == w) {
+                        std::memcpy(dst, frame->data[0], h * w);
+                    } else {
+                        for (int y = 0; y < h; y++) {
+                            std::memcpy(dst + y * w,
+                                       frame->data[0] + y * frame->linesize[0], w);
+                        }
+                    }
+                    decoded = true;
+                }
+            }
+        }
+        av_packet_unref(pkt);
+    }
+
+    // Flush decoder
+    if (!decoded) {
+        avcodec_send_packet(codec_ctx, nullptr);
+        ret = avcodec_receive_frame(codec_ctx, frame);
+        if (ret >= 0) {
+            int h = frame->height;
+            int w = frame->width;
+            result = torch::empty({h, w}, torch::kUInt8);
+            uint8_t* dst = result.data_ptr<uint8_t>();
+            if (frame->linesize[0] == w) {
+                std::memcpy(dst, frame->data[0], h * w);
+            } else {
+                for (int y = 0; y < h; y++) {
+                    std::memcpy(dst + y * w,
+                               frame->data[0] + y * frame->linesize[0], w);
+                }
+            }
+            decoded = true;
+        }
+    }
+
+    // --- Cleanup ---
+    avformat_close_input(&fmt_ctx);
+
+    if (from_pool) {
+        HevcDecoderPool::instance().release(
+            dctx, skip_loop_filter, skip_idct, fast_decode);
+    } else {
+        av_frame_free(&frame);
+        av_packet_free(&pkt);
+        avcodec_free_context(&codec_ctx);
+    }
+
+    TORCH_CHECK(decoded, "Failed to decode: ", path);
+    return result;
+}
+
+
+/**
+ * batch_decode_fast — Batch decode with raw parsing + pool.
+ *
+ * Like batch_decode_file_paths but uses decode_hevc_file_fast for H.265 files.
+ */
+std::vector<torch::Tensor> batch_decode_fast(
+    const std::vector<std::string>& paths,
+    int mode = 3,
+    int max_parallel = 0,
+    bool skip_loop_filter = false,
+    bool skip_idct = false,
+    bool fast_decode = false)
+{
+    const int64_t n = paths.size();
+    if (n == 0) return {};
+    if (max_parallel <= 0) max_parallel = n;
+
+    std::vector<torch::Tensor> results(n);
+    std::vector<std::string> errors(n);
+
+    for (int64_t start = 0; start < n; start += max_parallel) {
+        int64_t end = std::min(start + (int64_t)max_parallel, n);
+        std::vector<std::thread> threads;
+        for (int64_t i = start; i < end; i++) {
+            threads.emplace_back([&, i]() {
+                try {
+                    std::string ext = ".h265";
+                    size_t dot_pos = paths[i].rfind('.');
+                    if (dot_pos != std::string::npos) {
+                        ext = paths[i].substr(dot_pos);
+                    }
+                    if (ext == ".zst") {
+                        // Zstd path unchanged
+                        results[i] = decode_any_frame_from_file(
+                            paths[i], ext, 1, skip_loop_filter,
+                            skip_idct, fast_decode);
+                    } else {
+                        results[i] = decode_hevc_file_fast(
+                            paths[i], mode, skip_loop_filter,
+                            skip_idct, fast_decode);
+                    }
+                } catch (const std::exception& e) {
+                    errors[i] = e.what();
+                }
+            });
+        }
+        for (auto& t : threads) t.join();
+    }
+
+    for (int64_t i = 0; i < n; i++) {
+        TORCH_CHECK(errors[i].empty(), "Failed to decode ", paths[i], ": ", errors[i]);
+    }
+    return results;
+}
+
+
+// ============================================================
 // DIRECT H.265 DECODE via libavcodec (avoids PyAV Python overhead)
 // ============================================================
 
@@ -3089,7 +4213,10 @@ int64_t batch_encode_frames_codec(
  * 2. Direct memory copy from AVFrame to torch tensor (no numpy intermediate)
  * 3. No Python GIL contention
  */
-torch::Tensor decode_h265_frame_from_file(const std::string& path) {
+torch::Tensor decode_h265_frame_from_file(const std::string& path, int num_threads = 0,
+                                          bool skip_loop_filter = false,
+                                          bool skip_idct = false,
+                                          bool fast_decode = false) {
     // Open input file
     AVFormatContext* fmt_ctx = nullptr;
     int ret = avformat_open_input(&fmt_ctx, path.c_str(), nullptr, nullptr);
@@ -3116,10 +4243,24 @@ torch::Tensor decode_h265_frame_from_file(const std::string& path) {
     TORCH_CHECK(codec_ctx != nullptr, "Failed to alloc codec context");
     avcodec_parameters_to_context(codec_ctx, codecpar);
 
-    // Use auto-threading (thread_count=0 lets libavcodec choose optimal count)
-    // For H.265 slice-based threading: splits frame into horizontal slices
-    codec_ctx->thread_count = 0;
+    // thread_count=0 → auto (libavcodec picks), 1 → single-threaded (for external parallelism)
+    codec_ctx->thread_count = num_threads;
     codec_ctx->thread_type = FF_THREAD_SLICE;
+
+    // Skip loop filter (deblocking) — saves ~15-23% decode time
+    if (skip_loop_filter) {
+        codec_ctx->skip_loop_filter = AVDISCARD_ALL;
+    }
+
+    // Skip IDCT — more aggressive, skips inverse DCT reconstruction
+    if (skip_idct) {
+        codec_ctx->skip_idct = AVDISCARD_ALL;
+    }
+
+    // AV_CODEC_FLAG2_FAST — allow non-spec-compliant speed tricks
+    if (fast_decode) {
+        codec_ctx->flags2 |= AV_CODEC_FLAG2_FAST;
+    }
 
     ret = avcodec_open2(codec_ctx, codec, nullptr);
     TORCH_CHECK(ret >= 0, "Failed to open codec");
@@ -3354,6 +4495,54 @@ torch::Tensor decode_h265_gather_dequant(
 static std::string auto_detect_frame_ext(const std::string& frame_dir);
 
 /**
+ * decode_any_frame_from_file - Generic frame decode that dispatches by extension.
+ *
+ * For .zst: reads file, Zstd decompresses, returns 1D uint8 tensor (flat).
+ * For .h265/.h264/.mkv: calls decode_h265_frame_from_file, returns (H, W) uint8 tensor.
+ *
+ * The caller must handle the shape difference (1D for Zstd, 2D for video codecs).
+ */
+static torch::Tensor decode_any_frame_from_file(
+    const std::string& path, const std::string& ext, int num_threads = 0,
+    bool skip_loop_filter = false,
+    bool skip_idct = false,
+    bool fast_decode = false)
+{
+    if (ext == ".zst") {
+        // Zstd path: read file + decompress
+        FILE* f = fopen(path.c_str(), "rb");
+        TORCH_CHECK(f != nullptr, "Failed to open Zstd file: ", path);
+        fseek(f, 0, SEEK_END);
+        size_t file_size = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        std::vector<uint8_t> compressed(file_size);
+        size_t nread = fread(compressed.data(), 1, file_size, f);
+        fclose(f);
+        TORCH_CHECK(nread == file_size, "Short read on ", path);
+
+        // Get decompressed size from Zstd frame header
+        unsigned long long content_size = ZSTD_getFrameContentSize(
+            compressed.data(), file_size);
+        TORCH_CHECK(content_size != ZSTD_CONTENTSIZE_UNKNOWN &&
+                    content_size != ZSTD_CONTENTSIZE_ERROR,
+                    "Cannot determine Zstd content size for: ", path);
+
+        auto output = torch::empty({(int64_t)content_size}, torch::kUInt8);
+        size_t decompressed = ZSTD_decompress(
+            output.data_ptr<uint8_t>(), (size_t)content_size,
+            compressed.data(), file_size);
+        TORCH_CHECK(!ZSTD_isError(decompressed),
+                    "Zstd decompress failed for ", path, ": ",
+                    ZSTD_getErrorName(decompressed));
+        return output;
+    } else {
+        // Video codec path (H.265, H.264, FFV1, etc.)
+        return decode_h265_frame_from_file(path, num_threads, skip_loop_filter,
+                                              skip_idct, fast_decode);
+    }
+}
+
+/**
  * batch_decode_gather_dequant - Decode multiple frames in parallel and gather+dequant.
  *
  * This is the key optimization for batch inference: when a batch needs rows from
@@ -3387,6 +4576,7 @@ torch::Tensor batch_decode_gather_dequant(
 
     // Step 1: Decode all frames in parallel (auto-detect codec from file extension)
     std::string ext = auto_detect_frame_ext(frame_dir);
+    bool is_zstd = (ext == ".zst");
     std::vector<torch::Tensor> decoded_frames(num_frames);
 
     // Use std::thread for parallel decode (at::parallel_for may not work well with
@@ -3400,7 +4590,7 @@ torch::Tensor batch_decode_gather_dequant(
                 char fname[64];
                 snprintf(fname, sizeof(fname), "frame_%05ld%s", fid_ptr[i], ext.c_str());
                 std::string path = frame_dir + "/" + fname;
-                decoded_frames[i] = decode_h265_frame_from_file(path);
+                decoded_frames[i] = decode_any_frame_from_file(path, ext);
             } catch (const std::exception& e) {
                 errors[i] = e.what();
             }
@@ -3434,12 +4624,12 @@ torch::Tensor batch_decode_gather_dequant(
     // Get frame data pointers
     struct FrameInfo {
         const uint8_t* data;
-        int64_t width;
+        int64_t width;  // width for tiled frames, D for flat (Zstd) frames
     };
     std::vector<FrameInfo> frame_infos(num_frames);
     for (int64_t i = 0; i < num_frames; i++) {
         frame_infos[i].data = decoded_frames[i].data_ptr<uint8_t>();
-        frame_infos[i].width = decoded_frames[i].size(1);
+        frame_infos[i].width = is_zstd ? D : decoded_frames[i].size(1);
     }
 
     at::parallel_for(0, num_indices, 64, [&](int64_t begin, int64_t end) {
@@ -3453,21 +4643,24 @@ torch::Tensor batch_decode_gather_dequant(
                         "Frame ID ", fid, " not in decoded set");
             int64_t fidx = fid_to_idx[fid];
             const uint8_t* frame_data = frame_infos[fidx].data;
-            int64_t width = frame_infos[fidx].width;
-
-            // Compute tile position
-            int64_t ty = row_in_frame / tiles_per_row;
-            int64_t tx = row_in_frame % tiles_per_row;
-
-            // Gather 4x4 tile and dequantize
             float* dst = out_ptr + i * D;
-            for (int ly = 0; ly < 4; ly++) {
-                const uint8_t* src = frame_data + (ty * 4 + ly) * width + tx * 4;
-#ifdef __AVX512F__
-                // Can't use full AVX-512 for 4 bytes, use scalar
-#endif
-                for (int lx = 0; lx < 4; lx++) {
-                    dst[ly * 4 + lx] = (static_cast<float>(src[lx]) - fzp) * fscale;
+
+            if (is_zstd) {
+                // Flat layout: row_in_frame * D + col
+                const uint8_t* src = frame_data + row_in_frame * D;
+                for (int64_t d = 0; d < D; d++) {
+                    dst[d] = (static_cast<float>(src[d]) - fzp) * fscale;
+                }
+            } else {
+                // Tiled layout: (ty*4+ly) * width + tx*4+lx
+                int64_t width = frame_infos[fidx].width;
+                int64_t ty = row_in_frame / tiles_per_row;
+                int64_t tx = row_in_frame % tiles_per_row;
+                for (int ly = 0; ly < 4; ly++) {
+                    const uint8_t* src = frame_data + (ty * 4 + ly) * width + tx * 4;
+                    for (int lx = 0; lx < 4; lx++) {
+                        dst[ly * 4 + lx] = (static_cast<float>(src[lx]) - fzp) * fscale;
+                    }
                 }
             }
         }
@@ -3484,7 +4677,7 @@ torch::Tensor batch_decode_gather_dequant(
  * Returns the detected extension string, defaults to ".h265".
  */
 static std::string auto_detect_frame_ext(const std::string& frame_dir) {
-    const char* exts[] = {".h265", ".h264", ".mkv"};
+    const char* exts[] = {".h265", ".h264", ".mkv", ".zst"};
     for (const char* ext : exts) {
         std::string path = frame_dir + "/frame_00000" + ext;
         FILE* f = fopen(path.c_str(), "rb");
@@ -3497,11 +4690,11 @@ static std::string auto_detect_frame_ext(const std::string& frame_dir) {
 }
 
 /**
- * batch_decode_frames - Decode multiple frames in parallel, return tiled frames.
+ * batch_decode_frames - Decode multiple frames in parallel, return decoded frames.
  *
- * Auto-detects codec from file extension (.h265, .h264, .mkv).
- * Useful when caller wants to cache the decoded frames.
- * Returns: vector of torch::Tensor, each (H, W) uint8.
+ * Auto-detects codec from file extension (.h265, .h264, .mkv, .zst).
+ * For video codecs: returns (H, W) uint8 tensors (tiled layout).
+ * For Zstd: returns 1D uint8 tensors (flat layout, rows_per_frame * D bytes).
  */
 std::vector<torch::Tensor> batch_decode_frames(
     const std::string& frame_dir,
@@ -3523,7 +4716,7 @@ std::vector<torch::Tensor> batch_decode_frames(
                 char fname[64];
                 snprintf(fname, sizeof(fname), "frame_%05ld%s", fid_ptr[i], ext.c_str());
                 std::string path = frame_dir + "/" + fname;
-                decoded_frames[i] = decode_h265_frame_from_file(path);
+                decoded_frames[i] = decode_any_frame_from_file(path, ext);
             } catch (const std::exception& e) {
                 errors[i] = e.what();
             }
@@ -3539,6 +4732,58 @@ std::vector<torch::Tensor> batch_decode_frames(
     return decoded_frames;
 }
 
+
+/**
+ * batch_decode_file_paths - Decode frames from explicit file paths in parallel.
+ *
+ * Auto-detects codec from file extension (.zst → Zstd, else → FFmpeg).
+ * Uses std::thread for parallelism (no Python GIL, no at::parallel_for).
+ * max_parallel controls how many concurrent decodes run at once.
+ */
+std::vector<torch::Tensor> batch_decode_file_paths(
+    const std::vector<std::string>& paths,
+    int num_threads_per_decode = 1,
+    int max_parallel = 0,
+    bool skip_loop_filter = false,
+    bool skip_idct = false,
+    bool fast_decode = false)
+{
+    const int64_t n = paths.size();
+    if (n == 0) return {};
+    if (max_parallel <= 0) max_parallel = n;  // default: all at once
+
+    std::vector<torch::Tensor> results(n);
+    std::vector<std::string> errors(n);
+
+    // Process in chunks of max_parallel
+    for (int64_t start = 0; start < n; start += max_parallel) {
+        int64_t end = std::min(start + (int64_t)max_parallel, n);
+        std::vector<std::thread> threads;
+        for (int64_t i = start; i < end; i++) {
+            threads.emplace_back([&, i]() {
+                try {
+                    // Detect extension from path
+                    std::string ext = ".h265";  // default
+                    size_t dot_pos = paths[i].rfind('.');
+                    if (dot_pos != std::string::npos) {
+                        ext = paths[i].substr(dot_pos);
+                    }
+                    results[i] = decode_any_frame_from_file(
+                        paths[i], ext, num_threads_per_decode, skip_loop_filter,
+                        skip_idct, fast_decode);
+                } catch (const std::exception& e) {
+                    errors[i] = e.what();
+                }
+            });
+        }
+        for (auto& t : threads) t.join();
+    }
+
+    for (int64_t i = 0; i < n; i++) {
+        TORCH_CHECK(errors[i].empty(), "Failed to decode ", paths[i], ": ", errors[i]);
+    }
+    return results;
+}
 
 // scan_needed_frames: given batch indices, find which cold frames are needed per table.
 // Replaces the Python loop over compressed tables with a single fused C++ call.
@@ -3732,6 +4977,736 @@ void scatter_cold_to_weights(
 }
 
 
+// ============================================================
+// Zstd compression/decompression (lossless, ~35x faster decode than H.265)
+// ============================================================
+
+/**
+ * zstd_compress_frame - Compress a contiguous uint8 tensor with Zstd.
+ *
+ * Returns a 1D uint8 tensor containing the compressed data.
+ * level: Zstd compression level (1=fastest, 19=best, default=3).
+ */
+torch::Tensor zstd_compress_frame(const torch::Tensor& data, int level = 3) {
+    TORCH_CHECK(data.dtype() == torch::kUInt8, "zstd_compress_frame: input must be uint8");
+    auto contiguous = data.contiguous();
+    const size_t src_size = contiguous.numel();
+    const void* src = contiguous.data_ptr<uint8_t>();
+
+    size_t bound = ZSTD_compressBound(src_size);
+    auto output = torch::empty({(int64_t)bound}, torch::kUInt8);
+    void* dst = output.data_ptr<uint8_t>();
+
+    size_t compressed_size = ZSTD_compress(dst, bound, src, src_size, level);
+    TORCH_CHECK(!ZSTD_isError(compressed_size),
+                "Zstd compress failed: ", ZSTD_getErrorName(compressed_size));
+
+    // Trim to actual size
+    return output.slice(0, 0, (int64_t)compressed_size).clone();
+}
+
+/**
+ * zstd_decompress_frame - Decompress Zstd data back to uint8 tensor.
+ *
+ * original_size: the expected decompressed size in bytes.
+ * Returns a 1D uint8 tensor of exactly original_size bytes.
+ */
+torch::Tensor zstd_decompress_frame(const torch::Tensor& compressed, int64_t original_size) {
+    TORCH_CHECK(compressed.dtype() == torch::kUInt8, "zstd_decompress_frame: input must be uint8");
+    auto contiguous = compressed.contiguous();
+    const size_t comp_size = contiguous.numel();
+    const void* src = contiguous.data_ptr<uint8_t>();
+
+    auto output = torch::empty({original_size}, torch::kUInt8);
+    void* dst = output.data_ptr<uint8_t>();
+
+    size_t decompressed_size = ZSTD_decompress(dst, (size_t)original_size, src, comp_size);
+    TORCH_CHECK(!ZSTD_isError(decompressed_size),
+                "Zstd decompress failed: ", ZSTD_getErrorName(decompressed_size));
+    TORCH_CHECK((int64_t)decompressed_size == original_size,
+                "Zstd decompress size mismatch: got ", decompressed_size,
+                " expected ", original_size);
+
+    return output;
+}
+
+/**
+ * batch_zstd_compress - Compress multiple frames in parallel, write to .zst files.
+ *
+ * frames: vector of uint8 tensors (each is a flat frame).
+ * output_dir: directory to write frame_XXXXX.zst files.
+ * level: Zstd compression level.
+ * Returns total compressed bytes written.
+ */
+int64_t batch_zstd_compress(
+    const std::vector<torch::Tensor>& frames,
+    const std::string& output_dir,
+    int level = 3)
+{
+    const int64_t n = frames.size();
+    if (n == 0) return 0;
+
+    std::vector<int64_t> compressed_sizes(n, 0);
+    std::vector<std::string> errors(n);
+    std::vector<std::thread> threads;
+
+    for (int64_t i = 0; i < n; i++) {
+        threads.emplace_back([&, i]() {
+            try {
+                const auto& frame = frames[i].contiguous();
+                TORCH_CHECK(frame.dtype() == torch::kUInt8,
+                            "batch_zstd_compress: frame ", i, " must be uint8");
+                const size_t src_size = frame.numel();
+                const void* src = frame.data_ptr<uint8_t>();
+
+                size_t bound = ZSTD_compressBound(src_size);
+                std::vector<uint8_t> buf(bound);
+
+                size_t comp_size = ZSTD_compress(buf.data(), bound, src, src_size, level);
+                if (ZSTD_isError(comp_size)) {
+                    errors[i] = std::string("Zstd compress failed: ") + ZSTD_getErrorName(comp_size);
+                    return;
+                }
+
+                char fname[64];
+                snprintf(fname, sizeof(fname), "frame_%05ld.zst", (long)i);
+                std::string path = output_dir + "/" + fname;
+
+                FILE* f = fopen(path.c_str(), "wb");
+                if (!f) {
+                    errors[i] = "Failed to open " + path;
+                    return;
+                }
+                fwrite(buf.data(), 1, comp_size, f);
+                fclose(f);
+                compressed_sizes[i] = (int64_t)comp_size;
+            } catch (const std::exception& e) {
+                errors[i] = e.what();
+            }
+        });
+    }
+    for (auto& t : threads) t.join();
+
+    int64_t total = 0;
+    for (int64_t i = 0; i < n; i++) {
+        TORCH_CHECK(errors[i].empty(), "batch_zstd_compress frame ", i, ": ", errors[i]);
+        total += compressed_sizes[i];
+    }
+    return total;
+}
+
+/**
+ * batch_zstd_decompress_files - Decompress multiple .zst files in parallel.
+ *
+ * paths: file paths to .zst files.
+ * original_size: decompressed size per frame (all frames same size).
+ * max_parallel: max concurrent decompressions (0 = all at once).
+ * Returns vector of 1D uint8 tensors.
+ */
+std::vector<torch::Tensor> batch_zstd_decompress_files(
+    const std::vector<std::string>& paths,
+    int64_t original_size,
+    int max_parallel = 0)
+{
+    const int64_t n = paths.size();
+    if (n == 0) return {};
+    if (max_parallel <= 0) max_parallel = (int)n;
+
+    std::vector<torch::Tensor> results(n);
+    std::vector<std::string> errors(n);
+
+    for (int64_t start = 0; start < n; start += max_parallel) {
+        int64_t end = std::min(start + (int64_t)max_parallel, n);
+        std::vector<std::thread> threads;
+
+        for (int64_t i = start; i < end; i++) {
+            threads.emplace_back([&, i]() {
+                try {
+                    // Read compressed file
+                    FILE* f = fopen(paths[i].c_str(), "rb");
+                    if (!f) {
+                        errors[i] = "Failed to open " + paths[i];
+                        return;
+                    }
+                    fseek(f, 0, SEEK_END);
+                    size_t file_size = ftell(f);
+                    fseek(f, 0, SEEK_SET);
+                    std::vector<uint8_t> compressed(file_size);
+                    size_t read = fread(compressed.data(), 1, file_size, f);
+                    fclose(f);
+                    if (read != file_size) {
+                        errors[i] = "Short read on " + paths[i];
+                        return;
+                    }
+
+                    // Decompress
+                    auto output = torch::empty({original_size}, torch::kUInt8);
+                    void* dst = output.data_ptr<uint8_t>();
+                    size_t decompressed = ZSTD_decompress(
+                        dst, (size_t)original_size,
+                        compressed.data(), file_size);
+                    if (ZSTD_isError(decompressed)) {
+                        errors[i] = std::string("Zstd decompress failed: ") +
+                                    ZSTD_getErrorName(decompressed);
+                        return;
+                    }
+                    if ((int64_t)decompressed != original_size) {
+                        errors[i] = "Size mismatch: got " + std::to_string(decompressed) +
+                                    " expected " + std::to_string(original_size);
+                        return;
+                    }
+                    results[i] = output;
+                } catch (const std::exception& e) {
+                    errors[i] = e.what();
+                }
+            });
+        }
+        for (auto& t : threads) t.join();
+    }
+
+    for (int64_t i = 0; i < n; i++) {
+        TORCH_CHECK(errors[i].empty(), "batch_zstd_decompress ", paths[i], ": ", errors[i]);
+    }
+    return results;
+}
+
+
+// ============================================================
+// PIPELINED INFERENCE: background decode + LRU frame cache in C++
+// ============================================================
+
+// Per-table decode info for the pipeline
+// PipelineTableInfo, PipelineState, g_pipeline defined earlier (before fast_forward_seq_pipelined)
+
+/**
+ * pipeline_init — Register per-table frame directories and cold params.
+ * Called once after register_tables().
+ *
+ * row_cache_capacity: max rows to cache per table (0 = auto-size based on first batch)
+ */
+void pipeline_init(
+    const std::vector<int64_t>& compressed_table_indices,
+    const std::vector<std::string>& frame_dirs,
+    const std::vector<int64_t>& rows_per_frame,
+    const std::vector<double>& cold_scales,
+    const std::vector<double>& cold_zps,
+    const std::vector<int64_t>& n_colds,
+    const std::vector<torch::Tensor>& is_hot_list,
+    const std::vector<torch::Tensor>& o2c_map_list,
+    int64_t budget)
+{
+    TORCH_CHECK(g_registered, "Call register_tables first");
+    int64_t K = compressed_table_indices.size();
+
+    g_pipeline.compressed_tables = compressed_table_indices;
+    g_pipeline.table_info.resize(K);
+    g_pipeline.budget = budget;
+
+    for (int64_t k = 0; k < K; k++) {
+        int64_t t = compressed_table_indices[k];
+        auto& info = g_pipeline.table_info[k];
+        info.frame_dir = frame_dirs[k];
+        info.rpf = rows_per_frame[k];
+        info.cold_scale = static_cast<float>(cold_scales[k]);
+        info.cold_zp = static_cast<float>(cold_zps[k]);
+        info.n_cold = n_colds[k];
+        info.D = g_tables[t].D;
+        info.is_hot = is_hot_list[k];
+        info.o2c_map = o2c_map_list[k];
+
+        // Auto-detect frame extension
+        info.frame_ext = ".h265";
+        for (const char* ext : {".h265", ".mkv", ".zst"}) {
+            std::string test = info.frame_dir + "/frame_00000" + ext;
+            FILE* f = fopen(test.c_str(), "rb");
+            if (f) { fclose(f); info.frame_ext = ext; break; }
+        }
+
+        // Setup dynamic frame mode for this table (used by both
+        // pipeline_forward and fast_forward_seq_pipelined)
+        auto& tab = g_tables[t];
+        tab.cold_dynamic = true;
+        tab.has_cold_frames = true;
+        tab.rows_per_frame = info.rpf;
+        tab.cold_scale = info.cold_scale;
+        tab.cold_zp = info.cold_zp;
+
+        // Register cold_mapping so COLD_FROM_BITMAP can route cold indices
+        tab.cold_mapping = info.o2c_map;
+        tab.cold_mapping_ptr = info.o2c_map.data_ptr<int32_t>();
+        tab.has_cold_mapping = true;
+
+        // Pre-size per-frame pointer arrays
+        int64_t max_frames = (info.n_cold + info.rpf - 1) / info.rpf + 1;
+        tab.dyn_frame_ptrs.assign(max_frames, nullptr);
+        tab.dyn_frame_tensors.resize(max_frames);
+
+        // Enable tiled storage (skip untiling) for PURE H.265 tables with D=16
+        // Disabled for mixed-codec tables (Zstd hot + H.265 cold) since Zstd is flat
+        if (tab.D == 16 && info.frame_ext != ".zst" && info.frame_ext == ".h265") {
+            tab.dyn_tiled = true;
+            // Width from resolution: rpf = (W/4) * (H/4) for 4x4 tiles
+            // For 1080p: rpf = 480 * 270 = 129600, W=1920
+            // Derive width from rpf and known height
+            // Common: 1080p→1920, 480p→640, 4K→3840
+            if (info.rpf == 129600) tab.dyn_width = 1920;
+            else if (info.rpf == 19200) tab.dyn_width = 640;
+            else if (info.rpf == 518400) tab.dyn_width = 3840;
+            else tab.dyn_tiled = false;  // unknown resolution
+        }
+    }
+
+    // Pre-load ALL compressed frame files into memory (only ~1.6MB for H.265)
+    // This eliminates file I/O during decode, reducing multi-table decode from 17ms to ~5ms
+    g_pipeline.inmem_frames.clear();
+    int64_t total_bytes = 0;
+    for (int64_t k = 0; k < K; k++) {
+        auto& info = g_pipeline.table_info[k];
+        int64_t max_frames = (info.n_cold + info.rpf - 1) / info.rpf + 1;
+        for (int64_t fid = 0; fid < max_frames; fid++) {
+            char fid_str[16];
+            snprintf(fid_str, sizeof(fid_str), "%05ld", (long)fid);
+            std::string path;
+            FILE* f = nullptr;
+            for (const char* ext : {".zst", ".h265", ".mkv"}) {
+                path = info.frame_dir + "/frame_" + fid_str + ext;
+                f = fopen(path.c_str(), "rb");
+                if (f) break;
+            }
+            if (!f) continue;
+            fseek(f, 0, SEEK_END);
+            size_t sz = ftell(f);
+            fseek(f, 0, SEEK_SET);
+            auto buf = torch::empty({(int64_t)sz}, torch::kUInt8);
+            fread(buf.data_ptr<uint8_t>(), 1, sz, f);
+            fclose(f);
+            g_pipeline.inmem_frames[k * 100000 + fid] = buf;
+            total_bytes += sz;
+        }
+    }
+    fprintf(stderr, "[C++] Pre-loaded %zu compressed frames into memory (%.1f MB)\n",
+            g_pipeline.inmem_frames.size(), total_bytes / (1024.0 * 1024.0));
+
+    g_pipeline.initialized = true;
+}
+
+/**
+ * pipeline_add_frame — Add a decoded frame to the dynamic cache (O(1)).
+ * frame_data must be (rpf, D) uint8 (already untiled).
+ */
+static void pipeline_add_frame(int64_t table_idx, int64_t frame_id,
+                                torch::Tensor frame_data) {
+    auto& tab = g_tables[table_idx];
+    TORCH_CHECK(tab.cold_dynamic, "Table not in dynamic mode");
+
+    if (frame_id >= (int64_t)tab.dyn_frame_ptrs.size()) {
+        // Grow arrays
+        int64_t new_size = frame_id + 16;
+        tab.dyn_frame_ptrs.resize(new_size, nullptr);
+        tab.dyn_frame_tensors.resize(new_size);
+    }
+
+    // Ensure contiguous uint8
+    auto data = frame_data.contiguous().to(torch::kUInt8);
+
+    if (tab.dyn_tiled) {
+        // Store tiled (H, W) directly — skip untiling (saves ~6ms per batch)
+        // cold_frame_accum will compute tile coordinates on the fly
+    } else if (data.dim() == 2 && data.size(0) == tab.rows_per_frame) {
+        // (rpf, D) — good
+    } else if (data.dim() == 1) {
+        data = data.view({tab.rows_per_frame, tab.D});
+    } else {
+        // Tiled frame (H, W) — untile
+        data = untile_frame_to_rows(data, tab.rows_per_frame);
+    }
+
+    tab.dyn_frame_tensors[frame_id] = data;       // keep alive
+    tab.dyn_frame_ptrs[frame_id] = data.data_ptr<uint8_t>();
+}
+
+/**
+ * pipeline_remove_frame — Remove a frame from the dynamic cache (O(1)).
+ */
+static void pipeline_remove_frame(int64_t table_idx, int64_t frame_id) {
+    auto& tab = g_tables[table_idx];
+    if (frame_id < (int64_t)tab.dyn_frame_ptrs.size()) {
+        tab.dyn_frame_ptrs[frame_id] = nullptr;
+        tab.dyn_frame_tensors[frame_id] = torch::Tensor();
+    }
+}
+
+/**
+ * pipeline_scan_needed — Find which frames are needed for a batch.
+ * Returns vector of (table_index_in_pipeline, set<frame_id>).
+ */
+static std::vector<std::unordered_set<int64_t>> pipeline_scan(
+    const torch::Tensor& lS_i  // (T, N) int64
+) {
+    int64_t K = g_pipeline.compressed_tables.size();
+    std::vector<std::unordered_set<int64_t>> needed(K);
+
+    for (int64_t k = 0; k < K; k++) {
+        int64_t t = g_pipeline.compressed_tables[k];
+        auto& info = g_pipeline.table_info[k];
+        const int64_t* idx_ptr = lS_i[t].data_ptr<int64_t>();
+        int64_t N = lS_i.size(1);
+        const bool* hot_ptr = info.is_hot.data_ptr<bool>();
+        const int32_t* o2c_ptr = info.o2c_map.data_ptr<int32_t>();
+
+        for (int64_t i = 0; i < N; i++) {
+            int64_t orig = idx_ptr[i];
+            if (!hot_ptr[orig]) {
+                int32_t cold_idx = o2c_ptr[orig];
+                if (cold_idx >= 0) {
+                    int64_t fid = cold_idx / info.rpf;
+                    needed[k].insert(fid);
+                }
+            }
+        }
+    }
+    return needed;
+}
+
+/**
+ * pipeline_prescan_and_decode — Scan batch for cold rows, decode missing frames,
+ * extract needed rows into per-table row cache.
+ *
+ * Flow:
+ *   1. Scan batch indices → collect (table, cold_rank, frame_id) for uncached rows
+ *   2. Group by (table, frame_id) → unique frames to decode
+ *   3. Decode missing frames in parallel (one thread per frame)
+ *   4. Extract needed rows from decoded frames → add to row cache
+ *   5. Discard decoded frames (only keep the extracted rows)
+ */
+static void pipeline_prescan_and_decode(const torch::Tensor& lS_i) {
+    int64_t K = g_pipeline.compressed_tables.size();
+
+    // Per-table: frame_id → set of (cold_rank, row_in_frame) needing cache
+    struct RowNeed {
+        int64_t cold_rank;
+        int64_t row_in_frame;
+    };
+    // frames_to_decode[k] = {frame_id → vector of RowNeed}
+    std::vector<std::unordered_map<int64_t, std::vector<RowNeed>>> frames_to_decode(K);
+
+    // Step 1: Scan batch for frames with uncached data
+    for (int64_t k = 0; k < K; k++) {
+        int64_t t = g_pipeline.compressed_tables[k];
+        auto& tab = g_tables[t];
+        auto& info = g_pipeline.table_info[k];
+        const int64_t* idx_ptr = lS_i[t].data_ptr<int64_t>();
+        int64_t N = lS_i.size(1);
+        const bool* hot_ptr = info.is_hot.data_ptr<bool>();
+        const int32_t* o2c_ptr = info.o2c_map.data_ptr<int32_t>();
+
+        for (int64_t i = 0; i < N; i++) {
+            int64_t orig = idx_ptr[i];
+            if (hot_ptr[orig]) continue;
+            int32_t cold_rank = o2c_ptr[orig];
+            if (cold_rank < 0) continue;
+
+            int64_t fid = cold_rank / info.rpf;
+
+            // Check if frame is in dynamic cache
+            if (tab.cold_dynamic &&
+                fid < (int64_t)tab.dyn_frame_ptrs.size() &&
+                tab.dyn_frame_ptrs[fid] != nullptr) continue;
+
+            int64_t row_in_frame = cold_rank % info.rpf;
+            frames_to_decode[k][fid].push_back({cold_rank, row_in_frame});
+        }
+    }
+
+    // Step 2: Collect unique frames to decode
+    struct DecodeJob {
+        int64_t k;      // pipeline table index
+        int64_t fid;    // frame id
+    };
+    std::vector<DecodeJob> jobs;
+    for (int64_t k = 0; k < K; k++) {
+        for (auto& [fid, rows] : frames_to_decode[k]) {
+            jobs.push_back({k, fid});
+        }
+    }
+
+    if (jobs.empty()) return;
+
+    // Step 3: Batch decode with pool (fastest path)
+    // Try multiple extensions per frame (supports mixed Zstd + H.265 per table)
+    std::vector<std::string> paths(jobs.size());
+    for (size_t i = 0; i < jobs.size(); i++) {
+        auto& info = g_pipeline.table_info[jobs[i].k];
+        std::string base = info.frame_dir + "/frame_";
+        char fid_str[16];
+        snprintf(fid_str, sizeof(fid_str), "%05ld", (long)jobs[i].fid);
+        // Try preferred extension first, then alternatives
+        paths[i] = base + fid_str + info.frame_ext;
+        if (access(paths[i].c_str(), F_OK) != 0) {
+            for (const char* ext : {".zst", ".h265", ".mkv"}) {
+                std::string alt = base + fid_str + ext;
+                if (access(alt.c_str(), F_OK) == 0) {
+                    paths[i] = alt;
+                    break;
+                }
+            }
+        }
+    }
+    auto decoded = batch_decode_fast(paths, 2, paths.size(), true, false, false);
+
+    // Step 4: Add decoded frames to dynamic pointer cache (O(1) per frame)
+    for (size_t i = 0; i < jobs.size(); i++) {
+        if (!decoded[i].defined()) continue;
+        int64_t t = g_pipeline.compressed_tables[jobs[i].k];
+        pipeline_add_frame(t, jobs[i].fid, decoded[i]);
+    }
+}
+
+/**
+ * pipeline_forward — Pipelined inference: run fast_forward on current batch
+ * while background-decoding frames for the next batch.
+ *
+ * On each call:
+ *   1. Wait for background decode from previous call (if any)
+ *   2. Scan CURRENT batch for missing frames → decode synchronously (ensures correctness)
+ *   3. Launch background decode for NEXT batch's missing frames
+ *   4. Run fast_forward on current batch
+ *
+ * First batch is slower (no prior prefetch → synchronous decode of all needed frames).
+ * Subsequent batches benefit from prefetch (background decode already finished).
+ *
+ * Args:
+ *   lS_i: (T, N) int64 — current batch indices
+ *   lS_o: (T, B) int64 — current batch offsets
+ *   next_lS_i: (T, N) int64 — NEXT batch indices (for prefetch), or empty
+ *
+ * Returns: same as fast_forward
+ */
+std::vector<torch::Tensor> pipeline_forward(
+    const torch::Tensor& lS_i,
+    const torch::Tensor& lS_o,
+    const torch::Tensor& next_lS_i)  // empty tensor if no next batch
+{
+    TORCH_CHECK(g_pipeline.initialized, "Call pipeline_init first");
+
+    // 1. Wait for background decode from previous call
+    if (g_pipeline.bg_future.valid()) {
+        g_pipeline.bg_future.get();
+    }
+
+    // 2. Scan CURRENT batch — decode frames for uncached rows, extract rows
+    pipeline_prescan_and_decode(lS_i);  // no-op if all rows cached
+
+    // 3. Launch background prescan+decode for NEXT batch
+    if (next_lS_i.numel() > 0) {
+        // Copy tensor since lambda outlives this scope
+        torch::Tensor next_copy = next_lS_i.clone();
+        g_pipeline.bg_future = std::async(std::launch::async, [next_copy]() {
+            pipeline_prescan_and_decode(next_copy);
+        });
+    }
+
+    // 4. Run fast_forward — cold_frame_accum checks row cache (all hits)
+    return fast_forward(lS_i, lS_o);
+}
+
+/**
+ * pipeline_warmup — Synchronously decode rows needed by first batch.
+ */
+void pipeline_warmup(const torch::Tensor& lS_i) {
+    TORCH_CHECK(g_pipeline.initialized, "Call pipeline_init first");
+    pipeline_prescan_and_decode(lS_i);
+}
+
+/**
+ * pipeline_clear_frames — Clear all dynamic frame pointers for all tables.
+ * Used by no-cache pipeline to discard decoded frames after each batch.
+ */
+static void pipeline_clear_frames() {
+    for (int64_t k = 0; k < (int64_t)g_pipeline.compressed_tables.size(); k++) {
+        int64_t t = g_pipeline.compressed_tables[k];
+        auto& tab = g_tables[t];
+        if (tab.cold_dynamic) {
+            for (size_t i = 0; i < tab.dyn_frame_ptrs.size(); i++) {
+                tab.dyn_frame_ptrs[i] = nullptr;
+                tab.dyn_frame_tensors[i] = torch::Tensor();
+            }
+        }
+    }
+}
+
+/**
+ * pipeline_forward_nocache — Decode-every-batch pipeline with NO persistent cache.
+ *
+ * Flow:
+ *   1. Wait for background decode of THIS batch's frames (started during prev batch)
+ *   2. Run fast_forward (cold lookups use decoded dynamic frame pointers)
+ *   3. Clear all decoded frames (reclaim memory)
+ *   4. Start background decode of NEXT batch's frames
+ *
+ * First batch: synchronous decode (no prior prefetch).
+ * Subsequent batches: decode overlaps with previous batch's inference.
+ *
+ * Runtime memory: only mapping (12MB) + hot (22MB) + compressed frames (1.6MB) = ~36MB
+ * No decoded frame cache between batches.
+ */
+std::vector<torch::Tensor> pipeline_forward_nocache(
+    const torch::Tensor& lS_i,
+    const torch::Tensor& lS_o,
+    const torch::Tensor& next_lS_i)
+{
+    TORCH_CHECK(g_pipeline.initialized, "Call pipeline_init first");
+
+    // 1. Wait for background decode from previous call
+    if (g_pipeline.bg_future.valid()) {
+        g_pipeline.bg_future.get();
+    }
+
+    // 2. If no frames decoded yet (first batch), decode synchronously
+    {
+        // Check if ANY frame is cached for first compressed table
+        int64_t t0 = g_pipeline.compressed_tables[0];
+        bool any_cached = false;
+        for (size_t i = 0; i < g_tables[t0].dyn_frame_ptrs.size() && !any_cached; i++)
+            if (g_tables[t0].dyn_frame_ptrs[i]) any_cached = true;
+        if (!any_cached) {
+            pipeline_prescan_and_decode(lS_i);
+        }
+    }
+
+    // 3. Run fast_forward using decoded frames
+    auto result = fast_forward(lS_i, lS_o);
+
+    // 4. Clear all decoded frames (release memory)
+    pipeline_clear_frames();
+
+    // 5. Start background decode for NEXT batch
+    if (next_lS_i.numel() > 0) {
+        torch::Tensor next_copy = next_lS_i.clone();
+        g_pipeline.bg_future = std::async(std::launch::async, [next_copy]() {
+            pipeline_prescan_and_decode(next_copy);
+        });
+    }
+
+    return result;
+}
+
+
+/**
+ * pipeline_forward_full — All-in-one per-batch: decompress hot + decode cold + forward.
+ *
+ * Eliminates Python overhead between decode and forward steps.
+ * Everything runs in C++ with no Python calls in between.
+ *
+ * Args:
+ *   lS_i, lS_o: current batch indices/offsets
+ *   next_lS_i: next batch indices for background cold prefetch
+ *   hot_zstd_paths: paths to Zstd-compressed hot tensors (one per compressed table)
+ *   hot_table_indices: which global table index each hot path corresponds to
+ */
+std::vector<torch::Tensor> pipeline_forward_full(
+    const torch::Tensor& lS_i,
+    const torch::Tensor& lS_o,
+    const torch::Tensor& next_lS_i,
+    const std::vector<std::string>& hot_zstd_paths,
+    const std::vector<int64_t>& hot_table_indices)
+{
+    TORCH_CHECK(g_pipeline.initialized, "Call pipeline_init first");
+
+    // 1. Wait for background cold decode from previous batch
+    if (g_pipeline.bg_future.valid()) {
+        g_pipeline.bg_future.get();
+    }
+
+    // 2. Decompress hot Zstd tensors (C++ parallel threads)
+    if (!hot_zstd_paths.empty()) {
+        // batch_decode_file_paths auto-detects .zst, uses parallel std::threads
+        auto hot_decoded = batch_decode_file_paths(
+            hot_zstd_paths, 1, hot_zstd_paths.size(), false, false, false);
+
+        // Update hot weight pointers in g_tables
+        for (size_t i = 0; i < hot_table_indices.size() && i < hot_decoded.size(); i++) {
+            int64_t t = hot_table_indices[i];
+            if (t >= 0 && t < (int64_t)g_tables.size()) {
+                auto& tab = g_tables[t];
+                int64_t D = tab.D;
+                auto reshaped = hot_decoded[i].view({-1, D});
+                tab.weight = reshaped;
+            }
+        }
+    }
+
+    // 3. Decode cold frames for current batch (if not already done by bg thread)
+    pipeline_prescan_and_decode(lS_i);
+
+    // 4. Run fast_forward
+    auto result = fast_forward(lS_i, lS_o);
+
+    // 5. Clear cold frames (free memory)
+    pipeline_clear_frames();
+
+    // 6. Start background cold decode for next batch
+    if (next_lS_i.numel() > 0) {
+        torch::Tensor next_copy = next_lS_i.clone();
+        g_pipeline.bg_future = std::async(std::launch::async, [next_copy]() {
+            pipeline_prescan_and_decode(next_copy);
+        });
+    }
+
+    return result;
+}
+
+
+/**
+ * embedding_bag_backward_sum — Fast C++ backward for EmbeddingBag (sum mode).
+ *
+ * Given grad_output (T, B, D) from the loss backward, compute per-row gradients
+ * and apply them to the master weight tensors via index_add_.
+ *
+ * For each table t:
+ *   For each index i in bag b: grad_weight[indices[i]] += lr * grad_output[t][b]
+ *
+ * This replaces the slow Python loop over bags and tables.
+ */
+void embedding_bag_backward_sum(
+    const torch::Tensor& grad_output,  // (T, B, D)
+    const std::vector<torch::Tensor>& lS_i_list,  // T tensors, each (N,) int64
+    const std::vector<torch::Tensor>& lS_o_list,  // T tensors, each (B,) int64
+    std::vector<torch::Tensor>& master_weights,   // T tensors, each (num_emb, D) fp32
+    double lr)
+{
+    const int64_t T = lS_i_list.size();
+    const int64_t B = grad_output.size(1);
+    const int64_t D = grad_output.size(2);
+
+    at::parallel_for(0, T, 1, [&](int64_t t_begin, int64_t t_end) {
+        for (int64_t t = t_begin; t < t_end; t++) {
+            const auto& indices = lS_i_list[t];
+            const auto& offsets = lS_o_list[t];
+            const int64_t N = indices.size(0);
+            const int64_t* idx_ptr = indices.data_ptr<int64_t>();
+            const int64_t* off_ptr = offsets.data_ptr<int64_t>();
+            const float* grad_ptr = grad_output[t].data_ptr<float>();
+            float* w_ptr = master_weights[t].data_ptr<float>();
+            float neg_lr = static_cast<float>(-lr);
+
+            for (int64_t b = 0; b < B; b++) {
+                int64_t start = off_ptr[b];
+                int64_t end = (b + 1 < B) ? off_ptr[b + 1] : N;
+                const float* g = grad_ptr + b * D;
+                for (int64_t i = start; i < end; i++) {
+                    int64_t row = idx_ptr[i];
+                    float* w = w_ptr + row * D;
+                    for (int64_t d = 0; d < D; d++) {
+                        w[d] += neg_lr * g[d];
+                    }
+                }
+            }
+        }
+    });
+}
+
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("compressed_emb_bag_forward", &compressed_emb_bag_forward,
           "Compressed EmbeddingBag forward (hot path in C++, returns cold_mask)");
@@ -3751,6 +5726,17 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           "Process all compressed tables in one C++ call with merged mapping");
     m.def("all_tables_forward", &all_tables_forward,
           "Process ALL tables (compressed + standard) in one C++ call, eliminating Python loop");
+    m.def("embedding_bag_backward_sum", &embedding_bag_backward_sum,
+          "Fast C++ EmbeddingBag backward (sum mode): scatter grad to master weights",
+          py::arg("grad_output"), py::arg("lS_i_list"), py::arg("lS_o_list"),
+          py::arg("master_weights"), py::arg("lr"),
+          py::call_guard<py::gil_scoped_release>());
+    m.def("update_table_weight", [](int64_t table_idx, const torch::Tensor& new_weight) {
+              TORCH_CHECK(g_registered && table_idx < (int64_t)g_tables.size(),
+                         "Invalid table index");
+              g_tables[table_idx].weight = new_weight;
+          }, "Swap hot weight pointer for a registered table (for per-batch hot decompress)",
+          py::arg("table_idx"), py::arg("new_weight"));
     m.def("register_tables", &register_tables,
           "Register all table metadata in C++ for fast_forward",
           py::arg("table_kinds"), py::arg("weights"), py::arg("mappings"),
@@ -3758,6 +5744,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           py::arg("use_bitmap") = false);
     m.def("fast_forward", &fast_forward,
           "Process all registered tables with a single call (zero Python loop overhead)");
+    m.def("fast_forward_seq", &fast_forward_seq,
+          "Sequential tables, parallel batches within each table (matches baseline parallelism)",
+          py::call_guard<py::gil_scoped_release>());
+    m.def("fast_forward_seq_pipelined", &fast_forward_seq_pipelined,
+          "Sequential tables with per-table frame decode pipeline (low memory)",
+          py::call_guard<py::gil_scoped_release>());
     m.def("register_cold_frames_for_table", &register_cold_frames_for_table,
           "Register pre-decoded cold frames for a table (enables full C++ cold lookup)",
           py::arg("table_idx"), py::arg("frame_ids"), py::arg("frame_data"),
@@ -3767,6 +5759,16 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           "Register flat natural-order cold buffer (no cold_mapping needed, uses bitmap cold_rank)",
           py::arg("table_idx"), py::arg("cold_flat_data"),
           py::arg("cold_scale"), py::arg("cold_zp"), py::arg("n_cold_rows"));
+    m.def("register_cold_sparse_flat", &register_cold_sparse_flat,
+          "Register sparse flat cold buffer (only cached rows, validity bitmap+rank for O(1) lookup)",
+          py::arg("table_idx"), py::arg("cold_data"), py::arg("valid_cold_ranks"),
+          py::arg("cold_scale"), py::arg("cold_zp"), py::arg("n_cold_total"));
+    m.def("register_cold_dct", &register_cold_dct,
+          "Register DCT-domain cold data for compressed-domain embedding lookup",
+          py::arg("table_idx"), py::arg("dc_values"), py::arg("ac_data"),
+          py::arg("ac_positions"), py::arg("ac_block_offsets"),
+          py::arg("step_size"), py::arg("quant_scale"), py::arg("quant_zp"),
+          py::arg("n_cold_rows"));
     // Frame packing/unpacking optimizations
     m.def("tile_rows_to_frame", &tile_rows_to_frame,
           "Tile uint8 embedding rows (N,16) into a 2D frame (H,W) for H.265 encoding");
@@ -3790,7 +5792,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           "Get frame as contiguous 1D bytes (avoids Python .tobytes())");
     // Direct H.265 decode (avoids PyAV Python overhead)
     m.def("decode_h265_frame_from_file", &decode_h265_frame_from_file,
-          "Decode single H.265 frame from file, returns (H,W) uint8 tensor");
+          "Decode single H.265 frame from file, returns (H,W) uint8 tensor",
+          py::arg("path"), py::arg("num_threads") = 0,
+          py::arg("skip_loop_filter") = false,
+          py::arg("skip_idct") = false,
+          py::arg("fast_decode") = false,
+          py::call_guard<py::gil_scoped_release>());
     m.def("decode_h265_frame_from_bytes", &decode_h265_frame_from_bytes,
           "Decode single H.265 frame from in-memory bytes, returns (H,W) uint8 tensor");
     m.def("decode_h265_gather_dequant", &decode_h265_gather_dequant,
@@ -3799,6 +5806,55 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           "Batch: decode multiple H.265 frames in parallel + vectorized gather + dequant");
     m.def("batch_decode_frames", &batch_decode_frames,
           "Decode multiple H.265 frames in parallel, return list of tiled (H,W) tensors");
+    m.def("batch_decode_file_paths", &batch_decode_file_paths,
+          "Decode frames from explicit file paths with controlled parallelism",
+          py::arg("paths"), py::arg("num_threads_per_decode") = 1,
+          py::arg("max_parallel") = 0,
+          py::arg("skip_loop_filter") = false,
+          py::arg("skip_idct") = false,
+          py::arg("fast_decode") = false,
+          py::call_guard<py::gil_scoped_release>());
+    m.def("decode_hevc_file_fast", &decode_hevc_file_fast,
+          "Fast single-frame decode: mode 0=original, 2=raw, 3=raw+pool",
+          py::arg("path"), py::arg("mode") = 3,
+          py::arg("skip_loop_filter") = false,
+          py::arg("skip_idct") = false,
+          py::arg("fast_decode") = false,
+          py::call_guard<py::gil_scoped_release>());
+    m.def("batch_decode_fast", &batch_decode_fast,
+          "Batch decode with raw parsing + context pool",
+          py::arg("paths"), py::arg("mode") = 3,
+          py::arg("max_parallel") = 0,
+          py::arg("skip_loop_filter") = false,
+          py::arg("skip_idct") = false,
+          py::arg("fast_decode") = false,
+          py::call_guard<py::gil_scoped_release>());
+    // Pipeline functions
+    m.def("pipeline_init", &pipeline_init,
+          "Init pipelined decode with per-table frame dirs",
+          py::arg("compressed_table_indices"),
+          py::arg("frame_dirs"), py::arg("rows_per_frame"),
+          py::arg("cold_scales"), py::arg("cold_zps"),
+          py::arg("n_colds"),
+          py::arg("is_hot_list"), py::arg("o2c_map_list"),
+          py::arg("budget") = 9999);
+    m.def("pipeline_warmup", &pipeline_warmup,
+          "Decode all frames needed by first batch",
+          py::arg("lS_i"),
+          py::call_guard<py::gil_scoped_release>());
+    m.def("pipeline_forward", &pipeline_forward,
+          "Pipelined forward: fast_forward + background decode of next batch",
+          py::arg("lS_i"), py::arg("lS_o"), py::arg("next_lS_i"),
+          py::call_guard<py::gil_scoped_release>());
+    m.def("pipeline_forward_full", &pipeline_forward_full,
+          "All-in-one: decompress hot Zstd + decode cold H.265 + fast_forward (min Python overhead)",
+          py::arg("lS_i"), py::arg("lS_o"), py::arg("next_lS_i"),
+          py::arg("hot_zstd_paths"), py::arg("hot_table_indices"),
+          py::call_guard<py::gil_scoped_release>());
+    m.def("pipeline_forward_nocache", &pipeline_forward_nocache,
+          "No-cache pipeline: decode every batch, discard after use (min memory)",
+          py::arg("lS_i"), py::arg("lS_o"), py::arg("next_lS_i"),
+          py::call_guard<py::gil_scoped_release>());
     // Direct H.265 encode (avoids subprocess ffmpeg overhead)
     m.def("encode_h265_frame", &encode_h265_frame,
           "Encode single grayscale frame to H.265 (in-memory or file)",
@@ -3843,4 +5899,20 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           py::arg("o2c_map_list"), py::arg("cached_frames_list"),
           py::arg("weight_list"), py::arg("rows_per_frame"),
           py::arg("emb_dim"));
+    // Zstd compression/decompression
+    m.def("zstd_compress_frame", &zstd_compress_frame,
+          "Compress uint8 tensor with Zstd (lossless)",
+          py::arg("data"), py::arg("level") = 3);
+    m.def("zstd_decompress_frame", &zstd_decompress_frame,
+          "Decompress Zstd data back to uint8 tensor",
+          py::arg("compressed"), py::arg("original_size"));
+    m.def("batch_zstd_compress", &batch_zstd_compress,
+          "Compress multiple frames in parallel, write .zst files",
+          py::arg("frames"), py::arg("output_dir"), py::arg("level") = 3,
+          py::call_guard<py::gil_scoped_release>());
+    m.def("batch_zstd_decompress_files", &batch_zstd_decompress_files,
+          "Decompress multiple .zst files in parallel",
+          py::arg("paths"), py::arg("original_size"),
+          py::arg("max_parallel") = 0,
+          py::call_guard<py::gil_scoped_release>());
 }
