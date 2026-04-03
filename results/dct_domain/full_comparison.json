@@ -1,0 +1,70 @@
+{
+  "fp32_baseline": {
+    "auc": 0.8024972457424144,
+    "batch_p50_ms": 4.975343123078346,
+    "batch_p99_ms": 7.1941109001636505,
+    "batch_mean_ms": 5.089629326176464,
+    "total_s": 8.138317292556167,
+    "memory_mb": 2060.7,
+    "cold_mb": 0,
+    "hot_mb": 2060.7,
+    "cache_mb": 0,
+    "startup_ms": 0,
+    "needs_ffmpeg": false,
+    "retraining": false
+  },
+  "uint8_only": {
+    "auc": 0.802496395137152,
+    "batch_p50_ms": 4.322143271565437,
+    "batch_p99_ms": 5.973574072122574,
+    "batch_mean_ms": 4.436683263851002,
+    "total_s": 7.094256538897753,
+    "memory_mb": 2060.7
+  },
+  "h265_cache": {
+    "auc": 0.8021069765781801,
+    "batch_p50_ms": 2.320844680070877,
+    "batch_p99_ms": 2.6080948114395115,
+    "batch_mean_ms": 2.3480795820088143,
+    "total_s": 3.7545792516320944,
+    "emb_p50_ms": 0.2653263509273529,
+    "memory_mb": 523.6313903808593,
+    "hot_mb": 22.1,
+    "cold_mb": 0.3,
+    "cache_mb": 492.3313903808594,
+    "startup_ms": 893.1190930306911,
+    "needs_ffmpeg": true,
+    "retraining": false
+  },
+  "dct_8x8": {
+    "auc": 0.8021228472796272,
+    "batch_p50_ms": 2.319877967238426,
+    "batch_p99_ms": 3.4788066521286956,
+    "batch_mean_ms": 2.343972237446369,
+    "total_s": 3.7480116076767445,
+    "emb_p50_ms": 0.3251992166042328,
+    "memory_mb": 38.69268035888672,
+    "hot_mb": 22.1,
+    "cold_mb": 7.692680358886719,
+    "cache_mb": 0,
+    "startup_ms": 0,
+    "needs_ffmpeg": false,
+    "retraining": false
+  },
+  "dct_4x4": {
+    "auc": 0.8023053162506524,
+    "batch_p50_ms": 4.6424102038145065,
+    "batch_p99_ms": 6.094999834895132,
+    "batch_mean_ms": 4.686815122502383,
+    "total_s": 7.4942173808813095,
+    "memory_mb": 61.77071189880371,
+    "memory_mb_sparse": 31.18,
+    "hot_mb": 22.1,
+    "cold_mb": 30.77071189880371,
+    "cold_sparse_kb": 183,
+    "cache_mb": 0,
+    "startup_ms": 0,
+    "needs_ffmpeg": false,
+    "retraining": false
+  }
+}

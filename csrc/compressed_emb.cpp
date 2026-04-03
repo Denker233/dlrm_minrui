@@ -1034,52 +1034,58 @@ static constexpr int DCT_ROWS_PER_BLOCK = 4;  // (8/4)^2
 
 struct DctDomainTable {
     // DC values: one uint8 per block (quantized DC coefficient, fits in 0-255 for step>=8)
-    // Full coefficients stored as sparse AC for blocks with non-zero AC
     std::vector<uint8_t> dc_values;           // (n_blocks,) — quantized DC coefficient per block
     std::vector<std::vector<std::pair<uint8_t, int16_t>>> ac_coeffs;  // per-block sparse AC
     int64_t n_blocks = 0;
     int64_t n_rows = 0;
+    int block_size = 8;           // 4, 8, or 16
+    int rows_per_block = 4;       // 1, 4, or 16
     float step_size = 16.0f;
     float quant_scale = 0.0f;     // uint8 dequant scale
     float quant_zp = 0.0f;        // uint8 dequant zero point
 
-    // Pre-computed weight vectors for DC-only fast path
-    // dc_weights[row_in_block][d] = IDCT basis weight for DC coefficient at (row, dim)
-    // Since DC coefficient at (u=0,v=0): C(0)*C(0) * cos(0)*cos(0) = 1/N for ortho
-    // For 8×8 ortho DCT: C(0) = 1/sqrt(8), so dc_weight = 1/8 for all pixels
-    // But each row maps to specific pixel positions, so dc_weight is same for all dims in a row:
-    //   dc_weights[r][d] = (1/sqrt(8))*(1/sqrt(8)) = 1/8 = 0.125
-    // Actually for ortho-normalized DCT, DC → pixel is uniform: each pixel gets DC * 1/8
-    // WRONG: it's C(0)*C(0) = (1/sqrt(8))^2 = 1/8... let me compute properly.
-    // f(x,y) = sum_{u,v} C(u)C(v) F(u,v) cos(...) where C(0)=1/sqrt(N), C(k>0)=sqrt(2/N)
-    // For u=0,v=0: C(0)C(0) cos(0) cos(0) = (1/sqrt(8))^2 = 1/8 = 0.125
-    // So DC contributes 0.125 * DC_value to every pixel regardless of position.
-    float dc_weight_uniform;      // = 1/8 for 8x8 block
+    // DC weight: uniform for ortho-normalized DCT
+    // For NxN block: C(0) = 1/sqrt(N), dc_weight = C(0)^2 = 1/N
+    float dc_weight_uniform;      // = 1/block_size
 
     // Full weight matrix for AC coefficients: weights[row_in_block * EMB_DIM + d][u * 8 + v]
     // Flattened for cache-friendly access
     std::vector<float> full_weights;  // (4 * 16, 64) = (64, 64) = 4096 floats = 16KB
 
-    void init_weights(int D) {
-        // DC weight: uniform for all pixels
-        dc_weight_uniform = 1.0f / DCT_BLOCK;  // 1/sqrt(8) * 1/sqrt(8) = 1/8
+    void init_weights(int D, int blk_size, int rpb) {
+        block_size = blk_size;
+        rows_per_block = rpb;
+        dc_weight_uniform = 1.0f / block_size;  // C(0)^2 = 1/N
 
         // Full weights for AC coefficients
-        full_weights.resize(DCT_ROWS_PER_BLOCK * D * DCT_BLOCK * DCT_BLOCK);
-        for (int r = 0; r < DCT_ROWS_PER_BLOCK; r++) {
+        int BS = block_size;
+        full_weights.resize(rpb * D * BS * BS);
+        for (int r = 0; r < rpb; r++) {
             for (int d = 0; d < D; d++) {
-                int py = (r / 2) * DCT_TILE + d / DCT_TILE;
-                int px = (r % 2) * DCT_TILE + d % DCT_TILE;
-                for (int u = 0; u < DCT_BLOCK; u++) {
-                    for (int v = 0; v < DCT_BLOCK; v++) {
-                        float cu = (u == 0) ? (1.0f / std::sqrt((float)DCT_BLOCK))
-                                             : std::sqrt(2.0f / DCT_BLOCK);
-                        float cv = (v == 0) ? (1.0f / std::sqrt((float)DCT_BLOCK))
-                                             : std::sqrt(2.0f / DCT_BLOCK);
+                int py, px;
+                if (BS == 4) {
+                    // 4×4: 1 row per block, row IS the 4×4 block
+                    py = d / DCT_TILE;
+                    px = d % DCT_TILE;
+                } else if (BS == 8) {
+                    // 8×8: 2×2 grid of 4×4 tiles
+                    py = (r / 2) * DCT_TILE + d / DCT_TILE;
+                    px = (r % 2) * DCT_TILE + d % DCT_TILE;
+                } else {
+                    // 16×16: 4×4 grid of 4×4 tiles
+                    py = (r / 4) * DCT_TILE + d / DCT_TILE;
+                    px = (r % 4) * DCT_TILE + d % DCT_TILE;
+                }
+                for (int u = 0; u < BS; u++) {
+                    for (int v = 0; v < BS; v++) {
+                        float cu = (u == 0) ? (1.0f / std::sqrt((float)BS))
+                                             : std::sqrt(2.0f / BS);
+                        float cv = (v == 0) ? (1.0f / std::sqrt((float)BS))
+                                             : std::sqrt(2.0f / BS);
                         float w = cu * cv
-                            * std::cos(M_PI * (2*py + 1) * u / (2.0f * DCT_BLOCK))
-                            * std::cos(M_PI * (2*px + 1) * v / (2.0f * DCT_BLOCK));
-                        int idx = (r * D + d) * (DCT_BLOCK * DCT_BLOCK) + u * DCT_BLOCK + v;
+                            * std::cos(M_PI * (2*py + 1) * u / (2.0f * BS))
+                            * std::cos(M_PI * (2*px + 1) * v / (2.0f * BS));
+                        int idx = (r * D + d) * (BS * BS) + u * BS + v;
                         full_weights[idx] = w;
                     }
                 }
@@ -1090,8 +1096,8 @@ struct DctDomainTable {
     // Accumulate contribution of one cold row into output (D floats)
     // DC-only fast path: ~D multiply-adds
     inline void accum_row(float* __restrict__ out, int64_t cold_row_idx, int D) const {
-        int64_t block_id = cold_row_idx / DCT_ROWS_PER_BLOCK;
-        int row_in_block = cold_row_idx % DCT_ROWS_PER_BLOCK;
+        int64_t block_id = cold_row_idx / rows_per_block;
+        int row_in_block = cold_row_idx % rows_per_block;
 
         if (block_id >= n_blocks) return;
 
@@ -1117,10 +1123,11 @@ struct DctDomainTable {
 
         if (block_id < (int64_t)ac_coeffs.size() && !ac_coeffs[block_id].empty()) {
             // Has AC coefficients — use full weight lookup
-            const float* w_base = &full_weights[(row_in_block * D) * (DCT_BLOCK * DCT_BLOCK)];
+            int BS2 = block_size * block_size;
+            const float* w_base = &full_weights[(row_in_block * D) * BS2];
             for (int d = 0; d < D; d++) {
                 float val = dc_contribution;  // DC part
-                const float* w_d = w_base + d * (DCT_BLOCK * DCT_BLOCK);
+                const float* w_d = w_base + d * BS2;
                 // Add AC contributions
                 for (const auto& [pos, coeff] : ac_coeffs[block_id]) {
                     val += static_cast<float>(coeff) * step_size * w_d[pos];
@@ -1628,12 +1635,13 @@ void register_cold_dct(
     int64_t table_idx,
     const torch::Tensor& dc_values_t,     // (n_blocks,) int16
     const torch::Tensor& ac_data_t,       // (total_ac,) int16 — concatenated AC values
-    const torch::Tensor& ac_positions_t,  // (total_ac,) uint8 — concatenated AC positions (u*8+v)
+    const torch::Tensor& ac_positions_t,  // (total_ac,) uint8 — concatenated AC positions
     const torch::Tensor& ac_block_offsets_t, // (n_blocks+1,) int64 — start offset per block in ac_data
     double step_size,
     double quant_scale,
     double quant_zp,
-    int64_t n_cold_rows
+    int64_t n_cold_rows,
+    int64_t block_size_param = 8   // 4, 8, or 16
 ) {
     TORCH_CHECK(g_registered, "Tables not registered. Call register_tables first.");
     TORCH_CHECK(table_idx >= 0 && table_idx < (int64_t)g_tables.size(),
@@ -1675,8 +1683,13 @@ void register_cold_dct(
         }
     }
 
-    // Initialize weight matrices
-    dct.init_weights(tab.D);
+    // Initialize weight matrices with appropriate block size
+    int rpb = 1;
+    if (block_size_param == 4) rpb = 1;
+    else if (block_size_param == 8) rpb = 4;
+    else if (block_size_param == 16) rpb = 16;
+    else rpb = (block_size_param / DCT_TILE) * (block_size_param / DCT_TILE);
+    dct.init_weights(tab.D, static_cast<int>(block_size_param), rpb);
 
     tab.has_dct_cold = true;
     tab.has_cold_frames = true;  // Signal that cold lookup is handled in C++
@@ -1899,7 +1912,10 @@ std::vector<torch::Tensor> fast_forward(
                     } else { cm_ptr[i] = true; local_cold++; } \
                 } while(0)
                 #define COLD_FROM_BITMAP() do { \
-                    if (tab.has_cold_frames && tab.cold_flat) { \
+                    if (tab.has_dct_cold) { \
+                        int64_t ci = br.cold_rank(idx_ptr[i]); \
+                        tab.dct_cold.accum_row(out_row, ci, D); \
+                    } else if (tab.has_cold_frames && tab.cold_flat) { \
                         int64_t ci = br.cold_rank(idx_ptr[i]); \
                         cold_frame_accum(out_row, tab, ci, D); \
                     } else if (tab.has_cold_frames && tab.has_cold_mapping) { \
@@ -5768,7 +5784,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
           py::arg("table_idx"), py::arg("dc_values"), py::arg("ac_data"),
           py::arg("ac_positions"), py::arg("ac_block_offsets"),
           py::arg("step_size"), py::arg("quant_scale"), py::arg("quant_zp"),
-          py::arg("n_cold_rows"));
+          py::arg("n_cold_rows"), py::arg("block_size") = 8);
     // Frame packing/unpacking optimizations
     m.def("tile_rows_to_frame", &tile_rows_to_frame,
           "Tile uint8 embedding rows (N,16) into a 2D frame (H,W) for H.265 encoding");
