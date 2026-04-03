@@ -1,0 +1,45 @@
+======================================================================
+TERABYTE DC EXPERIMENT: D=64
+======================================================================
+Loading model...
+Unable to import mlperf_logging,  No module named 'mlperf_logging'
+Unable to import onnx.  No module named 'onnx'
+[TB] Loading dataset...
+Reading pre-processed data=/home/cc/input/terabyte/terabyte_processed.npz
+Sparse features= 26, Dense features= 13
+Reading pre-processed data=/home/cc/input/terabyte/terabyte_processed.npz
+Sparse features= 26, Dense features= 13
+[TB] Loading model checkpoint...
+[TB] Model loaded. 26 tables, D=64
+D=64, 26 tables, 8 large: [0, 9, 10, 11, 19, 20, 21, 22]
+Total embedding: 5544 MB
+Caching test batches...
+/home/cc/expr/dlrm_minrui/dlrm_data_pytorch.py:329: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow. Please consider converting the list to a single numpy.ndarray with numpy.array() before converting to a tensor. (Triggered internally at /pytorch/torch/csrc/utils/tensor_new.cpp:253.)
+  X_int = torch.log(torch.tensor(transposed_data[0], dtype=torch.float) + 1)
+Cached 500 test batches
+Profiling frequencies...
+Baseline AUC...
+  Baseline fp32: 0.773630
+
+================================================================================
+ Hot%         Mode        AUC     Loss   Hot MB         Cold    Total  Ratio
+--------------------------------------------------------------------------------
+ 4.3%         zero   0.773578  +0.005%    59.3         0 MB    89.4    62x
+ 4.3%         dc16   0.773579  +0.005%    59.3 1.3MB (1B/16r)    90.7    61x
+ 4.3%           dc   0.773589  +0.004%    59.3 20.6MB (1B/r)   110.0    50x
+ 4.3%     perdim16   0.773578  +0.005%    59.3 82.5MB (64B/16r)   171.9    32x
+ 4.3%        uint8   0.773614  +0.002%    59.3 1320.5MB (full)  1409.9     4x
+
+ 2.0%         zero   0.773538  +0.009%    27.6         0 MB    57.7    96x
+ 2.0%         dc16   0.773538  +0.009%    27.6 1.3MB (1B/16r)    59.0    94x
+ 2.0%           dc   0.773560  +0.007%    27.6 21.1MB (1B/r)    78.8    70x
+ 2.0%     perdim16   0.773539  +0.009%    27.6 84.5MB (64B/16r)   142.2    39x
+ 2.0%        uint8   0.773616  +0.001%    27.6 1352.3MB (full)  1409.9     4x
+
+ 1.0%         zero   0.773418  +0.021%    13.8         0 MB    43.9   126x
+ 1.0%         dc16   0.773418  +0.021%    13.8 1.3MB (1B/16r)    45.2   123x
+ 1.0%           dc   0.773476  +0.015%    13.8 21.3MB (1B/r)    65.2    85x
+ 1.0%     perdim16   0.773423  +0.021%    13.8 85.4MB (64B/16r)   129.2    43x
+ 1.0%        uint8   0.773615  +0.002%    13.8 1366.1MB (full)  1409.9     4x
+
+Done.
