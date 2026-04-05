@@ -1,6 +1,30 @@
-# H.265 Video Codec Compression for DLRM Embedding Tables
+# Bypassing the Entropy Decode Bottleneck for DLRM Embedding Compression
 
-Post-training compression of DLRM embedding tables using H.265 video codecs. Achieves 1360x compression on cold embeddings with only 0.037% AUC loss on Kaggle — no retraining required.
+We decompose why H.265 video codecs achieve 6,466x storage compression on DLRM embedding tables and discover that lossy DCT quantization provides 160x (the dominant factor) while CABAC entropy coding contributes only 1.5x. This reveals that cold embedding blocks are 100% DC-only — the block average is sufficient. We bypass the serial entropy decode bottleneck entirely with a DC block-mean approach: **97x runtime compression, <0.1% AUC loss, zero decode cache, no retraining.**
+
+## Key Results
+
+| Method | Runtime Compression | AUC Loss | Decode Cache | Startup | Retraining |
+|---|:--:|:--:|:--:|:--:|:--:|
+| fp32 baseline | 1x (2,061 MB) | — | — | — | — |
+| H.265 + cache | 29x (71 MB) | -0.039% | 40 MB | 893ms | No |
+| **DC block-mean (ours)** | **97x (21 MB)** | **-0.092%** | **0** | **0** | **No** |
+
+### Compression Decomposition (Novel Finding)
+
+```
+uint8 quantization:        4x    
+Zstd entropy coding:       6.7x  (cumulative 27x)
+CABAC + intra prediction:  1.5x  (cumulative 40x)  ← modest
+Lossy DCT quantization:    160x  (cumulative 6,466x) ← DOMINANT
+```
+
+### Cross-Dataset Results
+
+| Dataset | D | Embeddings | DC 2% hot | AUC Loss | Ratio |
+|---|:--:|:--:|:--:|:--:|:--:|
+| Criteo Kaggle | 16 | 2.1 GB | 21.2 MB | -0.092% | 97x |
+| Criteo Terabyte | 64 | 5.5 GB | 59 MB | -0.009% | 94x |
 
 ## Setup
 
@@ -330,38 +354,54 @@ H.265 decode dominates when decoding all frames every batch (~53ms, same cost fo
 | `generate_interesting_figures.py` | `results/interesting_figures/` | Compression paradox, entropy vs compression, frame concentration, mapping optimization |
 | `generate_reordering_figures.py` | `results/interesting_figures/` | Reordering AUC benefit, ratio no-effect, punchline triptych, Pareto shift |
 
-## Key Results
+## Detailed Results
 
-### Headline Numbers (Kaggle, D=16)
+### DC Block-Mean Approach (Runtime, Kaggle D=16)
 
-| Metric | Value |
-|--------|-------|
-| Storage compression ratio | 1360x |
-| Runtime memory | 7.8x (2,058 → 263 MB) |
-| AUC loss (CRF=18) | -0.037% |
+| Hot fraction | AUC | AUC Loss | Memory | Ratio | Batch latency |
+|:--:|:--:|:--:|:--:|:--:|:--:|
+| 4.3% | 0.802115 | -0.038% | 32.9 MB | 63x | 2.49ms |
+| **2.0%** | **0.801581** | **-0.092%** | **21.2 MB** | **97x** | **2.48ms** |
+| 1.0% | 0.800688 | -0.181% | 16.0 MB | 129x | 2.44ms |
 
-### Comparison with Prior Methods (Kaggle)
+### H.265 Storage Compression (CRF Pareto, Kaggle)
 
-| Method | Ratio | AUC Loss | Retraining |
-|--------|-------|----------|------------|
-| INT8 | 4x | 0.002% | No |
-| PQ M=2 | 32x | 0.559% | No |
-| Prune 99% | 100x | 0.181% | No |
-| Zstd-19+uint8 | 133x | 0.002% | No |
-| CAFE+ (~1000x) | ~1000x | ~0.750% | **Yes** |
-| **H.265 CRF=18+freq (ours)** | **1360x** | **0.037%** | **No** |
+| CRF | Storage Size | Ratio (vs fp32) | AUC Loss |
+|:--:|:--:|:--:|:--:|
+| 0 (lossless) | 74 MB | 27x | -0.0001% |
+| 18 | 8.7 MB | 232x | -0.003% |
+| 30 | 312 KB | 6,466x | -0.013% |
+| 35 | 212 KB | 9,502x | -0.021% |
+| 51 | 162 KB | 12,437x | -0.037% |
 
-### Runtime Memory Breakdown (Kaggle CRF=18)
+### Comparison with Prior Methods
 
-| Component | Size | % |
-|-----------|------|---|
-| Hot embeddings (fp32) | 88.5 MB | 34% |
-| Compressed cold (H.265, in RAM) | 0.8 MB | 0% |
-| Decoded frame cache (20 frames) | 39.6 MB | 15% |
-| Mapping tables (int32) | 134.6 MB | 51% |
-| **Total** | **263 MB** | — |
+| Method | Runtime Compression | AUC Loss | Retraining | Decode overhead |
+|---|:--:|:--:|:--:|---|
+| INT8 | 4x | -0.002% | No | Negligible (fused) |
+| Pruning 99% | 100x | -0.181% | No | Sparse lookup |
+| TT-Rec | 112x | ~-0.1% | **Yes** | Matrix multiply (14%) |
+| CAFE+ | ~10,000x | ~-0.75% | **Yes** | None (hash lookup) |
+| H.265 + cache | 29x | -0.039% | No | 40MB cache, 893ms startup |
+| **DC block-mean (ours)** | **97x** | **-0.092%** | **No** | **None (1 AVX-512 op)** |
 
-The mapping overhead dominates and can be reduced to ~38 MB with uint8 frame ID + bitmap rank indexing (72% savings).
+### Memory Breakdown (DC 2% hot, with bitmap)
+
+| Component | Size |
+|---|:--:|
+| Hot embeddings (uint8) | 10.3 MB |
+| DC cold values (uint8) | 2.0 MB |
+| Bitmap-rank index | 6.0 MB |
+| Small tables (fp32) | 2.9 MB |
+| **Total** | **21.2 MB (97x)** |
+
+### Why Cold Embeddings Can Be Compressed
+
+Four reinforcing mechanisms from the literature:
+1. **Insufficient gradient updates**: Cold rows updated k << K times, never converge
+2. **Regularization decay**: Weight decay pushes rarely-updated params to zero (λ_i ∝ 1/frequency)
+3. **Loss dominated by frequent items**: Gradient dominated by hot items
+4. **No distinguishing information**: Model can't learn anything unique about items seen 0-5 times
 
 ## Results Directory
 
