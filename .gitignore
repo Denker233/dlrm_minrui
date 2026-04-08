@@ -11,5 +11,26 @@ results/
 .claude/
 models/
 CAFE/
-CAFE_old/
 run_kaggle_pt/
+
+# CAFE_old: track code/scripts but exclude bulky artifacts
+CAFE_old/.git_upstream/
+CAFE_old/__pycache__/
+CAFE_old/**/__pycache__/
+CAFE_old/*.pt
+CAFE_old/**/*.pt
+CAFE_old/*.log
+CAFE_old/*.pid
+CAFE_old/models/
+CAFE_old/run_kaggle_pt/
+CAFE_old/cafe_experiments_*/
+CAFE_old/cafe_corrected_*/
+CAFE_old/comparison_*/
+CAFE_old/final_1epoch_*/
+CAFE_old/proper_run_*/
+CAFE_old/quick_run_*/
+CAFE_old/sketch_attempts_*/
+CAFE_old/ultra_fast_*/
+CAFE_old/training_fixed.log
+CAFE_old/sketch_test_500.log
+CAFE_old/cpu_test.log

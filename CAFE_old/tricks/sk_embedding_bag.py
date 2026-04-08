@@ -1,0 +1,600 @@
+# from __future__ import absolute_import, division, print_function, unicode_literals
+
+# import numpy as np
+# from numpy import random as ra
+# import torch
+# import torch.nn as nn
+# import torch.nn.functional as F
+# from torch.nn.parameter import Parameter
+# import ctypes
+# import time
+
+
+# sketch_time = 0
+
+
+# def get_sketch_time():
+#     global sketch_time
+#     return sketch_time
+
+
+# def reset_sketch_time():
+#     global sketch_time
+#     sketch_time = 0
+
+
+# class SKEmbeddingBag(nn.Module):
+
+#     def __init__(
+#         self,
+#         field_num,
+#         hotn,
+#         lib,
+#         weight_high,
+#         device,
+#         num_categories,
+#         embedding_dim,
+#         f_offset,
+#         hash_size,
+#         max_norm=None,
+#         norm_type=2.0,
+#         scale_grad_by_freq=False,
+#         sparse=False,
+#     ):
+#         super(SKEmbeddingBag, self).__init__()
+#         # self.weight_high = weight_high
+#         self.field_num = field_num
+#         self.lib = lib
+#         self.offset = f_offset
+#         self.hash_size = hash_size
+#         self.hot_nums = hotn
+#         self.input_c = None
+
+#         self.num_categories = num_categories
+#         self.weight_h = weight_high
+#         self.embedding_dim = embedding_dim
+#         self.max_norm = max_norm
+#         self.norm_type = norm_type
+#         self.scale_grad_by_freq = scale_grad_by_freq
+#         self.device = device
+#         self.grad_norm = 0
+#         self.ins = self.lib.batch_insert
+#         self.ins.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
+#         self.ins.restype = ctypes.POINTER(ctypes.c_int)
+#         self.query_dic = None
+
+#         self.que = self.lib.batch_query
+#         self.que.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
+#         self.que.restype = ctypes.POINTER(ctypes.c_int)
+
+#         self.inv = self.lib.batch_insert_val
+#         self.inv.argtypes = [ctypes.POINTER(
+#             ctypes.c_int), ctypes.POINTER(ctypes.c_float), ctypes.c_int]
+#         self.inv.restype = ctypes.POINTER(ctypes.c_int)
+
+#         self.weight_hash = Parameter(
+#             torch.Tensor(self.hash_size, self.embedding_dim)
+#         )
+
+#         # print(f"hash_size: {self.hash_size}")
+#         self.reset_parameters()
+#         self.sparse = sparse
+
+#     def insert(self, input):
+#         N = len(input)
+#         input_l = (input + self.offset).numpy().astype(np.int32)
+#         addr = input_l.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
+#         input_c = ctypes.cast(addr, ctypes.POINTER(ctypes.c_int))
+
+#         mask_ptr = self.ins(input_c, N)
+#         dic_ptr = self.que(input_c, N)
+
+#         mask = torch.frombuffer(ctypes.cast(mask_ptr, ctypes.POINTER(
+#             ctypes.c_int * N)).contents, dtype=torch.int32, count=N)
+#         dic = torch.frombuffer(ctypes.cast(dic_ptr, ctypes.POINTER(
+#             ctypes.c_int * N)).contents, dtype=torch.int32, count=N)
+
+#         dic_mask = (dic < 0)
+#         dic = torch.abs(dic)
+#         return mask, dic_mask, dic
+
+#     def query(self, input):
+#         N = len(input)
+#         input_l = (input + self.offset).numpy().astype(np.int32)
+#         addr = input_l.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
+#         input_c = ctypes.cast(addr, ctypes.POINTER(ctypes.c_int))
+#         self.input_c = input_c
+
+#         dic_ptr = self.que(input_c, N)
+#         dic = torch.frombuffer(ctypes.cast(dic_ptr, ctypes.POINTER(
+#             ctypes.c_int * N)).contents, dtype=torch.int32, count=N)
+#         dic_mask = (dic < 0)
+#         dic = torch.abs(dic)
+#         return dic_mask, dic
+
+#     def reset_parameters(self):
+#         nn.init.uniform_(self.weight_hash, -np.sqrt(1 /
+#                          self.num_categories), np.sqrt(1 / self.num_categories))
+
+#     def forward(self, input, offsets=None, per_sample_weights=None, test=False):
+
+#         dic_mask, dic = self.query(input)
+#         # if test:
+#         #     dic_mask, dic = self.query(input)
+#         # else:
+#         #     mask, dic_mask, dic = self.insert(input) #cold to hot features, cold or hot features, features
+#             #idx = torch.nonzero(mask)
+#             # with torch.no_grad():
+#             #     for x in idx[:, 0]:
+#             #         self.weight_h[dic[x]] = self.weight_hash[input[x] % self.hash_size]
+#         self.query_dic = dic_mask.numpy()
+#         dic = dic.to(self.device)
+#         offsets = offsets.to(self.device)
+#         dic_mask = dic_mask.to(self.device).unsqueeze(1)
+#         embed_high = F.embedding_bag(
+#             dic % self.hot_nums,
+#             self.weight_h,
+#             offsets,
+#             sparse=True,
+#         )
+#         embed_hash = F.embedding_bag(
+#             dic % self.hash_size,
+#             self.weight_hash,
+#             offsets,
+#             sparse=True,
+#         )
+#         embed = torch.where(
+#             dic_mask,
+#             embed_high,
+#             embed_hash,
+#         )
+
+#         return embed
+
+#     def query_norm(self, input):
+#         N = len(input)
+#         l = self.field_num * N
+#         r = l + N
+#         dic_mask = self.query_dic
+#         grad_norm = torch.where(
+#             dic_mask,
+#             torch.norm(self.weight_h.grad._values()[l: r], dim=1, p=2),
+#             torch.norm(self.weight_hash.grad._values(), dim=1, p=2),
+#         )
+#         lst = self.grad_norm
+#         if self.grad_norm == 0:
+#             self.grad_norm = torch.sum(grad_norm)
+#         else:
+#             self.grad_norm = self.grad_norm * 0.8 + torch.sum(grad_norm) * 0.2
+#         grad_norm = grad_norm * N / self.grad_norm
+#         self.grad_norm = lst
+#         return grad_norm.cpu()
+
+#     def insert_grad(self, input):
+
+#         N = len(input)
+#         l = self.field_num * N
+#         r = l + N
+#         grad_norm = torch.where(
+#             torch.from_numpy(self.query_dic).to(self.device),
+#             torch.norm(self.weight_h.grad._values()[l: r], dim=1, p=2),
+#             torch.norm(self.weight_hash.grad._values(), dim=1, p=2),
+#         )
+
+#         # if self.grad_norm == 0:
+#         #     self.grad_norm = torch.sum(grad_norm)
+#         # else:
+#         #     self.grad_norm = self.grad_norm * 0.8 + torch.sum(grad_norm) * 0.2
+
+#         grad_norm = grad_norm * N / torch.sum(grad_norm)
+#         grad_norm_np = grad_norm.cpu().numpy()
+#         grad_norm_addr = grad_norm_np.ctypes.data_as(
+#             ctypes.POINTER(ctypes.c_float))
+#         grad_norm_c = ctypes.cast(
+#             grad_norm_addr, ctypes.POINTER(ctypes.c_float))
+
+#         mask_ptr = self.inv(self.input_c, grad_norm_c, N)
+#         mask = torch.frombuffer(ctypes.cast(mask_ptr, ctypes.POINTER(
+#             ctypes.c_int * N)).contents, dtype=torch.int32, count=N)
+#         idx = torch.nonzero(mask)
+
+#         dic_ptr = self.que(self.input_c, N)
+#         dic = torch.frombuffer(ctypes.cast(dic_ptr, ctypes.POINTER(
+#             ctypes.c_int * N)).contents, dtype=torch.int32, count=N)
+#         dic = torch.abs(dic)
+#         with torch.no_grad():
+#             for x in idx[:, 0]:
+#                 self.weight_h[dic[x]] = self.weight_hash[input[x] %
+#                                                          self.hash_size]
+
+#     def extra_repr(self):
+#         s = "{num_embeddings}, {embedding_dim}"
+#         if self.max_norm is not None:
+#             s += ", max_norm={max_norm}"
+#         if self.norm_type != 2:
+#             s += ", norm_type={norm_type}"
+#         if self.scale_grad_by_freq is not False:
+#             s += ", scale_grad_by_freq={scale_grad_by_freq}"
+#         s += ", mode={mode}"
+#         return s.format(**self.__dict__)
+
+from __future__ import absolute_import, division, print_function, unicode_literals
+
+import numpy as np
+from numpy import random as ra
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.nn.parameter import Parameter
+import ctypes
+import time
+
+
+sketch_time = 0
+
+
+def get_sketch_time():
+    global sketch_time
+    return sketch_time
+
+
+def reset_sketch_time():
+    global sketch_time
+    sketch_time = 0
+
+
+class SKEmbeddingBag(nn.Module):
+
+    def __init__(
+        self,
+        field_num,
+        hotn,
+        lib,
+        weight_high,
+        device,
+        num_categories,
+        embedding_dim,
+        f_offset,
+        hash_size,
+        max_norm=None,
+        norm_type=2.0,
+        scale_grad_by_freq=False,
+        sparse=False,
+    ):
+        super(SKEmbeddingBag, self).__init__()
+        # self.weight_high = weight_high
+        self.field_num = field_num
+        self.lib = lib
+        self.offset = f_offset
+        self.hash_size = hash_size
+        self.hot_nums = hotn
+        self.input_c = None
+
+        self.num_categories = num_categories
+        self.weight_h = weight_high
+        self.embedding_dim = embedding_dim
+        self.max_norm = max_norm
+        self.norm_type = norm_type
+        self.scale_grad_by_freq = scale_grad_by_freq
+        self.device = device
+        self.grad_norm = 0
+        self.ins = self.lib.batch_insert
+        self.ins.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
+        self.ins.restype = ctypes.POINTER(ctypes.c_int)
+        self.query_dic = None
+
+        self.que = self.lib.batch_query
+        self.que.argtypes = [ctypes.POINTER(ctypes.c_int), ctypes.c_int]
+        self.que.restype = ctypes.POINTER(ctypes.c_int)
+
+        self.inv = self.lib.batch_insert_val
+        self.inv.argtypes = [ctypes.POINTER(
+            ctypes.c_int), ctypes.POINTER(ctypes.c_float), ctypes.c_int]
+        self.inv.restype = ctypes.POINTER(ctypes.c_int)
+
+        self.weight_hash = Parameter(
+            torch.Tensor(self.hash_size, self.embedding_dim)
+        )
+
+        # ============================================================
+        # ADDED: Fine-grained timing counters
+        # ============================================================
+        self.time_numpy_convert = 0      # Time for tensor -> numpy conversion
+        self.time_ctypes_setup = 0       # Time for ctypes pointer setup
+        self.time_sketch_query = 0       # Time for C++ batch_query call
+        self.time_frombuffer = 0         # Time for torch.frombuffer
+        self.time_data_transfer = 0      # Time for .to(device) transfers
+        self.time_hot_lookup = 0         # Time for hot F.embedding_bag
+        self.time_cold_lookup = 0        # Time for hash F.embedding_bag
+        self.time_combine = 0            # Time for torch.where combination
+        self.time_total_forward = 0      # Total forward time
+        self.lookup_count = 0            # Number of forward passes
+        self.insert_grad_call_count = 0  # Number of batch_insert_val calls
+        # ============================================================
+
+        # Bind get_insert_val_count for verification
+        self.get_insert_val_count = self.lib.get_insert_val_count
+        self.get_insert_val_count.argtypes = []
+        self.get_insert_val_count.restype = ctypes.c_longlong
+
+        # print(f"hash_size: {self.hash_size}")
+        self.reset_parameters()
+        self.sparse = sparse
+
+    def insert(self, input):
+        N = len(input)
+        input_l = (input + self.offset).numpy().astype(np.int32)
+        addr = input_l.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
+        input_c = ctypes.cast(addr, ctypes.POINTER(ctypes.c_int))
+
+        mask_ptr = self.ins(input_c, N)
+        dic_ptr = self.que(input_c, N)
+
+        mask = torch.frombuffer(ctypes.cast(mask_ptr, ctypes.POINTER(
+            ctypes.c_int * N)).contents, dtype=torch.int32, count=N)
+        dic = torch.frombuffer(ctypes.cast(dic_ptr, ctypes.POINTER(
+            ctypes.c_int * N)).contents, dtype=torch.int32, count=N)
+
+        dic_mask = (dic < 0)
+        dic = torch.abs(dic)
+        return mask, dic_mask, dic
+
+    def query(self, input):
+        N = len(input)
+        input_l = (input + self.offset).numpy().astype(np.int32)
+        addr = input_l.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
+        input_c = ctypes.cast(addr, ctypes.POINTER(ctypes.c_int))
+        self.input_c = input_c
+
+        dic_ptr = self.que(input_c, N)
+        dic = torch.frombuffer(ctypes.cast(dic_ptr, ctypes.POINTER(
+            ctypes.c_int * N)).contents, dtype=torch.int32, count=N)
+        dic_mask = (dic < 0)
+        dic = torch.abs(dic)
+        return dic_mask, dic
+
+    # ============================================================
+    # ADDED: Timed version of query with fine-grained breakdown
+    # ============================================================
+    def query_timed(self, input):
+        N = len(input)
+        
+        # 1. Numpy conversion
+        t0 = time.time()
+        input_l = (input + self.offset).numpy().astype(np.int32)
+        t1 = time.time()
+        self.time_numpy_convert += (t1 - t0)
+        
+        # 2. Ctypes pointer setup
+        t2 = time.time()
+        addr = input_l.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
+        input_c = ctypes.cast(addr, ctypes.POINTER(ctypes.c_int))
+        self.input_c = input_c
+        t3 = time.time()
+        self.time_ctypes_setup += (t3 - t2)
+        
+        # 3. C++ sketch query call
+        t4 = time.time()
+        dic_ptr = self.que(input_c, N)
+        t5 = time.time()
+        self.time_sketch_query += (t5 - t4)
+        
+        # 4. torch.frombuffer and mask creation
+        t6 = time.time()
+        dic = torch.frombuffer(ctypes.cast(dic_ptr, ctypes.POINTER(
+            ctypes.c_int * N)).contents, dtype=torch.int32, count=N)
+        dic_mask = (dic < 0)
+        dic = torch.abs(dic)
+        t7 = time.time()
+        self.time_frombuffer += (t7 - t6)
+        
+        return dic_mask, dic
+    # ============================================================
+
+    def reset_parameters(self):
+        nn.init.uniform_(self.weight_hash, -np.sqrt(1 /
+                         self.num_categories), np.sqrt(1 / self.num_categories))
+
+    def forward(self, input, offsets=None, per_sample_weights=None, test=False):
+        # ============================================================
+        # MODIFIED: Added fine-grained timing throughout forward pass
+        # ============================================================
+        t_forward_start = time.time()
+        self.lookup_count += 1
+
+        # 1. Query sketch (uses timed version)
+        dic_mask, dic = self.query_timed(input)
+
+        self.query_dic = dic_mask.numpy()
+
+        # Save input for insert_grad (avoid dangling pointer)
+        self._saved_input = input.clone()
+
+        # 2. Data transfers to device
+        t_transfer_start = time.time()
+        dic = dic.to(self.device)
+        offsets = offsets.to(self.device)
+        dic_mask = dic_mask.to(self.device).unsqueeze(1)
+        t_transfer_end = time.time()
+        self.time_data_transfer += (t_transfer_end - t_transfer_start)
+
+        # 3. Hot embedding lookup
+        t_hot_start = time.time()
+        embed_high = F.embedding_bag(
+            dic % self.hot_nums,
+            self.weight_h,
+            offsets,
+            sparse=True,
+        )
+        t_hot_end = time.time()
+        self.time_hot_lookup += (t_hot_end - t_hot_start)
+
+        # 4. Hash/cold embedding lookup
+        t_cold_start = time.time()
+        embed_hash = F.embedding_bag(
+            dic % self.hash_size,
+            self.weight_hash,
+            offsets,
+            sparse=True,
+        )
+        t_cold_end = time.time()
+        self.time_cold_lookup += (t_cold_end - t_cold_start)
+
+        # 5. Combine results with torch.where
+        t_combine_start = time.time()
+        embed = torch.where(
+            dic_mask,
+            embed_high,
+            embed_hash,
+        )
+        t_combine_end = time.time()
+        self.time_combine += (t_combine_end - t_combine_start)
+
+        # Register backward hook to capture per-table output gradient
+        # This avoids the fragile shared weight_h.grad slicing
+        if not test:
+            embed.register_hook(lambda grad: setattr(self, '_output_grad', grad))
+
+        t_forward_end = time.time()
+        self.time_total_forward += (t_forward_end - t_forward_start)
+
+        return embed
+
+    # ============================================================
+    # ADDED: Method to print timing summary
+    # ============================================================
+    def print_timing_summary(self):
+        if self.lookup_count == 0:
+            print("No lookups performed yet")
+            return
+        
+        total = self.time_total_forward
+        count = self.lookup_count
+        
+        print(f"\n{'='*70}")
+        print(f"SKEmbeddingBag TIMING BREAKDOWN (field {self.field_num})")
+        print(f"{'='*70}")
+        print(f"Total forward calls: {count}")
+        print(f"Total forward time:  {total:.4f} s ({total/count*1e6:.2f} µs/call)")
+        print()
+        print(f"{'Component':<25} {'Total (s)':<12} {'Per Call (µs)':<15} {'% of Total':<10}")
+        print(f"{'-'*70}")
+        
+        components = [
+            ("Numpy conversion", self.time_numpy_convert),
+            ("Ctypes setup", self.time_ctypes_setup),
+            ("C++ sketch query", self.time_sketch_query),
+            ("torch.frombuffer", self.time_frombuffer),
+            ("Data transfer (.to())", self.time_data_transfer),
+            ("Hot embedding_bag", self.time_hot_lookup),
+            ("Hash embedding_bag", self.time_cold_lookup),
+            ("torch.where combine", self.time_combine),
+        ]
+        
+        for name, t in components:
+            pct = (t / total * 100) if total > 0 else 0
+            per_call = t / count * 1e6 if count > 0 else 0
+            print(f"{name:<25} {t:<12.4f} {per_call:<15.2f} {pct:<10.1f}%")
+        
+        # Calculate overhead vs pure lookups
+        pure_lookup = self.time_hot_lookup + self.time_cold_lookup
+        overhead = total - pure_lookup
+        print(f"\n{'='*70}")
+        print(f"Pure embedding lookups:  {pure_lookup:.4f} s ({pure_lookup/total*100:.1f}%)")
+        print(f"Overhead (rest):         {overhead:.4f} s ({overhead/total*100:.1f}%)")
+        print(f"{'='*70}\n")
+    
+    def reset_timing(self):
+        """Reset all timing counters"""
+        self.time_numpy_convert = 0
+        self.time_ctypes_setup = 0
+        self.time_sketch_query = 0
+        self.time_frombuffer = 0
+        self.time_data_transfer = 0
+        self.time_hot_lookup = 0
+        self.time_cold_lookup = 0
+        self.time_combine = 0
+        self.time_total_forward = 0
+        self.lookup_count = 0
+    # ============================================================
+
+    def query_norm(self, input):
+        N = len(input)
+        l = self.field_num * N
+        r = l + N
+        dic_mask = self.query_dic
+        grad_norm = torch.where(
+            dic_mask,
+            torch.norm(self.weight_h.grad._values()[l: r], dim=1, p=2),
+            torch.norm(self.weight_hash.grad._values(), dim=1, p=2),
+        )
+        lst = self.grad_norm
+        if self.grad_norm == 0:
+            self.grad_norm = torch.sum(grad_norm)
+        else:
+            self.grad_norm = self.grad_norm * 0.8 + torch.sum(grad_norm) * 0.2
+        grad_norm = grad_norm * N / self.grad_norm
+        self.grad_norm = lst
+        return grad_norm.cpu()
+
+    def insert_grad(self, input):
+        N = len(input)
+
+        # Use the saved input from forward pass to recompute the C pointer
+        # (fixes dangling pointer bug where self.input_c pointed to GC'd memory)
+        input_for_sketch = self._saved_input
+        input_l = (input_for_sketch + self.offset).numpy().astype(np.int32)
+        input_addr = input_l.ctypes.data_as(ctypes.POINTER(ctypes.c_int))
+        input_c = ctypes.cast(input_addr, ctypes.POINTER(ctypes.c_int))
+
+        # Use output gradient captured by backward hook when available,
+        # otherwise fall back to frequency-based importance (all-ones)
+        if hasattr(self, '_output_grad') and self._output_grad is not None:
+            grad_norm = torch.norm(self._output_grad, dim=1, p=2)
+            grad_sum = torch.sum(grad_norm)
+            if grad_sum > 0:
+                grad_norm = grad_norm * N / grad_sum
+            else:
+                grad_norm = torch.ones(N)
+            grad_norm_np = grad_norm.cpu().numpy().astype(np.float32)
+        else:
+            # Fallback: frequency-based importance (count accesses uniformly)
+            grad_norm_np = np.ones(N, dtype=np.float32)
+
+        grad_norm_addr = grad_norm_np.ctypes.data_as(
+            ctypes.POINTER(ctypes.c_float))
+        grad_norm_c = ctypes.cast(
+            grad_norm_addr, ctypes.POINTER(ctypes.c_float))
+
+        mask_ptr = self.inv(input_c, grad_norm_c, N)
+        self.insert_grad_call_count += 1
+        mask = torch.frombuffer(ctypes.cast(mask_ptr, ctypes.POINTER(
+            ctypes.c_int * N)).contents, dtype=torch.int32, count=N)
+        idx = torch.nonzero(mask)
+
+        dic_ptr = self.que(input_c, N)
+        dic = torch.frombuffer(ctypes.cast(dic_ptr, ctypes.POINTER(
+            ctypes.c_int * N)).contents, dtype=torch.int32, count=N)
+        dic_raw = dic
+        dic = torch.abs(dic)
+        with torch.no_grad():
+            for x in idx[:, 0]:
+                # Only copy if query returned a negative value (in hot table)
+                # and the hot index is within bounds
+                if dic_raw[x] < 0 and dic[x] < self.hot_nums:
+                    self.weight_h[dic[x]] = self.weight_hash[input[x] %
+                                                             self.hash_size]
+
+        # Clear saved gradient to free memory
+        self._output_grad = None
+
+    def extra_repr(self):
+        s = "{num_embeddings}, {embedding_dim}"
+        if self.max_norm is not None:
+            s += ", max_norm={max_norm}"
+        if self.norm_type != 2:
+            s += ", norm_type={norm_type}"
+        if self.scale_grad_by_freq is not False:
+            s += ", scale_grad_by_freq={scale_grad_by_freq}"
+        s += ", mode={mode}"
+        return s.format(**self.__dict__)

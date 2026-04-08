@@ -1,0 +1,1 @@
+./comparison_script.sh: line 90: python: command not found

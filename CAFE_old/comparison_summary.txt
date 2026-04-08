@@ -1,0 +1,44 @@
+=========================================
+DLRM Performance Comparison
+Sketch (CAFE) vs Original
+Date: Thu Jan 29 00:51:51 UTC 2026
+=========================================
+
+Configuration:
+  - Sparse Feature Size: 16
+  - Bottom MLP: 13-512-256-64-16
+  - Top MLP: 512-256-1
+  - Test Batch Size: 2048
+  - Compression Rate: 0.007
+  - Hash Rate: 0.2
+  - Cache: DROPPED before each run
+
+=========================================
+TIMING BREAKDOWN (seconds)
+=========================================
+Component                     Sketch        Original         Speedup
+-----------------------------------------
+Error: Could not extract timing information
+
+=========================================
+ACCURACY COMPARISON
+=========================================
+Metric                        Sketch        Original      Difference
+-----------------------------------------
+Error: Could not extract accuracy information
+
+=========================================
+COMPRESSION ANALYSIS
+=========================================
+Compression Rate: 0.007 (0.7%)
+Hash Rate: 0.2 (20%)
+Effective Compression: ~143x (estimated)
+
+=========================================
+SUMMARY
+=========================================
+
+Output files:
+  - Sketch results: /home/cc/expr/dlrm_minrui/CAFE_old/sketch_timing_results.txt
+  - Original results: /home/cc/expr/dlrm_minrui/original_timing_results.txt
+  - This summary: comparison_summary.txt
