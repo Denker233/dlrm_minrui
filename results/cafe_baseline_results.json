@@ -1,0 +1,139 @@
+{
+  "description": "CAFE embedding compression baselines on Criteo Kaggle dataset",
+  "date": "2026-03-27",
+  "dataset": "Criteo Kaggle",
+  "num_train_samples": 39291957,
+  "num_test_samples": 6548660,
+  "training": {
+    "epochs": 1,
+    "batch_size": 128,
+    "learning_rate": 0.1,
+    "optimizer": "sgd",
+    "embedding_dim": 16,
+    "test_freq_iters": 30000,
+    "total_iters": 306969,
+    "device": "CPU"
+  },
+  "notes": [
+    "CAFE methods used --cafe_use_freq True (frequency-based importance) due to sparse gradient coalescing on CPU",
+    "CAFE hyperparameters (threshold, hash_rate) from CAFE paper's official criteo.json config",
+    "All methods trained for exactly 1 epoch with identical data splits (6/7 train, 1/7 test)",
+    "AUC values are best test AUC observed during training (standard practice)"
+  ],
+  "results": [
+    {
+      "method": "Full Embedding",
+      "compress_rate": 1.0,
+      "compression_ratio": "1x",
+      "best_test_auc": 0.80125,
+      "final_test_auc": 0.80094,
+      "test_accuracy": 0.78835,
+      "train_loss": 0.435353,
+      "ms_per_iter": 7.33
+    },
+    {
+      "method": "CAFE",
+      "compress_rate": 0.01,
+      "compression_ratio": "100x",
+      "best_test_auc": 0.79998,
+      "final_test_auc": 0.79952,
+      "test_accuracy": 0.78785,
+      "train_loss": 0.436474,
+      "ms_per_iter": 14.67,
+      "cafe_sketch_threshold": 100,
+      "cafe_hash_rate": 0.3
+    },
+    {
+      "method": "CAFE",
+      "compress_rate": 0.001,
+      "compression_ratio": "1000x",
+      "best_test_auc": 0.79309,
+      "final_test_auc": 0.79272,
+      "test_accuracy": 0.78503,
+      "train_loss": 0.441943,
+      "ms_per_iter": 17.20,
+      "cafe_sketch_threshold": 500,
+      "cafe_hash_rate": 0.2
+    },
+    {
+      "method": "CAFE",
+      "compress_rate": 0.0001,
+      "compression_ratio": "10000x",
+      "best_test_auc": 0.77777,
+      "final_test_auc": 0.77751,
+      "test_accuracy": 0.77827,
+      "train_loss": 0.454086,
+      "ms_per_iter": 16.84,
+      "cafe_sketch_threshold": 500,
+      "cafe_hash_rate": 0.1
+    },
+    {
+      "method": "Hash Embedding",
+      "compress_rate": 0.01,
+      "compression_ratio": "100x",
+      "best_test_auc": 0.78865,
+      "final_test_auc": 0.78854,
+      "test_accuracy": 0.78338,
+      "train_loss": 0.445797,
+      "ms_per_iter": 7.65
+    },
+    {
+      "method": "Hash Embedding",
+      "compress_rate": 0.001,
+      "compression_ratio": "1000x",
+      "best_test_auc": 0.77050,
+      "final_test_auc": 0.76980,
+      "test_accuracy": 0.77735,
+      "train_loss": 0.459375,
+      "ms_per_iter": 7.52
+    },
+    {
+      "method": "Hash Embedding",
+      "compress_rate": 0.0001,
+      "compression_ratio": "10000x",
+      "best_test_auc": 0.75067,
+      "final_test_auc": 0.75048,
+      "test_accuracy": 0.76956,
+      "train_loss": 0.473579,
+      "ms_per_iter": 7.60
+    },
+    {
+      "method": "Q-R Trick",
+      "compress_rate": 0.01,
+      "compression_ratio": "100x",
+      "best_test_auc": 0.79093,
+      "final_test_auc": 0.79041,
+      "test_accuracy": 0.78405,
+      "train_loss": 0.443623,
+      "ms_per_iter": 10.46
+    },
+    {
+      "method": "Q-R Trick",
+      "compress_rate": 0.005,
+      "compression_ratio": "200x",
+      "best_test_auc": 0.79119,
+      "final_test_auc": 0.79091,
+      "test_accuracy": 0.78424,
+      "train_loss": 0.443563,
+      "ms_per_iter": 10.85
+    }
+  ],
+  "comparison_with_dc": {
+    "our_full_auc": 0.80261,
+    "our_dc_crf18_auc": 0.80224,
+    "our_dc_compression_ratio": "1360x",
+    "our_dc_auc_loss_pct": -0.037,
+    "cafe_full_best_auc": 0.80125,
+    "cafe_1000x_best_auc": 0.79309,
+    "cafe_1000x_auc_loss_vs_cafe_full_pct": -0.816,
+    "hash_1000x_best_auc": 0.77050,
+    "hash_1000x_auc_loss_vs_cafe_full_pct": -3.075,
+    "dc_advantage_over_cafe_at_1000x": "22x less AUC degradation",
+    "notes": [
+      "Our full AUC (0.80261) is from our DLRM training; CAFE full AUC (0.80125) uses their DLRM implementation",
+      "DC at 1360x compression loses only 0.037% AUC vs our full baseline",
+      "CAFE at 1000x loses 0.816% AUC vs CAFE full baseline",
+      "Our DC method achieves 22x less AUC degradation than CAFE at similar compression"
+    ]
+  }
+}
