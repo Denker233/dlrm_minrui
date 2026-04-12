@@ -1,6 +1,6 @@
 # Bypassing the Entropy Decode Bottleneck for DLRM Embedding Compression
 
-We decompose why H.265 video codecs achieve 6,466x storage compression on DLRM embedding tables and discover that lossy DCT quantization provides 160x (the dominant factor) while CABAC entropy coding contributes only 1.5x. This reveals that cold embedding blocks are 100% DC-only — the block average is sufficient. We bypass the serial entropy decode bottleneck entirely with a DC block-mean approach: **97x runtime compression, <0.1% AUC loss, zero decode cache, no retraining.**
+We decompose why H.265 video codecs achieve 6,466x storage compression on DLRM embedding tables and discover that lossy DCT quantization provides 160x (the dominant factor) while CABAC entropy coding contributes only 1.5x. This reveals that cold embedding blocks are 100% DC-only — the block average is sufficient. We bypass the serial entropy decode bottleneck entirely with a DC block-mean approach: **248x runtime compression, -0.115% AUC loss, zero decode cache, no retraining.**
 
 ## Key Results
 
@@ -8,7 +8,8 @@ We decompose why H.265 video codecs achieve 6,466x storage compression on DLRM e
 |---|:--:|:--:|:--:|:--:|:--:|
 | fp32 baseline | 1x (2,061 MB) | — | — | — | — |
 | H.265 + cache | 29x (71 MB) | -0.039% | 40 MB | 893ms | No |
-| **DC block-mean (ours)** | **97x (21 MB)** | **-0.092%** | **0** | **0** | **No** |
+| DC block-mean (freq-sort) | 72x (29 MB) | -0.036% | 0 | 0 | No |
+| **DC block-mean + value-sort** | **248x (8.3 MB)** | **-0.115%** | **0** | **0** | **No** |
 
 ### Compression Decomposition (Novel Finding)
 
@@ -19,12 +20,42 @@ CABAC + intra prediction:  1.5x  (cumulative 40x)  ← modest
 Lossy DCT quantization:    160x  (cumulative 6,466x) ← DOMINANT
 ```
 
+### Value-Sort: 2x AUC Improvement at Zero Cost (New Finding)
+
+Sorting cold rows by their mean embedding value (instead of access frequency) before computing DC block means reduces AUC loss by 2.1-2.5x at the same compression ratio:
+
+| Hot % | Method | Ratio | AUC Loss |
+|:--:|---|:--:|:--:|
+| 4.3% | DC freq-sorted (old) | 72x | -0.036% |
+| 4.3% | **DC value-sorted** | **74x** | **-0.017%** |
+| 2.0% | DC freq-sorted (old) | 121x | -0.087% |
+| 2.0% | **DC value-sorted** | **129x** | **-0.039%** |
+| 1.0% | DC freq-sorted (old) | 174x | -0.173% |
+| 1.0% | **DC value-sorted** | **189x** | **-0.072%** |
+| 0.5% | DC freq-sorted (old) | 221x | -0.282% |
+| 0.5% | **DC value-sorted** | **248x** | **-0.115%** |
+
+**Why it works:** Inspired by AV1 video codec's intra prediction — adjacent pixels are spatially correlated, so prediction is accurate. Value-sorting creates the same property for embeddings: adjacent rows have similar values, so the block mean is a much better approximation (15-28% lower within-block MSE). Combined with 4-bit quantization of means (16 levels is sufficient), this gives an additional 10% ratio boost at no AUC cost.
+
+**Cost:** O(N log N) one-time sort at deployment (~4 seconds for all tables). Zero inference overhead — same O(1) lookup path.
+
+### AV1 vs H.265 Codec Comparison (New Finding)
+
+AV1 (dav1d decoder, AVX-512) dominates H.265 across the entire Pareto frontier:
+
+| Codec | CRF | Storage Compression | AUC Loss | Decode Speed |
+|:--:|:--:|:--:|:--:|:--:|
+| H.265 | 45 | 8,368x | -0.034% | 6.2 GB/s (AVX2) |
+| **AV1** | **30** | **75,236x** | **-0.023%** | **6.4 GB/s (AVX-512)** |
+
+At matched AUC (-0.035%), AV1 achieves 9x higher compression than H.265. Both achieve identical decode throughput with codec context pooling. Software H.265 decode is limited to AVX2 (0 AVX-512 instructions in libavcodec); dav1d has 2,363 AVX-512 instructions.
+
 ### Cross-Dataset Results
 
-| Dataset | D | Embeddings | DC 2% hot | AUC Loss | Ratio |
+| Dataset | D | Embeddings | DC value-sort 0.5% hot | AUC Loss | Ratio |
 |---|:--:|:--:|:--:|:--:|:--:|
-| Criteo Kaggle | 16 | 2.1 GB | 21.2 MB | -0.092% | 97x |
-| Criteo Terabyte | 64 | 5.5 GB | 59 MB | -0.009% | 94x |
+| Criteo Kaggle | 16 | 2.1 GB | 8.3 MB | -0.115% | 248x |
+| Criteo Terabyte | 64 | 10.5 GB | 62 MB | -0.080% | 172x |
 
 ## Setup
 
@@ -358,21 +389,34 @@ H.265 decode dominates when decoding all frames every batch (~53ms, same cost fo
 
 ### DC Block-Mean Approach (Runtime, Kaggle D=16)
 
-| Hot fraction | AUC | AUC Loss | Memory | Ratio | Batch latency |
-|:--:|:--:|:--:|:--:|:--:|:--:|
-| 4.3% | 0.802115 | -0.038% | 32.9 MB | 63x | 2.49ms |
-| **2.0%** | **0.801581** | **-0.092%** | **21.2 MB** | **97x** | **2.48ms** |
-| 1.0% | 0.800688 | -0.181% | 16.0 MB | 129x | 2.44ms |
+**Value-sorted (new, 4-bit means):**
 
-### H.265 Storage Compression (CRF Pareto, Kaggle)
+| Hot fraction | AUC | AUC Loss | Memory | Ratio |
+|:--:|:--:|:--:|:--:|:--:|
+| 4.3% | 0.802332 | -0.017% | 27.8 MB | 74x |
+| 2.0% | 0.802104 | -0.039% | 16.0 MB | 129x |
+| **1.0%** | **0.801778** | **-0.072%** | **10.9 MB** | **189x** |
+| 0.5% | 0.801351 | -0.115% | 8.3 MB | 248x |
 
-| CRF | Storage Size | Ratio (vs fp32) | AUC Loss |
-|:--:|:--:|:--:|:--:|
-| 0 (lossless) | 74 MB | 27x | -0.0001% |
-| 18 | 8.7 MB | 232x | -0.003% |
-| 30 | 312 KB | 6,466x | -0.013% |
-| 35 | 212 KB | 9,502x | -0.021% |
-| 51 | 162 KB | 12,437x | -0.037% |
+**Freq-sorted (old, 8-bit means):**
+
+| Hot fraction | AUC | AUC Loss | Memory | Ratio |
+|:--:|:--:|:--:|:--:|:--:|
+| 4.3% | 0.802135 | -0.036% | 28.8 MB | 72x |
+| 2.0% | 0.801624 | -0.087% | 17.0 MB | 121x |
+| 1.0% | 0.800766 | -0.173% | 11.9 MB | 174x |
+
+### H.265 vs AV1 Storage Compression (Kaggle)
+
+| Codec | CRF | Storage Size | Ratio (vs fp32) | AUC Loss |
+|:--:|:--:|:--:|:--:|:--:|
+| H.265 | 0 (lossless) | 50.1 MB | 39x | -0.0001% |
+| H.265 | 18 | 9.7 MB | 203x | -0.003% |
+| H.265 | 35 | 0.25 MB | 7,913x | -0.022% |
+| H.265 | 45 | 0.24 MB | 8,368x | -0.034% |
+| **AV1** | **10** | **0.35 MB** | **5,647x** | **-0.009%** |
+| **AV1** | **30** | **0.03 MB** | **75,236x** | **-0.023%** |
+| **AV1** | **50** | **0.009 MB** | **214,122x** | **-0.036%** |
 
 ### Comparison with Prior Methods
 
