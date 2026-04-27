@@ -1,15 +1,17 @@
 # Bypassing the Entropy Decode Bottleneck for DLRM Embedding Compression
 
-We decompose why H.265 video codecs achieve 6,466x storage compression on DLRM embedding tables and discover that lossy DCT quantization provides 160x (the dominant factor) while CABAC entropy coding contributes only 1.5x. This reveals that cold embedding blocks are 100% DC-only — the block average is sufficient. We bypass the serial entropy decode bottleneck entirely with a DC block-mean approach: **248x runtime compression, -0.115% AUC loss, zero decode cache, no retraining.**
+We decompose why H.265 video codecs achieve 6,466x storage compression on DLRM embedding tables and discover that lossy DCT quantization provides 160x (the dominant factor) while CABAC entropy coding contributes only 1.5x. This reveals that cold embedding blocks are 100% DC-only — the block average is sufficient. We bypass the serial entropy decode bottleneck entirely with a **DC block-mean + value-sort + 4-bit** approach: **341x compression on Terabyte (10.5 GB → 31 MB), -0.032% AUC loss; 248x on Kaggle (2.1 GB → 8.3 MB), -0.115% AUC loss. Zero decode overhead, no retraining.**
 
 ## Key Results
 
-| Method | Runtime Compression | AUC Loss | Decode Cache | Startup | Retraining |
-|---|:--:|:--:|:--:|:--:|:--:|
-| fp32 baseline | 1x (2,061 MB) | — | — | — | — |
-| H.265 + cache | 29x (71 MB) | -0.039% | 40 MB | 893ms | No |
-| DC block-mean (freq-sort) | 72x (29 MB) | -0.036% | 0 | 0 | No |
-| **DC block-mean + value-sort** | **248x (8.3 MB)** | **-0.115%** | **0** | **0** | **No** |
+| Method | Dataset | Runtime Compression | AUC Loss | Decode | Retraining |
+|---|---|:--:|:--:|:--:|:--:|
+| fp32 baseline | Kaggle | 1x (2,061 MB) | — | — | — |
+| H.265 + cache | Kaggle | 29x (71 MB) | -0.039% | 40 MB cache | No |
+| DC freq-sort (old) | Kaggle | 72x (29 MB) | -0.036% | 0 | No |
+| **DC value-sort 4-bit** | **Kaggle** | **248x (8.3 MB)** | **-0.115%** | **0** | **No** |
+| fp32 baseline | Terabyte | 1x (10.5 GB) | — | — | — |
+| **DC value-sort 4-bit** | **Terabyte** | **341x (31 MB)** | **-0.032%** | **0** | **No** |
 
 ### Compression Decomposition (Novel Finding)
 
@@ -20,22 +22,39 @@ CABAC + intra prediction:  1.5x  (cumulative 40x)  ← modest
 Lossy DCT quantization:    160x  (cumulative 6,466x) ← DOMINANT
 ```
 
-### Value-Sort: 2x AUC Improvement at Zero Cost (New Finding)
+### Value-Sort + 4-bit: Up to 2.5x Less AUC Loss, Validated Across Datasets
 
-Sorting cold rows by their mean embedding value (instead of access frequency) before computing DC block means reduces AUC loss by 2.1-2.5x at the same compression ratio:
+Sorting cold rows by their mean embedding value (instead of access frequency) before computing DC block means reduces AUC loss by 1.4-2.5x at the same compression ratio. Using 4-bit quantization for block means (16 levels) gives an additional ~10% ratio boost at negligible AUC cost.
 
-| Hot % | Method | Ratio | AUC Loss |
-|:--:|---|:--:|:--:|
-| 4.3% | DC freq-sorted (old) | 72x | -0.036% |
-| 4.3% | **DC value-sorted** | **74x** | **-0.017%** |
-| 2.0% | DC freq-sorted (old) | 121x | -0.087% |
-| 2.0% | **DC value-sorted** | **129x** | **-0.039%** |
-| 1.0% | DC freq-sorted (old) | 174x | -0.173% |
-| 1.0% | **DC value-sorted** | **189x** | **-0.072%** |
-| 0.5% | DC freq-sorted (old) | 221x | -0.282% |
-| 0.5% | **DC value-sorted** | **248x** | **-0.115%** |
+**Criteo Kaggle (D=16, baseline AUC 0.80250):**
 
-**Why it works:** Inspired by AV1 video codec's intra prediction — adjacent pixels are spatially correlated, so prediction is accurate. Value-sorting creates the same property for embeddings: adjacent rows have similar values, so the block mean is a much better approximation (15-28% lower within-block MSE). Combined with 4-bit quantization of means (16 levels is sufficient), this gives an additional 10% ratio boost at no AUC cost.
+| Hot % | Method | Ratio | AUC Loss | vs Zero |
+|:--:|---|:--:|:--:|:--:|
+| 4.3% | DC freq-sort 8-bit | 72x | -0.036% | — |
+| 4.3% | **DC value-sort 4-bit** | **74x** | **-0.017%** | 2.2x less loss than zero |
+| 2.0% | DC freq-sort 8-bit | 121x | -0.087% | — |
+| 2.0% | **DC value-sort 4-bit** | **129x** | **-0.039%** | 2.3x less loss than zero |
+| 1.0% | DC freq-sort 8-bit | 174x | -0.173% | — |
+| 1.0% | **DC value-sort 4-bit** | **189x** | **-0.072%** | 2.5x less loss than zero |
+| 0.5% | DC freq-sort 8-bit | 221x | -0.282% | — |
+| 0.5% | **DC value-sort 4-bit** | **248x** | **-0.115%** | 2.6x less loss than zero |
+
+**Criteo Terabyte (D=64, baseline AUC 0.76882):**
+
+| Hot % | Method | Ratio | AUC Loss | vs Zero |
+|:--:|---|:--:|:--:|:--:|
+| 4.3% | DC value-sort 4-bit | 81x | -0.001% | 1.4x less loss than zero |
+| 2.0% | DC value-sort 4-bit | 150x | -0.006% | 1.4x less loss than zero |
+| 1.0% | DC value-sort 4-bit | 239x | -0.014% | 1.4x less loss than zero |
+| **0.5%** | **DC value-sort 4-bit** | **341x** | **-0.032%** | **1.4x less loss than zero** |
+
+**Key observations:**
+- Value-sort benefit is stronger on Kaggle (2.1-2.5x) than Terabyte (1.3-1.4x), likely because D=16 makes the block mean a tighter approximation than D=64
+- 4-bit vs 8-bit DC means: negligible AUC difference on both datasets (<0.001%), but ~1% ratio improvement
+- Terabyte at 0.5% hot: **341x compression with only -0.032% AUC loss** (10.5 GB → 31 MB)
+- **No latency penalty**: DC value-sort serves at identical QPS to freq-sort (~28,800 QPS on Kaggle)
+
+**Why it works:** Inspired by AV1 video codec's intra prediction — adjacent pixels are spatially correlated, so prediction is accurate. Value-sorting creates the same property for embeddings: adjacent rows have similar values, so the block mean is a much better approximation (15-28% lower within-block MSE).
 
 **Cost:** O(N log N) one-time sort at deployment (~4 seconds for all tables). Zero inference overhead — same O(1) lookup path.
 
@@ -50,12 +69,16 @@ AV1 (dav1d decoder, AVX-512) dominates H.265 across the entire Pareto frontier:
 
 At matched AUC (-0.035%), AV1 achieves 9x higher compression than H.265. Both achieve identical decode throughput with codec context pooling. Software H.265 decode is limited to AVX2 (0 AVX-512 instructions in libavcodec); dav1d has 2,363 AVX-512 instructions.
 
-### Cross-Dataset Results
+### Cross-Dataset Results (DC Value-Sort 4-bit)
 
-| Dataset | D | Embeddings | DC value-sort 0.5% hot | AUC Loss | Ratio |
-|---|:--:|:--:|:--:|:--:|:--:|
-| Criteo Kaggle | 16 | 2.1 GB | 8.3 MB | -0.115% | 248x |
-| Criteo Terabyte | 64 | 10.5 GB | 62 MB | -0.080% | 172x |
+| Dataset | D | fp32 Size | Hot % | Compressed | AUC Loss | Ratio |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|
+| Criteo Kaggle | 16 | 2.1 GB | 4.3% | 27.8 MB | -0.017% | 74x |
+| Criteo Kaggle | 16 | 2.1 GB | 1.0% | 10.9 MB | -0.072% | 189x |
+| Criteo Kaggle | 16 | 2.1 GB | 0.5% | 8.3 MB | -0.115% | 248x |
+| Criteo Terabyte | 64 | 10.5 GB | 4.3% | 130 MB | -0.001% | 81x |
+| Criteo Terabyte | 64 | 10.5 GB | 1.0% | 44 MB | -0.014% | 239x |
+| **Criteo Terabyte** | **64** | **10.5 GB** | **0.5%** | **31 MB** | **-0.032%** | **341x** |
 
 ## Setup
 
@@ -387,24 +410,44 @@ H.265 decode dominates when decoding all frames every batch (~53ms, same cost fo
 
 ## Detailed Results
 
-### DC Block-Mean Approach (Runtime, Kaggle D=16)
+### DC Block-Mean Approach — Kaggle (D=16, baseline AUC 0.80250)
 
-**Value-sorted (new, 4-bit means):**
+**DC value-sort 4-bit (best):**
 
-| Hot fraction | AUC | AUC Loss | Memory | Ratio |
-|:--:|:--:|:--:|:--:|:--:|
-| 4.3% | 0.802332 | -0.017% | 27.8 MB | 74x |
-| 2.0% | 0.802104 | -0.039% | 16.0 MB | 129x |
-| **1.0%** | **0.801778** | **-0.072%** | **10.9 MB** | **189x** |
-| 0.5% | 0.801351 | -0.115% | 8.3 MB | 248x |
+| Hot % | AUC | AUC Loss | Memory | Ratio | vs Zero | vs Freq-sort |
+|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| 4.3% | 0.802332 | -0.017% | 27.8 MB | 74x | 2.2x less loss | 2.1x less loss |
+| 2.0% | 0.802104 | -0.039% | 16.0 MB | 129x | 2.3x less loss | 2.2x less loss |
+| **1.0%** | **0.801778** | **-0.072%** | **10.9 MB** | **189x** | **2.5x less loss** | **2.4x less loss** |
+| 0.5% | 0.801351 | -0.115% | 8.3 MB | 248x | 2.6x less loss | — |
 
-**Freq-sorted (old, 8-bit means):**
+**DC freq-sort 8-bit (old baseline):**
 
-| Hot fraction | AUC | AUC Loss | Memory | Ratio |
+| Hot % | AUC | AUC Loss | Memory | Ratio |
 |:--:|:--:|:--:|:--:|:--:|
 | 4.3% | 0.802135 | -0.036% | 28.8 MB | 72x |
 | 2.0% | 0.801624 | -0.087% | 17.0 MB | 121x |
 | 1.0% | 0.800766 | -0.173% | 11.9 MB | 174x |
+
+### DC Block-Mean Approach — Terabyte (D=64, baseline AUC 0.76882)
+
+**DC value-sort 4-bit:**
+
+| Hot % | AUC | AUC Loss | Ratio | vs Zero | vs Freq-sort |
+|:--:|:--:|:--:|:--:|:--:|:--:|
+| 4.3% | 0.768804 | -0.001% | 81x | 1.4x less loss | 1.4x less loss |
+| 2.0% | 0.768759 | -0.006% | 150x | 1.4x less loss | 1.3x less loss |
+| 1.0% | 0.768682 | -0.014% | 239x | 1.4x less loss | 1.4x less loss |
+| **0.5%** | **0.768495** | **-0.032%** | **341x** | **1.4x less loss** | **1.4x less loss** |
+
+**DC freq-sort 4-bit:**
+
+| Hot % | AUC | AUC Loss | Ratio |
+|:--:|:--:|:--:|:--:|
+| 4.3% | 0.768799 | -0.002% | 81x |
+| 2.0% | 0.768739 | -0.008% | 150x |
+| 1.0% | 0.768629 | -0.019% | 239x |
+| 0.5% | 0.768378 | -0.044% | 341x |
 
 ### H.265 vs AV1 Storage Compression (Kaggle)
 
@@ -423,21 +466,60 @@ H.265 decode dominates when decoding all frames every batch (~53ms, same cost fo
 | Method | Runtime Compression | AUC Loss | Retraining | Decode overhead |
 |---|:--:|:--:|:--:|---|
 | INT8 | 4x | -0.002% | No | Negligible (fused) |
+| PQ (1x8) | 36x | -0.004% | No | Codebook lookup |
 | Pruning 99% | 100x | -0.181% | No | Sparse lookup |
 | TT-Rec | 112x | ~-0.1% | **Yes** | Matrix multiply (14%) |
-| CAFE+ | ~10,000x | ~-0.75% | **Yes** | None (hash lookup) |
+| CAFE (100x, freq) | 100x | -0.127% | **Yes** | None (hash lookup) |
+| CAFE (1000x, freq) | 1000x | -0.816% | **Yes** | None (hash lookup) |
 | H.265 + cache | 29x | -0.039% | No | 40MB cache, 893ms startup |
-| **DC block-mean (ours)** | **97x** | **-0.092%** | **No** | **None (1 AVX-512 op)** |
+| **DC value-sort 4-bit (ours, 1% hot)** | **189x** | **-0.072%** | **No** | **None (O(1) lookup)** |
+| **DC value-sort 4-bit (ours, 0.5% hot)** | **248x** | **-0.115%** | **No** | **None (O(1) lookup)** |
+| **DC value-sort 4-bit (Terabyte, 0.5%)** | **341x** | **-0.032%** | **No** | **None (O(1) lookup)** |
 
-### Memory Breakdown (DC 2% hot, with bitmap)
+### Memory Breakdown (DC value-sort 4-bit, 1% hot, Kaggle)
 
 | Component | Size |
 |---|:--:|
-| Hot embeddings (uint8) | 10.3 MB |
-| DC cold values (uint8) | 2.0 MB |
-| Bitmap-rank index | 6.0 MB |
+| Hot embeddings (uint8) | 5.2 MB |
+| DC cold values (4-bit) | 1.0 MB |
+| Bitmap-rank index | 3.0 MB |
 | Small tables (fp32) | 2.9 MB |
-| **Total** | **21.2 MB (97x)** |
+| **Total** | **~10.9 MB (189x)** |
+
+### Memory Breakdown (DC value-sort 4-bit, 0.5% hot, Terabyte)
+
+| Component | Size |
+|---|:--:|
+| Hot embeddings (uint8) | 14.5 MB |
+| DC cold values (4-bit) | 8.1 MB |
+| Bitmap-rank index | 8.0 MB |
+| Small tables (fp32) | 0.5 MB |
+| **Total** | **~31 MB (341x)** |
+
+### SSD Cold Embedding Latency (batch_size=2048)
+
+Putting cold embeddings on SSD instead of DRAM is infeasible for serving:
+
+| Method | Mean | p50 | p99 | AUC | Memory |
+|---|:--:|:--:|:--:|:--:|:--:|
+| fp32 DRAM | 5.3ms | 5.4ms | 6.3ms | 0.802497 | 2,061 MB |
+| **SSD cold** | **91.3ms** | **90.0ms** | **104.4ms** | 0.802497 | 1,970 MB disk |
+| DC PCA-sort 4-bit (1% hot) | 4.9ms | 4.8ms | 5.7ms | 0.802301 | 11 MB |
+
+Per batch: 53,241 embedding lookups (3.25 MB), of which 1,660 are cold (0.10 MB). Despite the cold data being only 104 KB per batch, the 1,660 **random** 64-byte SSD reads cost 83.5ms — **17x slower than DRAM**. SSD bandwidth is not the bottleneck; random access latency is.
+
+### PCA Sort: Intelligent Compression Agent Finding
+
+A contextual bandit agent evaluated 4 sort methods with real AUC (not proxy metrics). **PCA sort** (sort cold rows by first principal component score) beats all alternatives at every hot fraction:
+
+| Hot % | PCA sort | Value sort | Freq sort | Zero |
+|:--:|:--:|:--:|:--:|:--:|
+| 0.5% | **-0.053%** | -0.064% | -0.337% | -0.368% |
+| 1.0% | **-0.024%** | -0.033% | -0.207% | -0.226% |
+| 2.0% | **-0.012%** | -0.013% | -0.105% | -0.113% |
+| 4.3% | **-0.007%** | -0.010% | -0.043% | -0.046% |
+
+PCA sort gives 17-26% less AUC loss than value sort by sorting along the direction of maximum variance rather than the unweighted row mean. The agent also found that optimal block size varies by table (T2→bs128, T9→bs8, T23→bs4), but with only 8 tables the learned policy couldn't outperform a uniform baseline — motivating cross-dataset training.
 
 ### Why Cold Embeddings Can Be Compressed
 

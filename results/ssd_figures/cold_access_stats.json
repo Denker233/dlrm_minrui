@@ -1,0 +1,53 @@
+{
+  "num_batches": 1599,
+  "batch_size": 1626,
+  "hot_fraction": 0.043,
+  "cold_lookups_per_batch": {
+    "mean": 1660.3977485928706,
+    "min": 823,
+    "max": 2826,
+    "p50": 1556.0,
+    "p99": 2541.02
+  },
+  "cold_samples_per_batch": {
+    "mean": 670.3977485928706,
+    "pct_of_batch": 41.22987383719992,
+    "min": 436,
+    "max": 839
+  },
+  "cold_tables_per_batch_mean": 8.0,
+  "per_table": {
+    "2": {
+      "mean_cold_lookups": 319.599124452783,
+      "pct_batches_with_cold": 100.0
+    },
+    "3": {
+      "mean_cold_lookups": 132.0281425891182,
+      "pct_batches_with_cold": 100.0
+    },
+    "9": {
+      "mean_cold_lookups": 244.58411507191994,
+      "pct_batches_with_cold": 100.0
+    },
+    "11": {
+      "mean_cold_lookups": 285.0813008130081,
+      "pct_batches_with_cold": 100.0
+    },
+    "15": {
+      "mean_cold_lookups": 224.8417761100688,
+      "pct_batches_with_cold": 100.0
+    },
+    "20": {
+      "mean_cold_lookups": 260.8499061913696,
+      "pct_batches_with_cold": 100.0
+    },
+    "23": {
+      "mean_cold_lookups": 91.56035021888681,
+      "pct_batches_with_cold": 100.0
+    },
+    "25": {
+      "mean_cold_lookups": 101.85303314571607,
+      "pct_batches_with_cold": 100.0
+    }
+  }
+}

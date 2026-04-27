@@ -1,0 +1,378 @@
+{
+  "description": "Intelligent Compression Agent for DLRM Embedding Tables",
+  "approach": "Contextual bandit: table features \u2192 compression config \u2192 reward (ratio vs quality)",
+  "num_tables": 8,
+  "num_configs_per_table": 48,
+  "total_observations": 384,
+  "model_r2": 0.9886208088898254,
+  "policies": {
+    "uniform": {
+      "config": [
+        0.15,
+        "zero",
+        4
+      ],
+      "total_reward": 154.19855474954423,
+      "avg_ratio": 22.0691872603905,
+      "avg_mse": 1.8284520072265182e-06
+    },
+    "agent": {
+      "configs": {
+        "2": [
+          0.15,
+          "freq",
+          4
+        ],
+        "3": [
+          0.15,
+          "value",
+          8
+        ],
+        "9": [
+          0.15,
+          "value",
+          8
+        ],
+        "11": [
+          0.15,
+          "value",
+          4
+        ],
+        "15": [
+          0.15,
+          "value",
+          8
+        ],
+        "20": [
+          0.15,
+          "freq",
+          4
+        ],
+        "23": [
+          0.08,
+          "value",
+          8
+        ],
+        "25": [
+          0.08,
+          "value",
+          8
+        ]
+      },
+      "total_reward": 154.23579533849997,
+      "avg_ratio": 19.544052637502148,
+      "avg_mse": 1.2187730892305482e-06
+    },
+    "oracle": {
+      "configs": {
+        "2": [
+          0.15,
+          "zero",
+          4
+        ],
+        "3": [
+          0.15,
+          "zero",
+          4
+        ],
+        "9": [
+          0.08,
+          "value",
+          8
+        ],
+        "11": [
+          0.15,
+          "zero",
+          4
+        ],
+        "15": [
+          0.15,
+          "zero",
+          4
+        ],
+        "20": [
+          0.15,
+          "zero",
+          4
+        ],
+        "23": [
+          0.15,
+          "value",
+          8
+        ],
+        "25": [
+          0.08,
+          "value",
+          8
+        ]
+      },
+      "total_reward": 155.31126233633879,
+      "avg_ratio": 21.85251563172229,
+      "avg_mse": 1.2703274932484018e-06
+    }
+  },
+  "improvement_over_uniform_pct": 0.024151062256210915,
+  "gap_to_oracle_closed_pct": 3.3468441662217003,
+  "loo_exact_matches": "2/8",
+  "loo_mean_reward_gain": 0.00886836077069364,
+  "top_features": [
+    [
+      "freq_std",
+      0.11081172510290656
+    ],
+    [
+      "log_hf",
+      0.10170253057678245
+    ],
+    [
+      "freq_entropy_normalized",
+      0.09514069773819311
+    ],
+    [
+      "l2_norm_std",
+      0.09200204808426987
+    ],
+    [
+      "freq_kurtosis",
+      0.09080253399975793
+    ],
+    [
+      "log_num_rows",
+      0.08231685903790359
+    ],
+    [
+      "num_rows",
+      0.07832051819012616
+    ],
+    [
+      "hf",
+      0.07469147938406098
+    ],
+    [
+      "quant_psnr",
+      0.0577955998536644
+    ],
+    [
+      "freq_mean",
+      0.03805440613314809
+    ]
+  ],
+  "table_features": {
+    "2": {
+      "num_rows": 10131227.0,
+      "log_num_rows": 7.0056620891215005,
+      "emb_dim": 16.0,
+      "l2_norm_mean": 0.0010128975905165333,
+      "l2_norm_std": 0.0011797242731595853,
+      "l2_norm_cv": 1.1646909196899036,
+      "row_mean_mean": -3.428984480235002e-08,
+      "row_mean_std": 0.00022212974558204337,
+      "row_var_mean": 1.0176530554912008e-07,
+      "row_var_std": 4.1923424948306995e-06,
+      "sorted_mean_smoothness": 324.78083094132467,
+      "freq_mean": 0.32319185030598957,
+      "freq_std": 56.5641601823339,
+      "freq_skewness": 1260.8340470076469,
+      "freq_kurtosis": 2086790.8373074715,
+      "pct_zero_freq": 0.906558109891329,
+      "freq_gini": 0.9720353807407018,
+      "freq_entropy": 14.598845949769698,
+      "freq_entropy_normalized": 0.7353648645520944,
+      "effective_dim": 2.627797397499819,
+      "top1_var_ratio": 0.6001470345417044,
+      "top3_var_ratio": 0.7658975775929339,
+      "dims_for_90pct": 9.0,
+      "quant_mse": 2.618109337760665e-07,
+      "quant_psnr": -2.387050578954546
+    },
+    "3": {
+      "num_rows": 2202608.0,
+      "log_num_rows": 6.34293740944604,
+      "emb_dim": 16.0,
+      "l2_norm_mean": 0.0027033138445903488,
+      "l2_norm_std": 0.004944258734499441,
+      "l2_norm_cv": 1.8289553966660161,
+      "row_mean_mean": 9.29702491056975e-08,
+      "row_mean_std": 0.0008436269136938502,
+      "row_var_mean": 1.2728936328496635e-06,
+      "row_var_std": 2.5964985609846224e-05,
+      "sorted_mean_smoothness": 217.2643410819601,
+      "freq_mean": 1.486569557542695,
+      "freq_std": 158.39582213840765,
+      "freq_skewness": 492.7533600534787,
+      "freq_kurtosis": 311993.9321144475,
+      "pct_zero_freq": 0.8611532328948228,
+      "freq_gini": 0.983715616735701,
+      "freq_entropy": 11.996005044819496,
+      "freq_entropy_normalized": 0.6583126782395621,
+      "effective_dim": 1.8782407736938211,
+      "top1_var_ratio": 0.7206043471477991,
+      "top3_var_ratio": 0.8647511486024089,
+      "dims_for_90pct": 5.0,
+      "quant_mse": 4.2704249850844545e-07,
+      "quant_psnr": 6.6720087316615695
+    },
+    "9": {
+      "num_rows": 93145.0,
+      "log_num_rows": 4.9691642095787225,
+      "emb_dim": 16.0,
+      "l2_norm_mean": 0.011336852067578068,
+      "l2_norm_std": 0.014424518027710864,
+      "l2_norm_cv": 1.2723554314877912,
+      "row_mean_mean": -1.4586234375553354e-06,
+      "row_mean_std": 0.002653155780761183,
+      "row_var_mean": 1.3997695721300233e-05,
+      "row_var_std": 9.510166785818128e-05,
+      "sorted_mean_smoothness": 49.379268260109335,
+      "freq_mean": 35.15304095764668,
+      "freq_std": 2461.361244791627,
+      "freq_skewness": 298.2449243777061,
+      "freq_kurtosis": 90277.56833274024,
+      "pct_zero_freq": 0.5099790648988137,
+      "freq_gini": 0.9613887819817184,
+      "freq_entropy": 9.888056679673387,
+      "freq_entropy_normalized": 0.6388402100297539,
+      "effective_dim": 2.516996178676428,
+      "top1_var_ratio": 0.6182767462332963,
+      "top3_var_ratio": 0.751020683933278,
+      "dims_for_90pct": 9.0,
+      "quant_mse": 2.989116823511741e-07,
+      "quant_psnr": 18.474380472607198
+    },
+    "11": {
+      "num_rows": 8351593.0,
+      "log_num_rows": 6.921769373607728,
+      "emb_dim": 16.0,
+      "l2_norm_mean": 0.0013072349102688043,
+      "l2_norm_std": 0.001864137890732128,
+      "l2_norm_cv": 1.426005086031516,
+      "row_mean_mean": 2.5777655906292107e-08,
+      "row_mean_std": 0.00033204548000811566,
+      "row_var_mean": 2.137378726847372e-07,
+      "row_var_std": 9.2397195326849e-06,
+      "sorted_mean_smoothness": 631.3963313953456,
+      "freq_mean": 0.3920605326432933,
+      "freq_std": 67.19652594481826,
+      "freq_skewness": 1053.0115986711082,
+      "freq_kurtosis": 1418332.8276535214,
+      "pct_zero_freq": 0.9024182572115284,
+      "freq_gini": 0.9745645498600986,
+      "freq_entropy": 14.04383689157076,
+      "freq_entropy_normalized": 0.7151949175931315,
+      "effective_dim": 2.431720593384851,
+      "top1_var_ratio": 0.6061540986847286,
+      "top3_var_ratio": 0.8441010456962167,
+      "dims_for_90pct": 6.0,
+      "quant_mse": 5.941997972677758e-07,
+      "quant_psnr": -2.6339884493395216
+    },
+    "15": {
+      "num_rows": 5461306.0,
+      "log_num_rows": 6.737296590499732,
+      "emb_dim": 16.0,
+      "l2_norm_mean": 0.0017168188971434376,
+      "l2_norm_std": 0.0026615297277398794,
+      "l2_norm_cv": 1.550259162207889,
+      "row_mean_mean": 6.912317063776575e-09,
+      "row_mean_std": 0.0004637106381818368,
+      "row_var_mean": 4.119229200662082e-07,
+      "row_var_std": 1.0774170747729612e-05,
+      "sorted_mean_smoothness": 378.4755897001249,
+      "freq_mean": 0.5995507301733322,
+      "freq_std": 86.10899442274246,
+      "freq_skewness": 782.2340881993624,
+      "freq_kurtosis": 809016.854118996,
+      "pct_zero_freq": 0.891169255119563,
+      "freq_gini": 0.9785575950373301,
+      "freq_entropy": 13.212629458537014,
+      "freq_entropy_normalized": 0.6888403434971035,
+      "effective_dim": 1.9240579729197544,
+      "top1_var_ratio": 0.7149218821902065,
+      "top3_var_ratio": 0.8194969781431294,
+      "dims_for_90pct": 7.0,
+      "quant_mse": 1.8129171438645095e-07,
+      "quant_psnr": 5.388528850198845
+    },
+    "20": {
+      "num_rows": 7046547.0,
+      "log_num_rows": 6.847976414621783,
+      "emb_dim": 16.0,
+      "l2_norm_mean": 0.0010452862467398856,
+      "l2_norm_std": 0.0010791246173034825,
+      "l2_norm_cv": 1.0323624720447455,
+      "row_mean_mean": -3.093902622215813e-08,
+      "row_mean_std": 0.00017845701206874794,
+      "row_var_mean": 1.0922392371714314e-07,
+      "row_var_std": 6.489015573900482e-06,
+      "sorted_mean_smoothness": 355.856049441393,
+      "freq_mean": 0.46467156183021274,
+      "freq_std": 74.54951216029971,
+      "freq_skewness": 925.814913833331,
+      "freq_kurtosis": 1113805.903661652,
+      "pct_zero_freq": 0.8978081037421591,
+      "freq_gini": 0.9761760479288203,
+      "freq_entropy": 13.670319183220167,
+      "freq_entropy_normalized": 0.7025609914808936,
+      "effective_dim": 5.5971155803942425,
+      "top1_var_ratio": 0.387286957680657,
+      "top3_var_ratio": 0.5406411258588469,
+      "dims_for_90pct": 13.0,
+      "quant_mse": 2.424807176587894e-07,
+      "quant_psnr": -2.352417816814315
+    },
+    "23": {
+      "num_rows": 286181.0,
+      "log_num_rows": 5.456642314446428,
+      "emb_dim": 16.0,
+      "l2_norm_mean": 0.0067961815637542266,
+      "l2_norm_std": 0.0113581039029587,
+      "l2_norm_cv": 1.6712454021358496,
+      "row_mean_mean": 1.0866538328812896e-06,
+      "row_mean_std": 0.0018701122570613645,
+      "row_var_mean": 7.452341972542203e-06,
+      "row_var_std": 0.00011900224820307166,
+      "sorted_mean_smoothness": 218.86395902443073,
+      "freq_mean": 11.44146536632411,
+      "freq_std": 709.1667799767397,
+      "freq_skewness": 184.24961385948825,
+      "freq_kurtosis": 39393.42243717463,
+      "pct_zero_freq": 0.7263969306138423,
+      "freq_gini": 0.9850845830025228,
+      "freq_entropy": 9.559462617730889,
+      "freq_entropy_normalized": 0.5880306130059534,
+      "effective_dim": 2.474656432669443,
+      "top1_var_ratio": 0.6218334271218627,
+      "top3_var_ratio": 0.769669076893966,
+      "dims_for_90pct": 7.0,
+      "quant_mse": 1.3495148661505873e-06,
+      "quant_psnr": 9.092227115820316
+    },
+    "25": {
+      "num_rows": 142572.0,
+      "log_num_rows": 5.154037288059661,
+      "emb_dim": 16.0,
+      "l2_norm_mean": 0.009895805649018851,
+      "l2_norm_std": 0.014272712726038916,
+      "l2_norm_cv": 1.442297758189748,
+      "row_mean_mean": 1.7433668841386701e-06,
+      "row_mean_std": 0.002594749341778877,
+      "row_var_mean": 1.2119603939209161e-05,
+      "row_var_std": 0.00011370011458282856,
+      "sorted_mean_smoothness": 67.2877327341699,
+      "freq_mean": 22.966150436270798,
+      "freq_std": 3992.9614241477743,
+      "freq_skewness": 369.6091241738001,
+      "freq_kurtosis": 138396.62139173035,
+      "pct_zero_freq": 0.6194063350447493,
+      "freq_gini": 0.9832340395888143,
+      "freq_entropy": 6.606604647774278,
+      "freq_entropy_normalized": 0.42006221818061196,
+      "effective_dim": 2.5681127730631097,
+      "top1_var_ratio": 0.6104256520593897,
+      "top3_var_ratio": 0.7476572731587303,
+      "dims_for_90pct": 8.0,
+      "quant_mse": 4.4317733946050985e-07,
+      "quant_psnr": 16.287864632506142
+    }
+  }
+}
