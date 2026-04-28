@@ -521,6 +521,24 @@ A contextual bandit agent evaluated 4 sort methods with real AUC (not proxy metr
 
 PCA sort gives 17-26% less AUC loss than value sort by sorting along the direction of maximum variance rather than the unweighted row mean. The agent also found that optimal block size varies by table (T2→bs128, T9→bs8, T23→bs4), but with only 8 tables the learned policy couldn't outperform a uniform baseline — motivating cross-dataset training.
 
+### Single-Scalar DC vs Per-Dimension DC (PCA sort, 4-bit)
+
+Two DC block-mean variants trade off compression ratio vs AUC quality:
+
+- **Scalar**: each block of 16 rows → 1 scalar (mean of all 256 values). Higher compression, more AUC loss.
+- **Per-dim**: each block of 16 rows → 16 values (mean per dimension). Lower compression, less AUC loss.
+
+| Hot % | Mode | AUC Loss | Size | Ratio |
+|:--:|---|:--:|:--:|:--:|
+| 1.0% | **Scalar** | -0.089% | 10.9 MB | **189x** |
+| 1.0% | Per-dim | -0.024% | 25.8 MB | 80x |
+| 0.5% | **Scalar** | -0.143% | 8.3 MB | **248x** |
+| 0.5% | Per-dim | -0.053% | 23.3 MB | 88x |
+| 4.3% | Scalar | -0.020% | 27.8 MB | 74x |
+| 4.3% | Per-dim | -0.007% | 42.2 MB | 49x |
+
+The difference is entirely in DC cold storage: 1 MB (scalar) vs 16 MB (per-dim). Hot embeddings, bitmap index, and small tables are identical. Both are valid Pareto-optimal operating points — scalar for maximum compression, per-dim for minimum AUC loss.
+
 ### Why Cold Embeddings Can Be Compressed
 
 Four reinforcing mechanisms from the literature:
