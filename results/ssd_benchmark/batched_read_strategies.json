@@ -1,0 +1,28 @@
+{
+  "cold_rows_per_batch": 1660.3977485928706,
+  "cold_kb_per_batch": 103.77485928705441,
+  "unique_pages_per_batch": 994.235,
+  "read_amplification": 33.98184842348857,
+  "wasted_pct": 97.05725248509792,
+  "single_row_page_pct": 91.69740009065738,
+  "strategies": {
+    "serial": {
+      "mean_ms": 65.69188058376312,
+      "p50_ms": 63.86791169643402,
+      "p99_ms": 111.13730711862439
+    },
+    "sorted": {
+      "mean_ms": 2.5803205091506243,
+      "p50_ms": 2.5838492438197136,
+      "p99_ms": 2.8228572010993958
+    },
+    "paged": {
+      "mean_ms": 1.5682484861463308,
+      "p50_ms": 1.5691667795181274,
+      "p99_ms": 1.7912856116890907
+    },
+    "full_file_amortized_ms": 3.591055718458504
+  },
+  "disk": "Micron MTFDDAK480TDS (SATA SSD)",
+  "file_size_mb": 1969.3255615234375
+}

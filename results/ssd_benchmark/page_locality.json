@@ -1,0 +1,19 @@
+{
+  "row_bytes": 64,
+  "page_size": 4096,
+  "rows_per_page": 64,
+  "total_cold_rows": 32265430,
+  "total_cold_mb": 1969.3255615234375,
+  "total_pages": 504148,
+  "per_batch": {
+    "cold_rows_mean": 1660.3977485928706,
+    "unique_pages_mean": 881.6153846153846,
+    "rows_per_page_mean": 1.8833584095373281,
+    "rows_per_page_median": 1.0,
+    "pct_single_row_pages": 91.69740009065738,
+    "useful_kb_mean": 103.77485928705441,
+    "read_kb_mean": 3526.4615384615386,
+    "read_amplification": 33.98184842348857,
+    "wasted_pct": 97.05725248509792
+  }
+}
