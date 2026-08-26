@@ -111,6 +111,36 @@ def convertUStringToDistinctIntsUnique(mat, mat_uni, counts):
     return out, mat_uni, counts
 
 
+
+def _remap_cat_vectorised(X_cat_t, convertDicts, n_cols=26):
+    """Vectorised replacement for the per-element dict loop in processCriteoAdData.
+
+    The original code did 26 x N_rows Python dict lookups (~854 ns each: np.int64
+    boxing + a probe into a 10M-entry hash table that misses cache).  This does the
+    same lookups in C via a pandas hash table (~126 ns), ~7x faster, and allocates
+    int32 instead of the accidental float64 (max category id is ~10M).
+
+    Returns bit-identical category ids to the original loop.
+    """
+    import pandas as pd
+
+    n_rows = X_cat_t.shape[1]
+    out = np.zeros((n_cols, n_rows), dtype=np.int32)
+    for j in range(n_cols):
+        d = convertDicts[j]
+        # dict values are the position of the key in the stored `unique` array,
+        # i.e. dict insertion order, so keys-in-order IS the lookup table.
+        keys = np.fromiter(d.keys(), dtype=np.int64, count=len(d))
+        vals = np.fromiter(d.values(), dtype=np.int64, count=len(d))
+        pos = pd.Index(keys).get_indexer(X_cat_t[j, :])
+        if (pos < 0).any():
+            raise KeyError(
+                "column %d: %d values absent from convertDicts" % (j, int((pos < 0).sum()))
+            )
+        out[j, :] = vals[pos]
+    return out
+
+
 def processCriteoAdData(d_path, d_file, npzfile, i, convertDicts, pre_comp_counts):
     # Process Kaggle Display Advertising Challenge or Terabyte Dataset
     # by converting unicode strings in X_cat to integers and
@@ -143,18 +173,19 @@ def processCriteoAdData(d_path, d_file, npzfile, i, convertDicts, pre_comp_count
                 data["X_cat"], convertDicts, counts
             )
             """
-            # Approach 2a: using pre-computed dictionaries
-            X_cat_t = np.zeros(data["X_cat_t"].shape)
-            for j in range(26):
-                for k, x in enumerate(data["X_cat_t"][j, :]):
-                    X_cat_t[j, k] = convertDicts[j][x]
+            # Approach 2a: using pre-computed dictionaries (vectorised, see
+            # _remap_cat_vectorised; the original per-element loop is ~7x slower)
+            X_cat_t = _remap_cat_vectorised(data["X_cat_t"], convertDicts)
             # continuous features
             X_int = data["X_int"]
             X_int[X_int < 0] = 0
             # targets
             y = data["y"]
 
-        np.savez_compressed(
+        # savez, not savez_compressed: zlib runs at ~9 MB/s single-threaded here
+        # (~90 min/day) vs ~490 MB/s to write plain (~2 min/day).  np.load reads
+        # both transparently, so existing compressed days stay valid.
+        np.savez(
             filename_i,
             # X_cat = X_cat,
             X_cat=np.transpose(X_cat_t),  # transpose of the data
@@ -698,7 +729,9 @@ def concatCriteoAdData(
 
                 filename_r = npzfile + "_{0}_reordered.npz".format(j)
                 print("Reordering (2nd pass) " + filename_r)
-                np.savez_compressed(
+                # savez, not savez_compressed: ~62 GB/day through zlib at 9 MB/s is
+                # ~1.9 h/day here vs ~1 min written plain.  np.load reads both.
+                np.savez(
                     filename_r,
                     X_cat=fj_s[indices, :],
                     X_int=fj_d[indices, :],

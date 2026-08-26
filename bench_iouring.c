@@ -22,6 +22,25 @@ static double time_ms(struct timespec *start, struct timespec *end) {
            (end->tv_nsec - start->tv_nsec) / 1000000.0;
 }
 
+
+/* Evict THIS file's pages only.  The original used a global
+ * `echo 3 > /proc/sys/vm/drop_caches`, which on a big-memory box also blows away
+ * the page cache of anything else running (here: a 19h Terabyte preprocessing job).
+ * posix_fadvise(DONTNEED) is surgical and much faster.  Set BENCH_DROP=global to
+ * restore the original behaviour. */
+static int drop_mode_global = -1;
+static void drop_cache(int fd) {
+    if (drop_mode_global < 0) {
+        const char *e = getenv("BENCH_DROP");
+        drop_mode_global = (e && strcmp(e, "global") == 0) ? 1 : 0;
+    }
+    if (drop_mode_global) {
+        if (system("sync && sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null")) { /* ignore */ }
+    } else {
+        posix_fadvise(fd, 0, 0, POSIX_FADV_DONTNEED);
+    }
+}
+
 /* Strategy 1: Serial reads (QD=1 baseline) */
 static double bench_serial(int fd, long *offsets, int n, char *buf) {
     struct timespec t0, t1;
@@ -162,13 +181,13 @@ int main(int argc, char **argv) {
     printf("Rounds: %d\n\n", rounds);
 
     /* Drop caches */
-    system("sync && sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'");
+    drop_cache(fd);
 
     /* Serial baseline */
     printf("--- Serial pread (QD=1) ---\n");
     double serial_times[100];
     for (int r = 0; r < rounds; r++) {
-        system("sync && sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null");
+        drop_cache(fd);
         serial_times[r] = bench_serial(fd, offsets, n, buf);
     }
     double serial_mean = 0;
@@ -188,7 +207,7 @@ int main(int argc, char **argv) {
         if (qd > max_qd) break;
         double times[100];
         for (int r = 0; r < rounds; r++) {
-            system("sync && sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null");
+            drop_cache(fd);
             times[r] = bench_iouring(fd, offsets, n, qd, buf);
         }
         double mean = 0;
@@ -208,7 +227,7 @@ int main(int argc, char **argv) {
         double times[100];
         int np = 0;
         for (int r = 0; r < rounds; r++) {
-            system("sync && sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches' 2>/dev/null");
+            drop_cache(fd);
             times[r] = bench_iouring_pages(fd, offsets, n, qd, pagebuf, &np);
         }
         double mean = 0;

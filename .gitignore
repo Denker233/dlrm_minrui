@@ -34,3 +34,10 @@ CAFE_old/ultra_fast_*/
 CAFE_old/training_fixed.log
 CAFE_old/sketch_test_500.log
 CAFE_old/cpu_test.log
+
+# August 2026 work: venv, compiled binaries, backups
+dlrm_env/
+bench_iouring
+bench_iouring_opt
+*.orig
+*.bak

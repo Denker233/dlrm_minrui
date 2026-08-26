@@ -2,6 +2,13 @@
 
 We decompose why H.265 video codecs achieve 6,466x storage compression on DLRM embedding tables and discover that lossy DCT quantization provides 160x (the dominant factor) while CABAC entropy coding contributes only 1.5x. This reveals that cold embedding blocks are 100% DC-only — the block average is sufficient. We bypass the serial entropy decode bottleneck entirely with a **DC block-mean + value-sort + 4-bit** approach: **341x compression on Terabyte (10.5 GB → 31 MB), -0.032% AUC loss; 248x on Kaggle (2.1 GB → 8.3 MB), -0.115% AUC loss. Zero decode overhead, no retraining.**
 
+
+> **⚠️ August 2026 re-measurement.** The Terabyte model these tables were built on was
+> undertrained (baseline AUC 0.768820). It has been retrained for a full epoch on 4 days
+> (baseline AUC **0.789235**), and every Terabyte number below has been re-measured on a
+> single machine with a single code path. **See [Re-measured Results](#re-measured-results-august-2026)
+> for the current numbers and four corrections to the claims in this README.**
+
 ## Key Results
 
 | Method | Dataset | Runtime Compression | AUC Loss | Decode | Retraining |
@@ -79,6 +86,106 @@ At matched AUC (-0.035%), AV1 achieves 9x higher compression than H.265. Both ac
 | Criteo Terabyte | 64 | 10.5 GB | 4.3% | 130 MB | -0.001% | 81x |
 | Criteo Terabyte | 64 | 10.5 GB | 1.0% | 44 MB | -0.014% | 239x |
 | **Criteo Terabyte** | **64** | **10.5 GB** | **0.5%** | **31 MB** | **-0.032%** | **341x** |
+
+
+---
+
+## Re-measured Results (August 2026)
+
+Everything in this section was measured on one machine (2× Xeon E5-2670 v3, 48T, 503 GB,
+2× Intel P3600 NVMe), one model (`models/dlrm_terabyte_4day.pt`, D=64, 4 days, 1 epoch),
+batch 2048, full forward time (bottom MLP + embedding gather + interaction + top MLP).
+Nothing is extrapolated and nothing is taken from another machine.
+Raw data: `results/unified_comparison.md`, `results/perdim_analysis.md`,
+`results/sort_key_analysis.md`, `results/nvme_benchmark.md`.
+
+### Headline: per-dimension block means
+
+| method | mem MB | ratio | ΔAUC% | fwd ms | extra hardware |
+|---|--:|--:|--:|--:|---|
+| fp32 (uncompressed) | 11,846 | 1x | — | 7.79 | — |
+| INT8 whole-table | 2,962 | 4x | +0.0017 | 6.90 | — |
+| INT4 whole-table | 1,484 | 8x | −0.2553 | 7.55 | — |
+| SSD cold, optimised NVMe @1% | 41.9 | 282x | +0.0027 | 9.35 | 2 NVMe + 8 I/O threads |
+| DC scalar block=16 @1% | 43.4 | 273x | −0.0874 | 6.82 | — |
+| **DC per-dim block=256 @1%** | **47.7** | **249x** | **−0.0301** | **7.31** | — |
+| **DC per-dim block=256 @0.5%** | **32.9** | **360x** | **−0.0455** | **7.28** | — |
+
+**Per-dimension block means replace scalar block means as the recommended method.**
+They are Pareto-dominant: at 0.5% hot they use 24% *less* memory than scalar at 1% hot
+(32.9 vs 43.4 MB) **and** have 48% less AUC loss (−0.0455 vs −0.0874), at no latency cost.
+
+Full sweep:
+
+| hot% | variant | B/row | mem MB | ratio | ΔAUC% | fwd ms |
+|--:|---|--:|--:|--:|--:|--:|
+| 4.3 | scalar block=16 | 0.031 | 140.84 | 84x | −0.0275 | 8.03 |
+| 4.3 | per-dim block=256 | 0.125 | 144.98 | 82x | −0.0115 | 8.09 |
+| 2.0 | scalar block=16 | 0.031 | 72.91 | 162x | −0.0489 | 7.58 |
+| 2.0 | per-dim block=256 | 0.125 | 77.15 | 154x | −0.0175 | 7.48 |
+| 1.0 | scalar block=16 | 0.031 | 43.37 | 273x | −0.0874 | 6.82 |
+| 1.0 | per-dim block=256 | 0.125 | 47.66 | 249x | −0.0301 | 7.31 |
+| 0.5 | scalar block=16 | 0.031 | 28.60 | 414x | −0.1268 | 7.29 |
+| 0.5 | per-dim block=256 | 0.125 | 32.91 | 360x | −0.0455 | 7.28 |
+
+### Why per-dimension wins: the error decomposition
+
+Scalar DC replaces a block with one number. Its squared error decomposes exactly:
+
+```
+Σ_{r∈B} Σ_d (w[r,d] − μ_B)²  =  Σ_r Σ_d (w[r,d] − μ_r)²   ← within-row, ordering-INDEPENDENT
+                              +  D · Σ_r (μ_r − μ_B)²      ← between-row, the only orderable term
+```
+
+Measured on real tables, the within-row term is **99.7–100.0% of the error at D=64**
+(97.2–99.6% at D=16). No scalar — per block *or* per row — can represent it. Per-dimension
+means are the only variant that attacks it.
+
+Two consequences: **sorting by row mean is exactly optimal** for the between-row term
+(value-sort is the optimum, not a heuristic), and **keeping a per-row mean is pointless**
+— 16x the storage to remove 0.3% of the error.
+
+### Four corrections to the claims above
+
+**1. "SSD cold serving is infeasible (91.3 ms)" — not supported.**
+That figure is a SATA drive with serial `pread`. An optimised NVMe path (O_DIRECT 512 B
+sectors, `IORING_SETUP_IOPOLL`, registered files/buffers, 8 threads NUMA-pinned, striped
+across 2 drives) does the same 1,660 cold-row batch in **1.79 ms** — or **0.39 ms** with a
+sector-packed layout, a 24x improvement over the naive io_uring number. End-to-end it is
+**9.35 ms** vs DC's 7.14 ms. The defensible claim is: *DC is faster and needs no storage
+hardware and no I/O cores*, not that SSD is unusable. See `results/nvme_benchmark.md`.
+
+**2. "PCA sort beats value sort by 17–26%" — does not replicate.**
+On Terabyte, value-sort −0.0341% vs pca-sort −0.0338% at 4.3% hot: indistinguishable.
+PCA-sort was *worse* than value-sort on all 8 tables tested, Kaggle included. On Kaggle
+corr(PC1, row mean) = 0.93–0.99 — the two orderings are nearly the same permutation, and
+both act on a term worth <3% of the error, so a 17–26% gap has no mechanism.
+**Recommendation: drop PCA-sort.** See `results/sort_key_analysis.md`.
+
+**3. INT8 is a much stronger baseline than the prior-work table suggests.**
+Measured here: **+0.0017% AUC at 4x, and 6.90 ms — faster than fp32**. DC's advantage over
+INT8 is memory (62x less), not accuracy or speed. **INT4 is not a competitor**: −0.2553%
+at 8x, dominated by per-dim DC on every axis (31–45x less memory *and* better AUC).
+(INT4 here uses one global scale per table; grouped scales would narrow the accuracy gap
+but not the memory gap.)
+
+**4. Scalar block means barely beat zeroing the cold rows.**
+`zero` −0.1451%, `scalar block mean` −0.0946% (1.5x better), `per-dim block=256` −0.0301%
+(4.8x better). The scalar method is much closer to the zeroing floor than the framing
+implies; per-dim moves it decisively away.
+
+### Caveat: ~99% of the table is still at random initialisation
+
+Median row norm is **0.00147**. DLRM initialises embeddings as `U(±√(1/n))`, which for
+n=10M predicts **0.00146** for a 64-dim row. Cold rows are not "trained toward zero" —
+they are *untrained*. This is why DC works so well here, and it is the main
+external-validity question: with the full 24-day dataset the same `max_ind_range`-capped
+10M slots receive ~6x more updates, so DC would be discarding real signal rather than
+initialisation noise. Table *sizes* would not change (the largest table is already
+0.09% below the 10M cap), so compression ratios are structurally unaffected — only the
+embedding content is. Full 24-day validation is planned; see `SETUP_PLAN.md` §4.
+
+---
 
 ## Setup
 
@@ -431,6 +538,10 @@ H.265 decode dominates when decoding all frames every batch (~53ms, same cost fo
 
 ### DC Block-Mean Approach — Terabyte (D=64, baseline AUC 0.76882)
 
+> **Superseded** — baseline AUC is now 0.789235 after full-epoch retraining.
+> See [Re-measured Results](#re-measured-results-august-2026).
+
+
 **DC value-sort 4-bit:**
 
 | Hot % | AUC | AUC Loss | Ratio | vs Zero | vs Freq-sort |
@@ -498,6 +609,10 @@ H.265 decode dominates when decoding all frames every batch (~53ms, same cost fo
 
 ### SSD Cold Embedding Latency (batch_size=2048)
 
+> **Superseded** — these are SATA numbers with serial `pread`. Optimised NVMe reaches
+> 1.79 ms for the same work. See [correction 1](#four-corrections-to-the-claims-above).
+
+
 Putting cold embeddings on SSD instead of DRAM is infeasible for serving:
 
 | Method | Mean | p50 | p99 | AUC | Memory |
@@ -509,6 +624,10 @@ Putting cold embeddings on SSD instead of DRAM is infeasible for serving:
 Per batch: 53,241 embedding lookups (3.25 MB), of which 1,660 are cold (0.10 MB). Despite the cold data being only 104 KB per batch, the 1,660 **random** 64-byte SSD reads cost 83.5ms — **17x slower than DRAM**. SSD bandwidth is not the bottleneck; random access latency is.
 
 ### PCA Sort: Intelligent Compression Agent Finding
+
+> **Does not replicate** — PCA-sort was worse than value-sort on every table tested.
+> See [correction 2](#four-corrections-to-the-claims-above).
+
 
 A contextual bandit agent evaluated 4 sort methods with real AUC (not proxy metrics). **PCA sort** (sort cold rows by first principal component score) beats all alternatives at every hot fraction:
 
