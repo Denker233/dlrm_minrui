@@ -150,3 +150,21 @@ Raw: `results/a100/gpu_inference.{json,md}`.
    tenancy — it matters on GPU in a way it never did on CPU.
 4. A fused CUDA kernel for the DC gather would likely close much of the 3.5x latency
    gap (the CPU story repeating one level down); not needed for the paper's claim.
+
+---
+
+## Block-size bracket: 256 is a plateau, not a truncation
+
+per-dim, 4-bit, value-sorted, 24-day model (raw: `results/bs_bracket_24day.json`).
+
+| block | @1% dAUC% (ratio) | @0.5% dAUC% (ratio) |
+|--:|--:|--:|
+| 256 | -0.0596 (248x) | -0.0917 (359x) |
+| 512 | -0.0661 (264x) | -0.0915 (393x) |
+| 1024 | -0.0647 (273x) | -0.0960 (413x) |
+
+AUC differences beyond block=256 are <=0.007pp — noise at 4.1M evaluation samples —
+while ratio grows only ~10%. The per-dim mean has extracted essentially all shared
+per-dimension structure by block=256; larger blocks neither help nor hurt. This closes
+the "was 256 just the largest size tested?" question: it is a plateau. (512 @0.5% is
+the nominal best single point, 393x at equal loss, but within noise of 256.)

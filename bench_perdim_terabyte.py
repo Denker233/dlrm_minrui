@@ -22,7 +22,8 @@ BATCH, D = U.BATCH, U.EMB_DIM
 AUC_BATCHES    = int(os.environ.get('AUC_BATCHES', 2000))
 TIMING_BATCHES = int(os.environ.get('TIMING_BATCHES', 200))
 HOT_FRACTIONS  = [float(x) for x in os.environ.get('HOT_FRACTIONS','0.043,0.02,0.01,0.005').split(',')]
-VARIANTS = [('scalar', 16), ('perdim', 16), ('perdim', 64), ('perdim', 256)]
+VARIANTS = [(m, int(b)) for m, b in (v.split(':') for v in os.environ.get(
+    'VARIANTS', 'scalar:16,perdim:16,perdim:64,perdim:256').split(','))]
 T0 = time.time()
 def log(m): print(f"[{time.time()-T0:7.0f}s] {m}", flush=True)
 def parr(p): return (ctypes.c_void_p * len(p))(*[ctypes.c_void_p(x) for x in p])
