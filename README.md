@@ -7,7 +7,9 @@ We decompose why H.265 video codecs achieve 6,466x storage compression on DLRM e
 > undertrained (baseline AUC 0.768820). It has been retrained for a full epoch on 4 days
 > (baseline AUC **0.789235**), and every Terabyte number below has been re-measured on a
 > single machine with a single code path. **See [Re-measured Results](#re-measured-results-august-2026)
-> for the current numbers and four corrections to the claims in this README.**
+> for the current numbers and four corrections to the claims in this README, and
+> **[Final Results](#final-results--full-24-day-terabyte-mlperf-configuration-august-2026)**
+> for the definitive 24-day MLPerf-configuration numbers.**
 
 ## Key Results
 
@@ -87,6 +89,52 @@ At matched AUC (-0.035%), AV1 achieves 9x higher compression than H.265. Both ac
 | Criteo Terabyte | 64 | 10.5 GB | 1.0% | 44 MB | -0.014% | 239x |
 | **Criteo Terabyte** | **64** | **10.5 GB** | **0.5%** | **31 MB** | **-0.032%** | **341x** |
 
+
+---
+
+
+## Final Results — full 24-day Terabyte, MLPerf configuration (August 2026)
+
+Model: D=64, days 0-22 train (4.19B samples) / **day 23 test** (MLPerf convention),
+1 epoch, `max-ind-range=10M`, batch 2048. Trained on an A100 (16.2 h); an independent
+CPU run reproduced the final test accuracy to every printed digit. Baseline AUC
+**0.798717**. Full details: `results/perdim_24day_analysis.md`.
+
+### Headline: per-dimension block means on the fully-trained model
+
+| method | mem | ratio | ΔAUC% |
+|---|--:|--:|--:|
+| fp32 baseline | 13.1 GB | 1x | — |
+| INT8 whole-table | 3.3 GB | 4x | −0.0005 |
+| INT4 whole-table | 1.6 GB | 8x | −0.3419 |
+| DC scalar block=16 @1% | 48 MB | 273x | −0.1351 |
+| **DC per-dim block=256 @1%** | **53 MB** | **248x** | **−0.0596** |
+| **DC per-dim block=256 @0.5%** | **36 MB** | **359x** | **−0.0917** |
+
+Per-dim dominates scalar at every hot fraction (1.8–2.0x less loss); INT4 is dominated
+on every axis; INT8 remains the strong lossless 4x baseline.
+
+### Compression loss vs training progress (9 checkpoints, one run)
+
+DC loss grows monotonically as cold rows accumulate real signal — scalar 2.5x and
+per-dim 3.5x from 12%→100% trained — then **flattens at convergence** (it tracks model
+convergence, it does not run away). The method ranking (per-dim > scalar, 2.1–3.4x) is
+stable at every point. Compressibility is therefore partly a function of training
+budget: report it with the training configuration attached.
+Raw: `results/dc_vs_training_progress.json`.
+
+### Serving latency across three hardware generations
+
+| hardware | fp32 | INT8 | DC per-dim @1% | takeaway |
+|---|--:|--:|--:|---|
+| 2015 Xeon (Haswell, C-fused) | 9.70 ms | 7.40 | 7.41 | DC matches INT8, beats fp32 |
+| 2021 EPYC 7763 (idle, 24T) | 9.48 ms | 10.97 | 10.07 | **DC at fp32 parity; INT8 loses its edge** |
+| A100 80GB (GPU-resident) | 1.49 ms | 1.77 | 5.55 | fp32 fastest (HBM); **DC fits ~170 models/GPU vs 6 — 28x tenancy** |
+
+GPU implementation validated against CPU AUC anchors to <1e-6. On GPU, DC's footprint
+is dominated by its index maps (410 MB vs 19–151 MB of data) — threshold-based
+dispatch (dropping the maps) is the natural next step and would multiply GPU tenancy
+again. All GPU/EPYC raw data: `results/a100/`.
 
 ---
 
