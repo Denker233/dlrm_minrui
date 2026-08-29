@@ -88,3 +88,40 @@ Headline operating points on the properly-trained Terabyte model:
 | per-dim BS=256, 1% hot | 249x | -0.0301 |
 | per-dim BS=256, 2% hot | 154x | -0.0175 |
 | per-dim BS=256, 4.3% hot | 82x | -0.0115 |
+
+---
+
+## Cross-dataset check: Criteo Kaggle (D=16)
+
+Same C-fused gathers, same value-sort, same variants, at D=16.
+`models/dlrm_kaggle_correct.pt`, fp32 baseline AUC 0.802844 (2,060.70 MB), 1% hot.
+
+| config | B/row | mem MB | AUC | dAUC% |
+|---|--:|--:|--:|--:|
+| fp32 | - | 2060.70 | 0.802844 | - |
+| scalar block=16 | 0.031 | 10.88 | 0.802074 | -0.0770 |
+| per-dim block=16 | 0.500 | 25.80 | 0.802461 | -0.0383 |
+| per-dim block=64 | 0.125 | 13.87 | 0.802625 | -0.0219 |
+| **per-dim block=256** | **0.031** | **10.88** | 0.802484 | **-0.0360** |
+
+**At D=16 per-dim block=256 is free.** It costs byte-for-byte the same as scalar
+block=16 (both 0.031 B/row: per-dim is `D*0.5/block` = 16*0.5/256, scalar is 0.5/16)
+and has **2.1x less AUC loss**. Strictly dominant, not a trade.
+
+### The decomposition predicts the cross-dataset difference
+
+| dataset | orderable (between-row) share of error | per-dim advantage @1% hot |
+|---|--:|--:|
+| Terabyte D=64 | 0.3% | -0.0874 -> -0.0301 = **2.9x** |
+| Kaggle D=16 | 2.8% | -0.0770 -> -0.0360 = **2.1x** |
+
+The per-dim win is *smaller* at D=16, as the within-row/between-row split predicts:
+at low D the scalar block mean already captures relatively more of the error, so there
+is less left for per-dimension means to recover. One mechanism accounts for both
+datasets.
+
+### Caveat
+Latency was NOT measured cleanly in this run - the Terabyte fetch was concurrently
+running 12 parquet converters, driving p99 to 85-109 ms. AUC is deterministic and
+unaffected; the timing column from this run must not be quoted. To be re-run on an
+idle machine, across all four hot fractions.

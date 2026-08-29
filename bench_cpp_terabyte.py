@@ -188,4 +188,5 @@ def main():
     lib.emb_close()
     log("done -> results/cpp_terabyte.json")
 
-main()
+if __name__ == '__main__':
+    main()

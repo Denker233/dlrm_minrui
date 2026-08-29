@@ -1,0 +1,83 @@
+[
+ {
+  "iteration": 250000,
+  "ckpt": "ckpt_it250000.pt",
+  "baseline_auc": 0.7869016440319434,
+  "scalar_auc": 0.7863668742807133,
+  "scalar_delta_pct": -0.053476975123012416,
+  "perdim_auc": 0.7867302407000224,
+  "perdim_delta_pct": -0.01714033319210051
+ },
+ {
+  "iteration": 500000,
+  "ckpt": "ckpt_it500000.pt",
+  "baseline_auc": 0.7897905467107581,
+  "scalar_auc": 0.7890364125760222,
+  "scalar_delta_pct": -0.07541341347359065,
+  "perdim_auc": 0.7895295027922354,
+  "perdim_delta_pct": -0.026104391852266318
+ },
+ {
+  "iteration": 750000,
+  "ckpt": "ckpt_it750000.pt",
+  "baseline_auc": 0.7935350390611859,
+  "scalar_auc": 0.792688175124687,
+  "scalar_delta_pct": -0.08468639364989095,
+  "perdim_auc": 0.7932849004276712,
+  "perdim_delta_pct": -0.025013863351475152
+ },
+ {
+  "iteration": 1000000,
+  "ckpt": "ckpt_it1000000.pt",
+  "baseline_auc": 0.7951391794175676,
+  "scalar_auc": 0.7941427145559002,
+  "scalar_delta_pct": -0.09964648616673788,
+  "perdim_auc": 0.7946883273462144,
+  "perdim_delta_pct": -0.04508520713532027
+ },
+ {
+  "iteration": 1250000,
+  "ckpt": "ckpt_it1250000.pt",
+  "baseline_auc": 0.7962952061725073,
+  "scalar_auc": 0.7952232506052064,
+  "scalar_delta_pct": -0.10719555673008863,
+  "perdim_auc": 0.7957773156894521,
+  "perdim_delta_pct": -0.05178904830551723
+ },
+ {
+  "iteration": 1500000,
+  "ckpt": "ckpt_it1500000.pt",
+  "baseline_auc": 0.796782112006038,
+  "scalar_auc": 0.7955850352834549,
+  "scalar_delta_pct": -0.11970767225830681,
+  "perdim_auc": 0.7962127388820408,
+  "perdim_delta_pct": -0.056937312399718554
+ },
+ {
+  "iteration": 1750000,
+  "ckpt": "ckpt_it1750000.pt",
+  "baseline_auc": 0.7963194862346008,
+  "scalar_auc": 0.794975279851342,
+  "scalar_delta_pct": -0.1344206383258828,
+  "perdim_auc": 0.7956831122122523,
+  "perdim_delta_pct": -0.0636374022348507
+ },
+ {
+  "iteration": 2000000,
+  "ckpt": "ckpt_it2000000.pt",
+  "baseline_auc": 0.7984912158429025,
+  "scalar_auc": 0.7971448601829669,
+  "scalar_delta_pct": -0.1346355659935572,
+  "perdim_auc": 0.7978952938741259,
+  "perdim_delta_pct": -0.05959219687765582
+ },
+ {
+  "iteration": 2047023,
+  "ckpt": "dlrm_terabyte_24day.pt",
+  "baseline_auc": 0.798716831053425,
+  "scalar_auc": 0.797365659722346,
+  "scalar_delta_pct": -0.1351171331078982,
+  "perdim_auc": 0.798121161250388,
+  "perdim_delta_pct": -0.05956698030369356
+ }
+]

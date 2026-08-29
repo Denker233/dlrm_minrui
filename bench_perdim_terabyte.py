@@ -183,4 +183,5 @@ def main():
                     hot_mb+bmap_mb+small_u8+dc_mb, mk())
     log("done -> results/perdim_terabyte.json")
 
-main()
+if __name__ == '__main__':
+    main()

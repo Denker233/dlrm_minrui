@@ -4,7 +4,7 @@
 # Usage: tb_fetch_day.sh <hf_date> <day_idx>
 set -uo pipefail
 DATE=$1; IDX=$2
-ROOT=/home/cc/input/terabyte
+ROOT=${TB_ROOT:-/home/cc/input/terabyte}
 STAGE=$ROOT/_stage/day_$IDX
 OUT=$ROOT/day_$IDX
 REPO=https://huggingface.co/datasets/criteo/CriteoClickLogs/resolve/main

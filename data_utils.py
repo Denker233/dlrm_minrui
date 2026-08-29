@@ -41,6 +41,7 @@ import sys
 from multiprocessing import Manager, Process
 
 # import os
+import os
 from os import path
 
 # import io
@@ -117,15 +118,17 @@ def _remap_cat_vectorised(X_cat_t, convertDicts, n_cols=26):
 
     The original code did 26 x N_rows Python dict lookups (~854 ns each: np.int64
     boxing + a probe into a 10M-entry hash table that misses cache).  This does the
-    same lookups in C via a pandas hash table (~126 ns), ~7x faster, and allocates
-    int32 instead of the accidental float64 (max category id is ~10M).
+    same lookups in C via a pandas hash table (~126 ns), ~7x faster.
 
     Returns bit-identical category ids to the original loop.
     """
     import pandas as pd
 
     n_rows = X_cat_t.shape[1]
-    out = np.zeros((n_cols, n_rows), dtype=np.int32)
+    # dtype matches the original `np.zeros(shape)` (float64). int32 would halve both
+    # memory and file size at identical values, but is deliberately NOT used here so
+    # the output is byte-for-byte what the reference implementation produced.
+    out = np.zeros((n_cols, n_rows))
     for j in range(n_cols):
         d = convertDicts[j]
         # dict values are the position of the key in the stored `unique` array,
@@ -182,9 +185,9 @@ def processCriteoAdData(d_path, d_file, npzfile, i, convertDicts, pre_comp_count
             # targets
             y = data["y"]
 
-        # savez, not savez_compressed: zlib runs at ~9 MB/s single-threaded here
-        # (~90 min/day) vs ~490 MB/s to write plain (~2 min/day).  np.load reads
-        # both transparently, so existing compressed days stay valid.
+        # P2: savez, not savez_compressed. zlib runs at ~9 MB/s single-threaded on this
+        # box; the payload is byte-identical either way (same .npy in the zip, just not
+        # DEFLATEd) and np.load reads both transparently.
         np.savez(
             filename_i,
             # X_cat = X_cat,
@@ -729,8 +732,6 @@ def concatCriteoAdData(
 
                 filename_r = npzfile + "_{0}_reordered.npz".format(j)
                 print("Reordering (2nd pass) " + filename_r)
-                # savez, not savez_compressed: ~62 GB/day through zlib at 9 MB/s is
-                # ~1.9 h/day here vs ~1 min written plain.  np.load reads both.
                 np.savez(
                     filename_r,
                     X_cat=fj_s[indices, :],
@@ -1106,7 +1107,7 @@ def getCriteoAdData(
             if path.exists(filename_s):
                 print("\nSkip existing " + filename_s)
             else:
-                np.savez_compressed(
+                np.savez(
                     filename_s,
                     X_int=X_int[0:i, :],
                     # X_cat=X_cat[0:i, :],
@@ -1158,10 +1159,21 @@ def getCriteoAdData(
                 )
                 for i in range(0, days)
             ]
-            for process in processes:
-                process.start()
-            for process in processes:
-                process.join()
+            # Upstream starts ALL days at once. Each worker allocates
+            # y + X_int + X_cat for one day (~31 GB at 196M rows), so 24 days
+            # would need ~754 GB and OOM a 503 GB box. Run them in bounded
+            # waves instead. This changes nothing about what each worker
+            # computes, and the merge below is still `for day in range(days)`,
+            # so the dense-ID assignment stays bit-identical to the serial path.
+            _conc = int(os.environ.get("DLRM_MP_CONCURRENCY", "8"))
+            for _s in range(0, len(processes), _conc):
+                _wave = processes[_s:_s + _conc]
+                print("Processing days %d-%d (%d concurrent)"
+                      % (_s, _s + len(_wave) - 1, len(_wave)))
+                for process in _wave:
+                    process.start()
+                for process in _wave:
+                    process.join()
             for day in range(days):
                 total_per_file[day] = resultDay[day]
                 print("Constructing convertDicts Split: {}".format(day))
@@ -1231,10 +1243,18 @@ def getCriteoAdData(
             )
             for i in range(0, days)
         ]
-        for process in processes:
-            process.start()
-        for process in processes:
-            process.join()
+        # Same bounded-wave treatment as the npz stage. Each worker here holds
+        # X_cat_t (float64, ~41 GB) + X_int + the loaded npz, so ~50 GB apiece;
+        # 24 at once would need >1.2 TB. Waves change scheduling only, not output.
+        _conc = int(os.environ.get("DLRM_MP_CONCURRENCY_PROC", "6"))
+        for _s in range(0, len(processes), _conc):
+            _wave = processes[_s:_s + _conc]
+            print("Processing (remap) days %d-%d (%d concurrent)"
+                  % (_s, _s + len(_wave) - 1, len(_wave)))
+            for process in _wave:
+                process.start()
+            for process in _wave:
+                process.join()
 
     else:
         for i in range(days):

@@ -1,0 +1,122 @@
+[
+ {
+  "config": "fp32 (C fused)",
+  "hot_frac": null,
+  "mem_mb": 13077.5810546875,
+  "auc": 0.8007871935790268,
+  "mean_ms": 9.526665334124118,
+  "p50_ms": 9.819879502174444,
+  "p99_ms": 14.641669502016105,
+  "timing_batches": 200,
+  "auc_samples": 409600,
+  "impl": "C-fused"
+ },
+ {
+  "config": "INT8 (C fused)",
+  "hot_frac": null,
+  "mem_mb": 3269.395263671875,
+  "auc": 0.8007949140933794,
+  "mean_ms": 9.325091794016771,
+  "p50_ms": 8.47679549769964,
+  "p99_ms": 15.700371817219999,
+  "timing_batches": 200,
+  "auc_samples": 409600,
+  "impl": "C-fused"
+ },
+ {
+  "config": "DC value-sort (C fused)",
+  "hot_frac": 0.043,
+  "mem_mb": 155.55036389827728,
+  "auc": 0.8007224115150096,
+  "mean_ms": 10.077463911002269,
+  "p50_ms": 9.301423997385427,
+  "p99_ms": 16.306445332593285,
+  "timing_batches": 200,
+  "auc_samples": 409600,
+  "impl": "C-fused"
+ },
+ {
+  "config": "SSD cold (C fused)",
+  "hot_frac": 0.043,
+  "mem_mb": 154.02607429027557,
+  "auc": 0.800795527546331,
+  "mean_ms": 13.6152857056004,
+  "p50_ms": 11.916051007574424,
+  "p99_ms": 23.678279329906214,
+  "timing_batches": 200,
+  "auc_samples": 409600,
+  "impl": "C-fused"
+ },
+ {
+  "config": "DC value-sort (C fused)",
+  "hot_frac": 0.02,
+  "mem_mb": 80.56099498271942,
+  "auc": 0.8005883223215794,
+  "mean_ms": 16.080036868952448,
+  "p50_ms": 13.084491496556439,
+  "p99_ms": 41.82625422836281,
+  "timing_batches": 200,
+  "auc_samples": 409600,
+  "impl": "C-fused"
+ },
+ {
+  "config": "SSD cold (C fused)",
+  "hot_frac": 0.02,
+  "mem_mb": 79.00007331371307,
+  "auc": 0.8007885711512233,
+  "mean_ms": 43.16151969062048,
+  "p50_ms": 48.770729001262225,
+  "p99_ms": 58.51730345340909,
+  "timing_batches": 200,
+  "auc_samples": 409600,
+  "impl": "C-fused"
+ },
+ {
+  "config": "DC value-sort (C fused)",
+  "hot_frac": 0.01,
+  "mem_mb": 47.95686662197113,
+  "auc": 0.8003499160293779,
+  "mean_ms": 9.536052193579962,
+  "p50_ms": 8.760945493122563,
+  "p99_ms": 14.057404887571462,
+  "timing_batches": 200,
+  "auc_samples": 409600,
+  "impl": "C-fused"
+ },
+ {
+  "config": "SSD cold (C fused)",
+  "hot_frac": 0.01,
+  "mem_mb": 46.380017161369324,
+  "auc": 0.8007878753847975,
+  "mean_ms": 32.904506615304854,
+  "p50_ms": 31.197670512483455,
+  "p99_ms": 44.784074096824035,
+  "timing_batches": 200,
+  "auc_samples": 409600,
+  "impl": "C-fused"
+ },
+ {
+  "config": "DC value-sort (C fused)",
+  "hot_frac": 0.005,
+  "mem_mb": 31.65477216243744,
+  "auc": 0.7996754637167645,
+  "mean_ms": 10.022486224333989,
+  "p50_ms": 9.331639492302202,
+  "p99_ms": 14.057515229214905,
+  "timing_batches": 200,
+  "auc_samples": 409600,
+  "impl": "C-fused"
+ },
+ {
+  "config": "SSD cold (C fused)",
+  "hot_frac": 0.005,
+  "mem_mb": 30.069958567619324,
+  "auc": 0.8007894542986526,
+  "mean_ms": 36.768530139815994,
+  "p50_ms": 36.07484800159,
+  "p99_ms": 42.93221950589213,
+  "timing_batches": 200,
+  "auc_samples": 409600,
+  "impl": "C-fused"
+ }
+]

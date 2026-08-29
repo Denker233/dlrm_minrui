@@ -169,43 +169,63 @@ Ratios are structurally unchanged; only the embedding *content* changes (see F9)
 **Why:** F9 says our result may be an artefact of an undertrained table. 24 days is the
 only way to know. **Not** for bigger tables — F11 shows those are already saturated.
 
-### Budget at today's (already patched) speeds
+### Measured per-stage costs (from the 4-day run's own timestamps)
 
-| stage | 4 days actual | 24 days naive | with the plan below |
-|---|--:|--:|--:|
-| download + convert | 8.5 h | ~51 h | **~9 h** (parallel fetch) |
-| npz build | 8.5 h | ~51 h | **~9 h** (parallel days) |
-| processed npz | 10 h → 1 h (patched) | ~6 h | **~1.5 h** (parallel days) |
-| reorder/memmap | 4.5 h → ~0.3 h (patched) | ~2 h | **~2 h** |
-| training 1 epoch | 6 h | ~36 h | **~36 h** (unavoidable) |
-| **total** | ~38 h | **~146 h** | **~58 h** |
+| stage | 4-day actual | per day |
+|---|--:|--:|
+| fetch parquet + convert to TSV | 00:34→01:00 | ~6 min |
+| TSV → `day_N.npz` (`getCriteoAdData`) | 01:00→13:03 | **~180 min** |
+| → `day_N_processed.npz` | 13:03→22:42 | ~145 min (now ~15, patched) |
+| reorder/memmap | 22:42→03:25 | ~70 min (now ~5, patched) |
+| training 1 epoch, 589M samples | 03:30→09:26 | 6 h total |
 
-### Speed measures, in order of payoff
+### The big win: skip the TSV entirely (measured)
 
-1. **Parallel day fetch + convert (biggest win).** `tb_fetch_day.sh` runs one day at a
-   time; days are independent. Run 4–6 concurrently — network-bound, and the box has 48
-   threads. 51 h → ~9 h.
-2. **`--dataset-multiprocessing`** (`dlrm_s_pytorch.py:1480`, currently unused) parallelises
-   per-day processing across processes.
-3. **The `data_utils.py` patches are already in** (F10) — 10× on the processed-npz stage.
-4. **Skip the reorder second pass if possible** — it exists to shuffle across days; with
-   23 training days the benefit is marginal but the cost is 23 × ~1 min (now that it is
-   plain `savez`). Keep it.
-5. **`--test-freq`**: set > nbatches so it evaluates **once at the end**. The 4-day run did
-   3 full passes over 181M test samples; at 24 days that is hours wasted.
-6. **`--num-workers`**: the 4-day run used 0. Use 8–16 for the training loader.
-7. **Training itself is ~36 h and cannot be shortened** without changing the science.
-   Run it under tmux, monitored.
+The HuggingFace source is **typed parquet**; the current pipeline serialises it to TSV
+text and parses it back with a Python per-row loop (`data_utils.py:1031-1060`: `split`,
+26 `int(x,16)` calls through a `lambda`, a per-row `np.array` allocation, and a progress
+print *per row*). That is the ~180 min/day.
+
+pyarrow keeps the hex strings in one contiguous byte buffer, and nulls occupy zero bytes,
+so valid 8-char values are densely packed. Reshape to `(n,8)`, map ASCII→nibble with a
+256-entry LUT, combine with shifts — no per-row work:
+
+```
+full part end-to-end (parquet read + convert): 1.16 s / 594,104 rows
+  -> 6.4 min/day   vs ~186 min/day for fetch+TSV+parse   = ~28x
+```
+Verified equal to `int(x,16)` including nulls/empties (which map to 0, as the TSV path does).
+
+**It also never writes the 47 GB/day TSV — saving ~1.13 TB across 24 days**, which was
+the binding disk constraint.
+
+### Revised 24-day budget
+
+| stage | naive | with fixes |
+|---|--:|--:|
+| parquet → `day_N.npz` (direct, vectorised) | ~74 h | **~4 h** (parallel across days) |
+| → processed npz (patched, F10) | ~58 h | **~6 h** → ~2 h parallel |
+| reorder/memmap (patched) | ~28 h | **~1 h** |
+| training 1 epoch, 23 days / 3.4B samples | ~36 h | **~36 h** (unavoidable) |
+| **total** | **~196 h (8 days)** | **~43 h** |
+
+Training dominates and cannot be shortened without changing the science.
+
+### Remaining speed measures
+1. Run 4–6 days concurrently in the ingest stages (independent, box has 48 threads).
+2. `--dataset-multiprocessing` (`dlrm_s_pytorch.py:1480`, unused today).
+3. `--test-freq` > nbatches so it evaluates **once**, not 3×.
+4. `--num-workers` 8–16 for the training loader (the 4-day run used 0).
 
 ### Disk — the binding constraint
 
 | item | size |
 |---|--:|
-| raw text, 24 days | ~1.15 TB |
+| raw text, 24 days | **0 — never materialised** (direct parquet path) |
 | `day_*.npz` | ~264 GiB |
 | `day_*_processed.npz` (int32, plain) | ~700 GiB |
 | intermediates + reordered | ~1.4 TB |
-| **peak if nothing is deleted** | **~3.5 TB** |
+| **peak, direct-parquet path** | **~2.3 TB** |
 | **available** | **1.3 TB on nvme0 + 1.7 TB on nvme1** |
 
 **Mandatory:** delete each day's raw text immediately after its `.npz` is built, and
@@ -219,3 +239,149 @@ delete-as-you-go pipeline is required, not a build-everything-then-clean approac
 - 3.5 TB peak vs 3.0 TB total — needs the streaming design to work first time.
 - ~58 h wall time; the session must survive disconnects (tmux).
 - If 24-day DC loss grows sharply (F9), that is a **finding**, not a failure.
+
+---
+
+## 5. PHASE E EXECUTION — 24-day run (started 2026-08-26)
+
+**Config:** days 0-22 train / day 23 test (MLPerf convention, `self.day = days-1`).
+D=64, max-ind-range=10M, lr=0.1, batch 2048, 1 epoch. Script: `run_tb24_setup.sh`.
+
+### Optimisations applied (user-approved subset)
+| id | change | status |
+|---|---|---|
+| P1 | vectorised categorical remap | **bit-identical**, verified on 5.1e9 values of day_0 |
+| P2 | `savez` not `savez_compressed` (3 sites) | **byte-identical payload** (same md5 of the extracted .npy) |
+| MP | `--dataset-multiprocessing` | **bit-identical** (dict merge is `for day in range(days)`) |
+| P3 | int32 payloads | **reverted** at user request — float64 kept |
+| P4 | direct-parquet ingest | **not used** at user request (written + validated, unused) |
+| T1 | `--num-workers > 0` | **BLOCKED** — upstream bug, see below |
+| T3 | OMP 24 -> 48 | **no benefit**: 36.60 vs 35.35 ms/it, wall 780 vs 787 s |
+
+### Two upstream OOM bugs found and fixed
+`--dataset-multiprocessing` starts **all** days at once in both stages. At 24 days:
+- npz build: 24 x ~29 GiB = **701 GiB** -> OOM (503 GiB box)
+- remap:     24 x ~48 GiB = **1.2 TB**  -> OOM
+
+Patched both into bounded waves (`DLRM_MP_CONCURRENCY=8`, `DLRM_MP_CONCURRENCY_PROC=6`).
+Waves change scheduling only; the merge order is unchanged, so output stays bit-identical.
+
+### T1 is unusable (upstream bug, and the crash is protective)
+`AttributeError: 'CriteoDataset' object has no attribute 'day_boundary'`
+(`dlrm_data_pytorch.py:286`). `day_boundary` is set only inside
+`if index == self.offset_per_file[self.day]`. With workers, only the worker that
+receives index 0 ever sets it. Merely initialising it would make workers past day 0
+compute `i = index - <wrong boundary>` and **silently read the wrong rows**.
+
+### Stale-artefact hazard (would have corrupted the run silently)
+With 24 days every dense category ID changes, but several writes are guarded by
+`if not path.exists(...)`, so the 4-day `_fea_count.npz`, `_fea_dict_*.npz` and
+`_day_count.npz` would **not** be overwritten, and `processCriteoAdData` prints
+"Using existing" for `day_0..3_processed.npz` — mixing old and new ID spaces with no error.
+Moved 84 GB of those to `/mnt/ssd4/tb_4day_backup` (kept, so the 4-day results stay
+reproducible). `day_0..3.npz` are retained: they hold `int(hex,16) % max_ind_range`,
+which is dictionary-independent.
+
+### test-freq
+Set to 3,000,000 (> the ~2.19M iterations) so the model is evaluated **once, at the end**.
+Rationale: the checkpoint is written only `if is_best`, so N evaluations would select it
+as best-of-N **on the day-23 test set the DC benchmark then reports AUC against**. One
+evaluation gives the final model with no selection effect. (MLPerf's `run_and_time.sh`
+uses 102400 because its metric is time-to-AUC-threshold; that rationale does not apply here.)
+
+### Storage
+All four SATA SSDs scanned (95-99% zeros, no filesystem, no recoverable data), formatted
+`-m 0`, mounted `/mnt/ssd1..4`, fstab `nofail`. **9.5 TB free** vs a ~2.5 TB peak.
+Raw TSVs for days 4-23 land on the SSDs and are symlinked into the dataset dir.
+
+### Expected timeline (from measured per-day costs)
+| stage | estimate |
+|---|--:|
+| fetch 20 days | ~2 h |
+| TSV -> day_N.npz (24 days, 8 concurrent) | ~6.6 h |
+| -> processed npz (24 days, 6 concurrent) | ~0.7 h |
+| reorder | ~2 h |
+| training 2.19M iterations @ 36.6 ms | ~22.3 h |
+| day-boundary loads + 1 test pass | ~0.9 h |
+| **total** | **~35 h (1.5 days)** |
+
+### Run-killer caught before preprocessing started (2026-08-26)
+The pipeline writes **all four output categories into one directory** and deletes
+nothing. Cumulative on `/mnt/nvme0` (1.6 TB free):
+
+| stage | cumulative |
+|---|--:|
+| day_N.npz | 0.69 TB |
+| + processed | 1.82 TB |
+| + intermediates | 3.19 TB |
+| + reordered | **4.33 TB** |
+
+It would have died ~6 h in, during the intermediates stage -- after the expensive npz
+work. The "8.65 TB free" figure was misleading: that is the sum over six *separate*
+mounts and the code can only use one.
+
+**Fix:** 120 pre-created symlinks distributing outputs by category. Verified that
+`np.savez`/`np.save` follow dangling symlinks and create the target, and that
+`path.exists()` reports a dangling link as absent (so nothing is wrongly skipped as
+"using existing").
+
+| mount | holds | needs | free | margin |
+|---|---|--:|--:|--:|
+| nvme0 | day_N.npz x24 | 0.69 T | 1.52 T | 0.83 T |
+| ssd1 / ssd2 | processed x12 each | 0.57 T | 1.31 / 1.59 T | 0.75 / 1.02 T |
+| ssd3 / ssd4 | intermediates x12 each | 0.69 T | 1.30 / 1.25 T | 0.61 / 0.56 T |
+| **nvme1** | **reordered x24** | 1.13 T | 1.68 T | 0.54 T |
+
+Side benefit: reordered files (re-read at every training day boundary) now sit on fast
+NVMe rather than SATA.
+
+Observed data scale: days average 44 GiB -> **4.72 B rows** across 24 days
+(canonical figure is ~4.37 B).
+
+### Phase E execution log (actuals)
+| stage | actual |
+|---|--:|
+| fetch 20 days (+ the day_23 recovery) | ~2.5 h |
+| counting pass | 0.6 h |
+| TSV -> day_N.npz, 3 waves of 8 | ~5.6 h |
+| dict merge (serial, via Manager IPC) | ~1.0 h |
+| remap, 4 waves of 6 (P1+P2) | ~1.25 h |
+| reorder 1st pass (serial, 24x ~10 min) | ~4.1 h |
+| reorder 2nd pass (serial, 24x ~7 min) | ~2.6 h |
+| **preprocessing total** | **~16.5 h** (est. was ~9-10 h; reorder passes underestimated) |
+| training start | 2026-08-27 ~14:35 UTC (CPU fallback; A100 address never provided) |
+
+All 24 reordered files verified on nvme1 (1.3 TB). Intermediates (~1.3 TB, ssd3/4)
+deleted after verification. day_23.npz shipped-set totals: X_cat/X_int/y all int32-safe
+(round-trip verified per file by the shipper when it runs).
+
+---
+
+## 6. PHASE E COMPLETE (2026-08-28)
+
+- 24-day dataset preprocessed here (16.5 h with P1+P2+bounded-wave MP), shipped to a
+  Chameleon A100 as int32 (~665 GB, every file round-trip-verified), trained there in
+  16.2 h (`--use-gpu`, RC=0). `models/gpu24/dlrm_terabyte_24day.pt` + 8 periodic ckpts.
+- **Baseline AUC 0.798717** on day-23 (MLPerf convention).
+- DC results on the fully-trained model: **per-dim block=256: 248x @ -0.060% / 359x @
+  -0.092%**. Scalar and INT4 degrade more. `results/perdim_24day_analysis.md`.
+- **F9 resolved with a 9-point curve** (`results/dc_vs_training_progress.json`):
+  DC loss grows monotonically with training progress (scalar 2.5x, per-dim 3.5x from
+  12%->100%), decelerating near convergence; per-dim's advantage stable at 2.1-3.4x
+  throughout.
+- Remaining (user decisions): CPU fallback run (~72%, redundant — kill or keep for a
+  numerics cross-check); README/PROPOSAL update with 24-day numbers; git push (commit
+  `7324a72` + new work still local-only); A100 lease release (all artefacts pulled).
+
+### CPU fallback run completed (2026-08-29 ~04:00 UTC)
+`TB24_TRAIN_RC=0`, wall ~37.5 h (14:35 Aug 27 -> ~04:00 Aug 29, slowed at times by
+concurrent benchmarks/shipping). **Final test accuracy 96.663% — identical to the GPU
+run's 96.663% to every printed digit**: two independent machines (Haswell CPU vs A100
+CUDA), same data order, matching outcomes. CPU checkpoint at `models/dlrm_terabyte_24day.pt`
+(GPU copy at `models/gpu24/`). All training in the project is now complete.
+
+### Follow-on experiments dispatched to the A100 node (briefs sent 2026-08-29)
+A: clean serving-latency suite on the idle EPYC 7763 (repairs the contaminated timing
+columns; modern-CPU numbers). B: GPU DC inference benchmark (fp32/INT8/DC-scalar/DC-
+per-dim, GPU-resident, CUDA-event timing, AUC anchors from the CPU run for validation,
+GPU-memory/multi-tenancy accounting). Results to be pulled back when the agent reports.
