@@ -168,3 +168,38 @@ while ratio grows only ~10%. The per-dim mean has extracted essentially all shar
 per-dimension structure by block=256; larger blocks neither help nor hurt. This closes
 the "was 256 just the largest size tested?" question: it is a plateau. (512 @0.5% is
 the nominal best single point, 393x at equal loss, but within noise of 256.)
+
+---
+
+## Ordering study for per-dim (both machines, 24-day model, block=256)
+
+The scalar-DC optimality proof for value-sort does NOT extend to per-dim (whose
+blocks are summarised by vectors, making ordering a clustering problem). Screened six
+orderings by the exact per-dim objective (within-block per-dim variance), then
+AUC-tested on the real pipeline. Raw: `results/perdim_order_ablation.json` (@1%,
+this node), `results/a100/perdim_order_hf005.json` (@0.5%, EPYC).
+
+| ordering | @1% dAUC% | @0.5% dAUC% |
+|---|--:|--:|
+| pc1 (sort by 1st principal component) | **-0.053** | -0.080 |
+| zorder (Morton over PC1xPC2) | -0.055 | **-0.076** |
+| value (row-mean sort) | -0.060 | -0.092 |
+| pc1|pc2 lexicographic | — | -0.111 |
+| unsorted | -0.226 | -0.324 |
+
+**Findings:**
+1. **The sort is essential to per-dim, not a refinement**: unsorted per-dim loses
+   3.5-3.8x more AUC and is worse than *sorted scalar*. Block homogeneity created by
+   the sort is what per-dim means exploit.
+2. **PCA-based orderings beat value-sort for per-dim** — 10-17% less loss, both tiers,
+   exactly the theoretical reversal expected (value-sort's optimality proof is
+   scalar-only; PC1 maximises captured variance for vector summaries). New best
+   operating points: **248x @ -0.053%** (pc1, 1%) and **359x @ -0.076%** (zorder, 0.5%).
+3. pc1 and zorder are within noise of each other; pc1 is simpler (one power-iteration
+   + one argsort) and is the recommended default for per-dim.
+4. pc1|pc2 lexicographic *underperformed value* despite a good objective score —
+   coarse bucket boundaries hurt; the MSE-proxy ranking is imperfect (screen said
+   0.83x, AUC said worse). AUC-validate any ordering before adopting it.
+5. Historical note closed: PCA-sort, which failed for scalar DC and was withdrawn,
+   is *correct for per-dim* — each variant has its own optimal ordering family, and
+   the decomposition says which.
