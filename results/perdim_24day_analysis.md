@@ -203,3 +203,26 @@ this node), `results/a100/perdim_order_hf005.json` (@0.5%, EPYC).
 5. Historical note closed: PCA-sort, which failed for scalar DC and was withdrawn,
    is *correct for per-dim* — each variant has its own optimal ordering family, and
    the decomposition says which.
+
+### Ordering vs serving latency: measured, twice, with order reversed
+
+Claim tested: does the cold-row ordering (value/pc1/zorder/none) affect forward
+latency? 300 timed batches per config, idle machine, run twice with config order
+REVERSED to expose position effects. Raw: `results/perdim_order_latency{,_rev}.json`.
+
+| ordering | run1 mean ms (pos) | run2 mean ms (pos) |
+|---|--:|--:|
+| value | 7.22 (1st) | 6.51 (4th) |
+| pc1 | 7.07 (2nd) | 6.54 (3rd) |
+| zorder | 7.35 (3rd) | 7.29 (2nd) |
+| none | 6.81 (4th) | 8.10 (1st) |
+
+The first-run config is always slowest (fresh allocations / NUMA placement / warmup);
+per-ordering cross-run variation exceeds every between-ordering gap. **Conclusion:
+orderings are latency-equivalent within run noise (~±0.7 ms on this box); the ordering
+choice is decided purely by AUC and encode cost** (value ~6 s, pc1 ~17 s, zorder ~28 s
+one-time for all 48.4M cold rows).
+
+Methodological note for all timing tables in this project: single-run cross-config
+comparisons on this machine carry ~±0.5-1 ms of position/allocation uncertainty —
+differences below that threshold should not be interpreted.
