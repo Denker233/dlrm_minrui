@@ -116,3 +116,36 @@ Results: `results/perdim_24day_analysis.md` (start here) · `results/a100/` ·
 
 D5 threshold dispatch (GPU-motivated, F-H) · multi-epoch curve extension · loader raw-
 binary format · PROPOSAL rewrite around per-dim · A100 lease release decision.
+
+---
+
+## 7. Addendum (2026-08-30 → 09-01): third dataset + ordering study
+
+**Third dataset (Avazu_x1, non-Criteo, D=16, all-categorical; test AUC 0.7609, in the
+FuxiCTR reference band).** Everything replicates: per-dim > scalar at every hot
+fraction (1.6x to >8x less loss); scalar ~= zero within 0.001pp; per-dim @0.5% is
+LOSSLESS (-0.0015 to +0.0009%). New observation: zeroing *more* cold rows can hurt
+*less* (mid-frequency embeddings carry overfit noise — compression as regularisation).
+`results/avazu_analysis.md`.
+
+**F-K. Ordering study — the sort is essential, and PC1 beats value-sort for per-dim.**
+Unsorted per-dim loses 3.5-3.8x more AUC than sorted (and is worse than sorted scalar):
+the ordering *creates* the block homogeneity per-dim means exploit. The scalar
+optimality proof for value-sort does not extend to per-dim (vector summaries make
+ordering a clustering problem); measured on the 24-day model, PC1-sort/zorder give
+10-17% less loss than value-sort. **New best operating points: 248x @ -0.053% (pc1,
+1% hot) and 359x @ -0.076% (zorder, 0.5%).** pc1|pc2-lex underperformed despite a good
+MSE proxy score — AUC-validate orderings, don't trust proxies.
+`results/perdim_sort_screen.json`, `results/perdim_order_ablation.json`,
+`results/a100/perdim_order_hf005.json`.
+
+**F-L. Ordering has no latency cost — measured, twice, order-reversed.** All orderings
+latency-equivalent within run noise (~±0.7 ms); first-config-in-run position effects
+exceed any between-ordering gap. Encode cost: value ~6 s, pc1 ~17 s, zorder ~28 s
+(one-time, all 48.4M cold rows). Methodological: single-run cross-config timing
+comparisons on this class of machine carry ±0.5-1 ms noise — do not interpret smaller
+differences, anywhere in this project's tables.
+
+**Final recommended method: per-dim block means, block=256, 4-bit, PC1-sorted.**
+Every clause experiment-backed: 248x @ -0.053% / 359x @ -0.076% on the 24-day MLPerf
+config; latency-equivalent to all alternatives; ~17 s one-time encode.
